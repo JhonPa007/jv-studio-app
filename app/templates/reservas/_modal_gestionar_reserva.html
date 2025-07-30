@@ -1,0 +1,45 @@
+<div class="modal fade text-dark" id="modalGestionarReserva" tabindex="-1" aria-labelledby="modalGestionarReservaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background-color: #f8f9fa;">
+            <div class="modal-header" style="background-color: var(--color-predominante); color: var(--color-acento-dorado);">
+                <h5 class="modal-title" id="modalGestionarReservaLabel"><i class="fas fa-calendar-check me-2"></i>Detalles de la Reserva</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                
+                <div id="detalleReservaVista">
+                    <p class="text-center">Cargando detalles...</p>
+                </div>
+                
+                <form id="formEditarReservaModal" style="display: none;" onsubmit="event.preventDefault();">
+                    <input type="hidden" id="editReservaId" name="reserva_id_a_editar">
+                    <div class="alert alert-danger" role="alert" id="modalEditarErrores" style="display: none;"></div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3"><label for="editClienteId" class="form-label">Cliente <span class="text-danger">*</span></label><select class="form-select" id="editClienteId" name="cliente_id" required></select></div>
+                        <div class="col-md-6 mb-3"><label for="editEmpleadoId" class="form-label">Colaborador <span class="text-danger">*</span></label><select class="form-select" id="editEmpleadoId" name="empleado_id" required></select></div>
+                    </div>
+                    <div class="mb-3"><label for="editServicioId" class="form-label">Servicio <span class="text-danger">*</span></label><select class="form-select" id="editServicioId" name="servicio_id" required></select></div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3"><label for="editFechaHoraInicio" class="form-label">Fecha y Hora de Inicio <span class="text-danger">*</span></label><input type="datetime-local" class="form-control" id="editFechaHoraInicio" name="fecha_hora_inicio" required></div>
+                        <div class="col-md-6 mb-3"><label for="editPrecioCobrado" class="form-label">Precio Final Cobrado (S/) (Opcional)</label><input type="number" step="0.01" min="0" class="form-control" id="editPrecioCobrado" name="precio_cobrado"></div>
+                    </div>
+                    <div class="mb-3"><label for="editNotasCliente" class="form-label">Notas del Cliente</label><textarea class="form-control" id="editNotasCliente" name="notas_cliente" rows="2"></textarea></div>
+                    <div class="mb-3"><label for="editNotasInternas" class="form-label">Notas Internas</label><textarea class="form-control" id="editNotasInternas" name="notas_internas" rows="2"></textarea></div>
+                </form>
+            </div>
+            <div class="modal-footer" style="background-color: #e9ecef;">
+                <button type="button" class="btn btn-warning btn-sm" id="btnModalEditarReserva"><i class="fas fa-edit me-1"></i>Editar</button>
+                <button type="button" class="btn btn-danger btn-sm" id="btnModalCancelarReserva"><i class="fas fa-calendar-times me-1"></i>Cancelar</button>
+                <button type="button" class="btn btn-success btn-sm" id="btnModalCompletarReserva"><i class="fas fa-check-circle me-1"></i>Marcar Completada</button>
+
+                <a href="#" id="btnModalRegistrarVenta" class="btn btn-primary btn-sm" style="display: none;"><i class="fas fa-cash-register me-1"></i>Registrar Venta</a>
+
+                <button type="button" class="btn btn-light btn-sm" id="btnModalCancelarEdicion" style="display: none;"><i class="fas fa-ban me-1"></i>Cancelar Edición</button>
+                <button type="submit" class="btn btn-primary btn-sm" id="btnModalGuardarCambios" style="display: none;" form="formEditarReservaModal"><i class="fas fa-save me-1"></i>Guardar Cambios</button>
+
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal"><i class="fas fa-times me-1"></i>Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>

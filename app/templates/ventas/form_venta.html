@@ -1,0 +1,1105 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_form | default('Nueva Venta') }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .form-section-venta { background-color: #3a3a3a; padding: 25px; border-radius: 8px; margin-bottom:20px; }
+    .form-section-venta h2, .form-section-venta h3 { 
+        color: var(--color-acento-dorado); 
+        margin-bottom: 20px; 
+        border-bottom: 1px solid var(--color-secundario-gris); 
+        padding-bottom: 10px;
+    }
+    .items-table th, .items-table td, .pagos-table th, .pagos-table td { 
+        vertical-align: middle; 
+        font-size:0.9em; 
+        color: #000000; 
+    }
+    .items-table thead th, .pagos-table thead th {
+        color: var(--color-acento-dorado); 
+    }
+    .items-table .btn-xs, .pagos-table .btn-xs { 
+        padding: .1rem .3rem;
+        font-size: .75rem;
+    }
+    .total-section { font-size: 1.0em; color: #f8f9fa; } 
+    .total-section strong { font-size: 1.2em; color: var(--color-acento-dorado); }
+    .total-section .saldo-pendiente { color: #ffc107; }
+    .total-section .form-label { color: #f8f9fa; } 
+    .form-control-sm, .form-select-sm { 
+        background-color: #4f4f4f; 
+        color: #f8f9fa;
+        border-color: var(--color-secundario-gris);
+    }
+    .form-control-sm::placeholder { color: #aaa; }
+    select:disabled {
+        background-color: #6c757d;
+        opacity: 0.7;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="form-section-venta">
+        <h2><i class="fas fa-cash-register me-2"></i>{{ titulo_form }}</h2>
+        
+        {% include 'partials/_flash_messages.html' %}
+        
+        {# ESTA LÍNEA ES LA CLAVE: Define de dónde se tomarán los datos para rellenar el formulario #}
+        {% set data_source = form_data if form_data else (prefill_data if prefill_data else {}) %}
+
+        <form method="POST" action="{{ action_url }}" id="formVenta">
+            <h3><i class="fas fa-file-invoice-dollar me-2"></i>Datos de la Venta</h3>
+            <div class="row">
+                <div class="col-lg-6 border-end pe-4" style="border-color: var(--color-secundario-gris) !important;">
+                    <h3><i class="fas fa-info-circle me-2"></i>Detalles del Servicio</h3>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="sucursal_id" class="form-label">Sucursal</label>
+                            <select class="form-select" id="sucursal_id" name="sucursal_id" required>
+                                {% for suc in sucursales %}<option value="{{ suc.id }}" {% if data_source.get('sucursal_id')|string == suc.id|string %}selected{% endif %}>{{ suc.nombre }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="fecha_venta" class="form-label">Fecha</label>
+                            <input type="datetime-local" class="form-control" id="fecha_venta" name="fecha_venta" value="{{ data_source.get('fecha_venta') }}" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="cliente_receptor_id" class="form-label">Cliente Atendido</label>
+                            <select class="form-select" id="cliente_receptor_id" name="cliente_receptor_id" required>
+                                {% for cli in clientes %}<option value="{{ cli.id }}" {% if data_source.get('cliente_receptor_id')|string == cli.id|string %}selected{% endif %}>{{ cli.razon_social_nombres }} {{ cli.apellidos or '' }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="empleado_id" class="form-label">Colaborador</label>
+                            <select class="form-select" id="empleado_id" name="empleado_id" required>
+                                <option value="">Seleccione...</option>
+                                {% for emp in empleados %}<option value="{{ emp.id }}" {% if data_source.get('empleado_id')|string == emp.id|string %}selected{% endif %}>{{ emp.nombres }} {{ emp.apellidos }}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                     <div class="mb-3">
+                        <label for="campana_id" class="form-label">Campaña Aplicada (Opcional)</label>
+                        <select class="form-select" id="campana_id" name="campana_id">
+                            <option value="">Venta Regular (Sin Campaña)</option>
+                            {% for c in campanas_activas %}<option value="{{ c.id }}" {% if data_source.get('campana_id')|string == c.id|string %}selected{% endif %}>{{ c.nombre }}</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="col-lg-6 ps-4">
+                    <h3><i class="fas fa-file-invoice me-2"></i>Información de Facturación</h3>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="tipo_comprobante" class="form-label">Tipo de Comprobante</label>
+                            <select class="form-select" id="tipo_comprobante" name="tipo_comprobante">
+                                <option value="Nota de Venta">Nota de Venta</option>
+                                <option value="Boleta Electrónica">Boleta Electrónica</option>
+                                <option value="Factura Electrónica">Factura Electrónica</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="serie_comprobante" class="form-label">Serie</label>
+                            <select class="form-select" id="serie_comprobante" name="serie_comprobante"></select>
+                        </div>
+                    </div>
+
+                    <div class="row align-items-center">
+                        <div class="col-md-6 mb-3" id="seccion_facturacion" style="display: none;">
+                            <label for="inputDocumentoFactura" id="labelDocumentoFactura" class="form-label">DNI / RUC</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="inputDocumentoFactura" placeholder="Ingresa y busca...">
+                                <button class="btn btn-outline-info" type="button" id="btnBuscarDocFactura"><i class="fas fa-search"></i></button>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                             <label for="cliente_facturacion_id" class="form-label">Facturar a:</label>
+                             <select class="form-select form-select-sm" id="cliente_facturacion_id" name="cliente_facturacion_id">
+                                <option value="">-- Mismo Cliente Atendido --</option>
+                                {% for cli in clientes %}<option value="{{ cli.id }}" {% if data_source.get('cliente_facturacion_id')|string == cli.id|string %}selected{% endif %}>{{ cli.razon_social_nombres }} {{ cli.apellidos or '' }} ({{ cli.numero_documento or 'S/D' }})</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {# --- NUEVA SECCIÓN PARA VENDER MEMBRESÍA --- #}
+            <h3 class="mt-4"><i class="fas fa-id-card me-2"></i>Vender Membresía (Opcional)</h3>
+            <div class="p-3 border rounded mb-3" style="border-color: var(--color-secundario-gris) !important;">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-10">
+                        <label for="selectPlanMembresia" class="form-label text-light">Seleccione un Plan:</label>
+                        <select id="selectPlanMembresia" class="form-select form-select-sm">
+                            <option value="">Ninguna</option>
+                            {% for plan in planes_membresia_activos %}
+                            <option value="{{ plan.id }}" data-nombre="{{ plan.nombre }}" data-precio="{{ plan.precio }}">
+                                {{ plan.nombre }} (S/ {{ "%.2f"|format(plan.precio) }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-info btn-sm w-100" id="btnAnadirMembresia">
+                            <i class="fas fa-plus"></i> Añadir a la Venta
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <hr>
+
+            {# SECCIÓN 2: ÍTEMS DE LA VENTA #}
+            <h3 class="mt-4"><i class="fas fa-shopping-cart me-2"></i>Ítems de la Venta</h3>
+            <div class="p-3 border rounded mb-3" style="border-color: var(--color-secundario-gris) !important;">
+                <h5 class="text-light">Añadir Servicio:</h5>
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-5">
+                        <select id="selectServicio" class="form-select form-select-sm">
+                        <option value="">Seleccione un servicio...</option>
+                        {% for srv in servicios %}
+                        <option value="{{ srv.id }}" data-nombre="{{ srv.nombre }}" data-precio="{{ "%.2f"|format(srv.precio) }}">{{ srv.nombre }} (S/ {{ "%.2f"|format(srv.precio) }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-1"><input type="number" id="cantidadServicio" class="form-control form-control-sm" value="1" min="1" placeholder="Cant."></div>
+                <div class="col-md-3"><input type="number" step="0.01" id="precioServicio" class="form-control form-control-sm" placeholder="Precio Unit."></div>
+                
+                <div class="col-auto">
+                        <div class="form-check">
+                          <input class="form-check-input" type="checkbox" id="checkServicioExtra">
+                          <label class="form-check-label text-light" for="checkServicioExtra">
+                            Extra
+                          </label>
+                        </div>
+                </div>
+                <div class="col-md-2"><button type="button" class="btn btn-info btn-sm w-100" id="btnAnadirServicio"><i class="fas fa-plus"></i> Añadir</button></div>
+            </div>
+            </div>
+            <div class="p-3 border rounded mb-3" style="border-color: var(--color-secundario-gris) !important;">
+                <h5 class="text-light">Añadir Producto:</h5>
+                <div class="row g-2 align-items-end"><div class="col-md-5">
+                    <select id="selectProducto" class="form-select form-select-sm">
+                            <option value="">Seleccione un producto...</option>
+                            {% for prod in productos %}
+                            <option value="{{ prod.id }}" data-nombre="{{ prod.nombre }}" data-precio="{{ "%.2f"|format(prod.precio_venta) }}" data-stock="{{ prod.stock_actual }}">
+                                {# Texto actualizado para mostrar producto y marca #}
+                                {{ prod.nombre }} - **{{ prod.marca_nombre if prod.marca_nombre else 'Sin Marca' }}** (S/ {{ "%.2f"|format(prod.precio_venta) }}) - Stock: {{ prod.stock_actual }}
+                            </option>
+                            {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-1"><input type="number" id="cantidadProducto" class="form-control form-control-sm" value="1" min="1" placeholder="Cant."></div><div class="col-md-3"><input type="number" step="0.01" id="precioProducto" class="form-control form-control-sm" placeholder="Precio Unit."></div><div class="col-md-2"><button type="button" class="btn btn-info btn-sm w-100" id="btnAnadirProducto"><i class="fas fa-plus"></i> Añadir</button></div></div>
+            </div>
+            <div class="table-responsive mt-2"><table class="table table-sm table-custom items-table" id="tablaItemsVenta"><thead><tr><th>Descripción</th><th>Cantidad</th><th>Precio Unit. (S/)</th><th>Subtotal (S/)</th><th>Acción</th></tr></thead><tbody><tr id="filaSinItems"><td colspan="5" class="text-center text-muted">No hay ítems añadidos a la venta.</td></tr></tbody></table></div>
+
+            {# SECCIÓN 3: TOTALES Y PAGO #}
+            <h3 class="mt-4"><i class="fas fa-dollar-sign me-2"></i>Totales y Pago</h3>
+            <div class="row">
+                <div class="col-md-7">
+                    <div class="p-3 border rounded mb-3" style="border-color: var(--color-secundario-gris) !important;">
+                        <h5 class="text-light">Añadir Pago:</h5>
+                        <div class="row g-2 align-items-end"><div class="col-md-4"><label for="selectMetodoPago" class="form-label">Método</label><select id="selectMetodoPago" class="form-select form-select-sm"><option value="">Seleccione método...</option>{% for metodo in metodos_pago %}<option value="{{ metodo }}">{{ metodo }}</option>{% endfor %}</select></div><div class="col-md-3"><label for="inputMontoPago" class="form-label">Monto (S/)</label><input type="number" step="0.01" min="0.01" class="form-control form-control-sm" id="inputMontoPago"></div><div class="col-md-3"><label for="inputReferenciaPago" class="form-label">Referencia</label><input type="text" class="form-control form-control-sm" id="inputReferenciaPago" placeholder="Opcional"></div><div class="col-md-2"><button type="button" class="btn btn-info btn-sm w-100" id="btnAnadirPago"><i class="fas fa-plus"></i> Añadir</button></div></div>
+                    </div>
+                    <div class="table-responsive mt-2">
+                        <table class="table table-sm table-custom pagos-table" id="tablaPagosAgregados">
+                            <thead><tr><th>Método</th><th>Monto (S/)</th><th>Referencia</th><th>Acción</th></tr></thead>
+                            <tbody><tr id="filaSinPagos"><td colspan="4" class="text-center text-muted">No hay pagos registrados.</td></tr></tbody>
+                        </table>
+                    </div>
+                    <div class="mb-3"><label for="notas_venta" class="form-label">Notas Adicionales</label><textarea class="form-control" id="notas_venta" name="notas_venta" rows="2"></textarea></div>
+                </div>
+                
+                <div class="col-md-5 total-section">
+                    <div class="p-3 border rounded" style="background-color: #4f4f4f;">
+
+                        <div id="seccionCreditosMembresia" style="display: none;"> {# Oculto por defecto #}
+                            <p class="mb-1 small text-light">Beneficios de Membresía Activa:</p>
+                            <ul class="list-group list-group-flush small" id="listaCreditosDisponibles">
+                                </ul>
+                            <hr style="border-color: var(--color-secundario-gris);">
+                        </div>
+
+                        {# --- NUEVA SECCIÓN DE CANJE DE PUNTOS --- #}
+                        <div id="seccionPuntosFidelidad" style="display: none;"> {# Oculto por defecto #}
+                            <div class="mb-2">
+                                <small class="text-light">Cliente tiene: <strong id="puntosDisponiblesDisplay" class="text-warning">0</strong> puntos</small>
+                            </div>
+                            <label for="puntosACanjearInput" class="form-label small">Puntos a canjear:</label>
+                            <div class="input-group input-group-sm mb-2">
+                                <input type="number" class="form-control" id="puntosACanjearInput" min="0">
+                                <button class="btn btn-outline-info" type="button" id="btnAplicarPuntos">Aplicar</button>
+                            </div>
+                            <div id="infoCanjePuntos" class="small text-info"></div>
+                            <hr style="border-color: var(--color-secundario-gris);">
+                        </div>
+                        {# --- FIN DE LA NUEVA SECCIÓN --- #}
+
+                        <div class="d-flex justify-content-between mb-2"><span>Subtotal Servicios (Inc. IGV):</span><span id="displaySubtotalServicios">S/ 0.00</span></div>
+                        <div class="d-flex justify-content-between mb-2"><span>Subtotal Productos (Inc. IGV):</span><span id="displaySubtotalProductos">S/ 0.00</span></div>
+                        <div class="d-flex justify-content-between mb-2 align-items-center"><label for="descuento_monto" class="form-label mb-0 me-2">Descuento (S/):</label><input type="number" step="0.01" min="0" class="form-control form-control-sm d-inline-block" id="descuento_monto" name="descuento_monto" value="0.00" style="width: 100px;"></div>
+                        <hr style="border-color: var(--color-secundario-gris);">
+                        <div class="d-flex justify-content-between mb-2 fw-bold"><span>TOTAL VENTA:</span><strong id="displayMontoVenta">S/ 0.00</strong></div>
+                        <hr style="border-color: var(--color-secundario-gris);">
+                        <div class="d-flex justify-content-between mb-2"><span>Total Pagado:</span><span id="displayTotalPagado">S/ 0.00</span></div>
+                        <div class="d-flex justify-content-between fw-bold mt-2"><span class="saldo-pendiente">SALDO PENDIENTE:</span><strong class="saldo-pendiente" id="displaySaldoPendiente">S/ 0.00</strong></div>
+                        <hr style="border-color: var(--color-secundario-gris);">
+                        <div class="d-flex justify-content-between mb-1 small text-muted"><span>Base Imponible (Desglosada):</span><span id="displayBaseImponible">S/ 0.00</span></div>
+                        <div class="d-flex justify-content-between small text-muted"><span>IGV (18% Desglosado):</span><span id="displayIGV">S/ 0.00</span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <input type="hidden" name="items_json" id="items_json">
+            <input type="hidden" name="pagos_json" id="pagos_json">
+            <input type="hidden" name="estado_pago" id="hidden_estado_pago">
+            <input type="hidden" name="comanda_origen_id" value="{{ comanda_origen_id or '' }}">
+            <input type="hidden" name="final_subtotal_servicios" id="final_subtotal_servicios"><input type="hidden" name="final_subtotal_productos" id="final_subtotal_productos"><input type="hidden" name="final_descuento_aplicado" id="final_descuento_aplicado"><input type="hidden" name="final_monto_impuestos" id="final_monto_impuestos"><input type="hidden" name="final_monto_total_venta" id="final_monto_total_venta">
+            <input type="hidden" name="reserva_id_origen" value="{{ reserva_origen_id if reserva_origen_id else '' }}">
+
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{{ url_for('main.render_agenda_diaria') }}" class="btn btn-secondary me-2"><i class="fas fa-times me-1"></i>Cancelar Venta</a>
+                <button type="submit" class="btn btn-success"><i class="fas fa-check-circle me-1"></i>Finalizar y Guardar Venta</button>
+            </div>
+        </form>
+    </div>
+<div class="modal fade text-dark" id="modalRegistroRapidoCliente" tabindex="-1" aria-labelledby="modalRegistroRapidoLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content" style="background-color: #f8f9fa;">
+                <form id="formRegistroRapido" onsubmit="event.preventDefault();">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalRegistroRapidoLabel">Registrar Nuevo Cliente para Facturación</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-danger" id="modalRegistroErrores" style="display: none;"></div>
+                        <div class="mb-3">
+                            <label for="registroRapidoDocumento" id="labelRegistroRapidoDocumento" class="form-label">DNI</label>
+                            <input type="text" class="form-control" id="registroRapidoDocumento" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label for="registroRapidoNombres" class="form-label">Nombres Completos / Razón Social</label>
+                            <input type="text" class="form-control" id="registroRapidoNombres" required>
+                        </div>
+                         <div class="mb-3" id="campoApellidosRapido">
+                            <label for="registroRapidoApellidos" class="form-label">Apellidos</label>
+                            <input type="text" class="form-control" id="registroRapidoApellidos">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Registrar Cliente</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+
+
+document.addEventListener('DOMContentLoaded', function() {   
+
+      
+ 
+    const estilosCatalogo = JSON.parse('{{ estilos_catalogo | tojson | safe }}');
+
+    const PUNTOS_POR_SOL_CANJE = 10;
+
+    const selectorComprobante = document.getElementById('tipo_comprobante');
+    const seccionFacturacion = document.getElementById('seccion_facturacion');
+    const btnBuscarDocFactura = document.getElementById('btnBuscarDocFactura');
+    const inputDocumentoFactura = document.getElementById('inputDocumentoFactura');
+    const selectorClienteFacturacion = document.getElementById('cliente_facturacion_id');
+    
+    const selectorClienteReceptor = document.getElementById('cliente_receptor_id');
+    if ('{{ reserva_id_origen }}') {
+        selectorCliente.dispatchEvent(new Event('change'));
+    }
+    // --- LISTENER DEL SELECTOR DE CLIENTE (CON ALERTAS PROACTIVAS) ---
+    selectorClienteReceptor?.addEventListener('change', async function() {
+        const clienteId = this.value;
+        
+        // Resetear secciones visuales
+        seccionPuntos.style.display = 'none';
+        seccionCreditos.style.display = 'none';
+        infoCanjePuntosDiv.textContent = '';
+        puntosACanjearInput.value = '';
+        listaCreditosDisplay.innerHTML = '';
+        creditosDisponiblesCliente = [];
+
+        if (!clienteId || clienteId === "0") return;
+
+        infoCanjePuntosDiv.textContent = 'Buscando beneficios...';
+
+        try {
+            // Hacemos ambas llamadas a la API en paralelo
+            const [resPuntos, resCreditos] = await Promise.all([
+                fetch(`/api/clientes/${clienteId}/puntos`),
+                fetch(`/api/clientes/${clienteId}/creditos`)
+            ]);
+
+            // Procesar Puntos
+            if (resPuntos.ok) {
+                const dataPuntos = await resPuntos.json();
+                console.log("Respuesta de la API de Puntos:", dataPuntos); 
+                if (dataPuntos && dataPuntos.puntos_disponibles > 0) {
+                    const puntos = dataPuntos.puntos_disponibles;
+                    puntosDisponiblesCliente = puntos;
+                    const canjeValor = (puntos / PUNTOS_POR_SOL_CANJE).toFixed(2);
+                    
+                    seccionPuntos.style.display = 'block';
+                    puntosDisponiblesDisplay.textContent = puntos;
+
+                    if (confirm(`Este cliente tiene ${puntos} JV Puntos (equivale a S/ ${canjeValor} de descuento).\n\n¿Deseas canjear todos los puntos ahora?`)) {
+                        puntosACanjearInput.value = puntos;
+                        btnAplicarPuntos.click();
+                    }
+                }
+            } else {
+                console.error("Fallo al obtener puntos.");
+            }
+
+            // Procesar Créditos
+            if (resCreditos.ok) {
+                const dataCreditos = await resCreditos.json();
+                if (dataCreditos && dataCreditos.length > 0) {
+                    creditosDisponiblesCliente = dataCreditos;
+                    let creditosTexto = "Este cliente tiene una membresía activa con los siguientes beneficios:\n\n";
+                    dataCreditos.forEach(c => {
+                        creditosTexto += `- ${c.cantidad_restante} x ${c.servicio_nombre}\n`;
+                        listaCreditosDisplay.innerHTML += `<li class="list-group-item bg-transparent text-light border-0 py-1"><i class="fas fa-cut me-2 text-info"></i> ${c.servicio_nombre} <span class="badge bg-info float-end">${c.cantidad_restante}</span></li>`;
+                    });
+                    seccionCreditos.style.display = 'block';
+                    alert(creditosTexto);
+                }
+            } else {
+                console.error("Fallo al obtener créditos.");
+            }
+
+        } catch (error) {
+            console.error("Error al buscar beneficios:", error);
+            alert("No se pudieron cargar los beneficios del cliente en este momento.");
+        } finally {
+            infoCanjePuntosDiv.textContent = '';
+        }
+    });
+
+
+    selectorComprobante?.addEventListener('change', function() {
+        const tipo = this.value;
+        const labelFacturacion = document.getElementById('labelDocumentoFactura'); // La etiqueta de la sección
+
+        if (tipo === 'Boleta Electrónica') {
+            seccionFacturacion.style.display = 'block';
+            labelFacturacion.textContent = 'Emitir Boleta al DNI:'; // Nuevo texto
+        } else if (tipo === 'Factura Electrónica') {
+            seccionFacturacion.style.display = 'block';
+            labelFacturacion.textContent = 'Facturar al RUC:'; // Nuevo texto
+        } else {
+            seccionFacturacion.style.display = 'none';
+        }
+    });
+
+    const modalRegistroRapido = new bootstrap.Modal(document.getElementById('modalRegistroRapidoCliente'));
+
+    
+    btnBuscarDocFactura?.addEventListener('click', function() {
+        const numeroDoc = inputDocumentoFactura.value.trim();
+        if (!numeroDoc) {
+            alert("Por favor, ingrese un DNI o RUC para buscar.");
+            return;
+        }
+        
+        this.disabled = true; 
+        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        fetch(`/api/clientes/buscar_por_documento?numero_doc=${numeroDoc}`)
+            .then(response => response.json().then(data => ({ok: response.ok, status: response.status, data})))
+            .then(result => {
+                if (result.ok) {
+                    selectorClienteFacturacion.value = result.data.id;
+                    alert(`Cliente "${result.data.razon_social_nombres} ${result.data.apellidos || ''}" encontrado y seleccionado.`);
+                } else if (result.status === 404) {
+                    if (confirm('Cliente no encontrado. ¿Desea registrarlo ahora?')) {
+                        // Obtenemos el tipo de documento directamente del selector principal
+                        const tipoDocSeleccionado = selectorComprobante.value;
+                        const tipoDocTexto = (tipoDocSeleccionado === 'Factura Electrónica') ? 'RUC' : 'DNI';
+                        
+                        // Rellenamos el modal con la información correcta
+                        document.getElementById('labelRegistroRapidoDocumento').textContent = tipoDocTexto;
+                        document.getElementById('registroRapidoDocumento').value = numeroDoc;
+                        document.getElementById('campoApellidosRapido').style.display = (tipoDocTexto === 'RUC') ? 'none' : 'block';
+                        
+                        // Limpiamos el formulario del modal
+                        document.getElementById('formRegistroRapido').reset();
+                        // Volvemos a poner el número de documento, porque reset() lo borra
+                        document.getElementById('registroRapidoDocumento').value = numeroDoc;
+
+                        modalRegistroRapido.show();
+                    }
+                } else { throw new Error(result.data.error || 'Error del servidor'); }
+            })
+            .catch(error => alert(`No se pudo completar la búsqueda. Motivo: ${error.message}`))
+            .finally(() => { this.disabled = false; this.innerHTML = '<i class="fas fa-search"></i>'; });
+    });
+
+    formRegistroRapido?.addEventListener('submit', function(event) {
+        event.preventDefault(); // Prevenir que la página se recargue
+        
+        const btnGuardar = document.getElementById('btnGuardarClienteRapido');
+        const modalErroresDiv = document.getElementById('modalRegistroErrores');
+        btnGuardar.disabled = true;
+        btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
+        modalErroresDiv.style.display = 'none';
+
+        const payload = {
+            documento: document.getElementById('registroRapidoDocumento').value,
+            tipo_documento: document.getElementById('labelRegistroRapidoDocumento').textContent,
+            razon_social_nombres: document.getElementById('registroRapidoNombres').value,
+            apellidos: document.getElementById('registroRapidoApellidos').value
+        };
+
+        fetch('/api/clientes/registro_rapido', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json().then(data => ({ok: response.ok, data})))
+        .then(result => {
+            if (result.ok && result.data.success) {
+                const nuevoCliente = result.data.cliente;
+                // Crear la nueva opción para los desplegables
+                const textoOpcion = `${nuevoCliente.razon_social_nombres} ${nuevoCliente.apellidos || ''}`.trim();
+                const textoCompletoOpcion = `${textoOpcion} (${nuevoCliente.numero_documento || 'S/D'})`;
+                const nuevaOpcion = new Option(textoCompletoOpcion, nuevoCliente.id, true, true);
+               
+                // Añadir la nueva opción a AMBOS desplegables de cliente
+                selectorClienteReceptor.add(nuevaOpcion.cloneNode(true));
+                selectorClienteFacturacion.add(nuevaOpcion);
+                
+                // Seleccionar automáticamente al nuevo cliente
+                selectorClienteReceptor.value = nuevoCliente.id;
+                selectorClienteFacturacion.value = nuevoCliente.id;
+                
+                modalRegistroRapido.hide();
+                alert("Cliente registrado y seleccionado exitosamente.");
+            } else {
+                // Mostrar error dentro del modal
+                modalErroresDiv.textContent = result.data.message;
+                modalErroresDiv.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            modalErroresDiv.innerHTML = `Error de conexión: ${error.message}`;
+            modalErroresDiv.style.display = 'block';
+        })
+        .finally(() => {
+            btnGuardar.disabled = false;
+            btnGuardar.textContent = 'Registrar Cliente';
+        });
+    });
+
+    document.getElementById('formRegistroRapido')?.addEventListener('submit', function() {
+        const payload = {
+            documento: document.getElementById('registroRapidoDocumento').value,
+            nombres: document.getElementById('registroRapidoNombres').value,
+            apellidos: document.getElementById('registroRapidoApellidos').value
+        };
+
+        fetch('/api/clientes/registro_rapido', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Éxito: Añadir el nuevo cliente al desplegable y seleccionarlo
+                const nuevoCliente = data.cliente;
+                const nuevaOpcion = new Option(`${nuevoCliente.nombres} ${nuevoCliente.apellidos} (${nuevoCliente.dni})`, nuevoCliente.id, true, true);
+                selectorClienteFacturacion.add(nuevaOpcion);
+                
+                modalRegistroRapido.hide();
+                alert("Cliente registrado y seleccionado exitosamente.");
+            } else {
+                // Mostrar error dentro del modal
+                document.getElementById('modalRegistroErrores').textContent = data.message;
+                document.getElementById('modalRegistroErrores').style.display = 'block';
+            }
+        });
+    });
+    
+    // --- LÓGICA DE JAVASCRIPT PARA EL FORMULARIO DE VENTA ---
+    
+    // --- Inicialización y Selectores DOM ---
+    let itemsEnVenta = JSON.parse('{{ prefill_items_json | safe }}');
+    
+    const fechaVentaInput = document.getElementById('fecha_venta');
+    const selectPlanMembresia = document.getElementById('selectPlanMembresia');
+    const btnAnadirMembresia = document.getElementById('btnAnadirMembresia');
+
+    if (fechaVentaInput && !fechaVentaInput.value) { 
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        now.setSeconds(0); 
+        now.setMilliseconds(0);
+        fechaVentaInput.value = now.toISOString().slice(0,16);
+    }
+        
+    let pagosEnVenta = [];
+    let puntosDisponiblesCliente = 0;
+    let creditosDisponiblesCliente = []; // <-- NUEVA: para guardar los créditos del cliente
+
+    const IGV_TASA = 0.18;
+    const PUNTOS_POR_SOL = 10; // Regla de canje
+
+// Selectores para los nuevos elementos
+    const selectorCliente = document.getElementById('cliente_id');
+    const seccionPuntos = document.getElementById('seccionPuntosFidelidad');
+    const puntosDisponiblesDisplay = document.getElementById('puntosDisponiblesDisplay');
+    const puntosACanjearInput = document.getElementById('puntosACanjearInput');
+    const btnAplicarPuntos = document.getElementById('btnAplicarPuntos');
+    const infoCanjePuntosDiv = document.getElementById('infoCanjePuntos');
+    const puntosCanjeadosHiddenInput = document.createElement('input'); // Campo oculto para enviar los puntos
+    puntosCanjeadosHiddenInput.type = 'hidden';
+    puntosCanjeadosHiddenInput.name = 'puntos_canjeados';
+    puntosCanjeadosHiddenInput.value = '0';
+    document.getElementById('formVenta').appendChild(puntosCanjeadosHiddenInput);
+    const seccionCreditos = document.getElementById('seccionCreditosMembresia');
+    const listaCreditosDisplay = document.getElementById('listaCreditosDisponibles');
+
+    
+    // Selectores para Ítems
+    const selectServicio = document.getElementById('selectServicio');
+    const cantidadServicioInput = document.getElementById('cantidadServicio');
+    const precioServicioInput = document.getElementById('precioServicio');
+    const btnAnadirServicio = document.getElementById('btnAnadirServicio');
+    const selectProducto = document.getElementById('selectProducto');
+    const cantidadProductoInput = document.getElementById('cantidadProducto');
+    const precioProductoInput = document.getElementById('precioProducto');
+    const btnAnadirProducto = document.getElementById('btnAnadirProducto');
+    const tablaItemsVentaBody = document.querySelector('#tablaItemsVenta tbody');  
+
+    // Selectores para Pagos
+    const selectMetodoPago = document.getElementById('selectMetodoPago');
+    const inputMontoPago = document.getElementById('inputMontoPago');
+    const inputReferenciaPago = document.getElementById('inputReferenciaPago');
+    const btnAnadirPago = document.getElementById('btnAnadirPago');
+    const tablaPagosAgregadosBody = document.querySelector('#tablaPagosAgregados tbody');
+    
+    // Selectores para Totales y Campos Ocultos
+    const descuentoMontoInput = document.getElementById('descuento_monto');
+    const displaySubtotalServicios = document.getElementById('displaySubtotalServicios');
+    const displaySubtotalProductos = document.getElementById('displaySubtotalProductos');
+    const displayMontoVenta = document.getElementById('displayMontoVenta');
+    const displayTotalPagado = document.getElementById('displayTotalPagado');
+    const displaySaldoPendiente = document.getElementById('displaySaldoPendiente');
+    const displayBaseImponible = document.getElementById('displayBaseImponible');
+    const displayIGV = document.getElementById('displayIGV');
+    
+    const itemsJsonInput = document.getElementById('items_json');
+    const pagosJsonInput = document.getElementById('pagos_json');
+    const hiddenEstadoPagoInput = document.getElementById('hidden_estado_pago');
+    const finalSubtotalServiciosInput = document.getElementById('final_subtotal_servicios');
+    const finalSubtotalProductosInput = document.getElementById('final_subtotal_productos');
+    const finalDescuentoAplicadoInput = document.getElementById('final_descuento_aplicado');
+    const finalMontoImpuestosInput = document.getElementById('final_monto_impuestos');
+    const finalMontoTotalInput = document.getElementById('final_monto_total_venta');
+
+    // Selectores para lógica de series dinámicas
+    const selectorSucursal = document.getElementById('sucursal_id');
+    const selectorTipoComprobante = document.getElementById('tipo_comprobante');
+    const selectorSerieComprobante = document.getElementById('serie_comprobante');
+
+    // Listener para cuando se cambia el cliente
+    if (selectorCliente) {
+        selectorCliente.addEventListener('change', function() {
+            const clienteId = this.value;
+            infoCanjePuntosDiv.textContent = ''; // Limpiar mensajes
+            puntosACanjearInput.value = ''; // Limpiar input
+            seccionPuntos.style.display = 'none';
+            seccionCreditos.style.display = 'none';
+            listaCreditosDisplay.innerHTML = '';
+            creditosDisponiblesCliente = [];
+            
+            if (clienteId && clienteId !== "0") {
+                // Si es un cliente registrado, buscar sus puntos
+                fetch(`/api/clientes/${clienteId}/puntos`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.puntos_disponibles !== undefined) {
+                            puntosDisponiblesCliente = data.puntos_disponibles;
+                            puntosDisponiblesDisplay.textContent = puntosDisponiblesCliente;
+                            seccionPuntos.style.display = 'block'; // Mostrar la sección de puntos
+                        } else {
+                            seccionPuntos.style.display = 'none';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error al obtener puntos del cliente:', error);
+                        seccionPuntos.style.display = 'none';
+                    });
+
+                fetch(`/api/clientes/${clienteId}/creditos`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data && data.length > 0) {
+                            creditosDisponiblesCliente = data; // Guardar los créditos
+                            // Dibujar la lista de créditos en pantalla
+                            data.forEach(credito => {
+                                const li = document.createElement('li');
+                                li.className = 'list-group-item bg-transparent text-light border-0 py-1';
+                                li.innerHTML = `<i class="fas fa-cut me-2 text-info"></i> ${credito.servicio_nombre} <span class="badge bg-info float-end">${credito.cantidad_restante}</span>`;
+                                listaCreditosDisplay.appendChild(li);
+                            });
+                            seccionCreditos.style.display = 'block'; // Mostrar la sección
+                        }
+                    })
+                    .catch(error => console.error('Error al obtener créditos:', error));
+
+
+            } else {
+                // Si es "Cliente Varios" o no hay selección, ocultar la sección
+                seccionPuntos.style.display = 'none';
+            }
+        });
+    }
+
+    // --- Lógica para Series Dinámicas ---
+    function cargarSeries() {
+        const sucursalId = selectorSucursal.value;
+        const tipoComprobante = selectorTipoComprobante.value;
+        selectorSerieComprobante.innerHTML = '<option value="">Cargando...</option>';
+        selectorSerieComprobante.disabled = true;
+
+        if (sucursalId && tipoComprobante) {
+            fetch(`/api/series_por_sucursal_y_tipo?sucursal_id=${sucursalId}&tipo_comprobante=${encodeURIComponent(tipoComprobante)}`)
+                .then(response => response.json())
+                .then(series => {
+                    selectorSerieComprobante.innerHTML = '<option value="">Seleccione una serie...</option>';
+                    if (series.length > 0) {
+                        series.forEach(serie => {
+                            const option = new Option(serie, serie);
+                            selectorSerieComprobante.add(option);
+                        });
+                        selectorSerieComprobante.disabled = false;
+                    } else {
+                        selectorSerieComprobante.innerHTML = '<option value="">No hay series configuradas</option>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error al cargar series:', error);
+                    selectorSerieComprobante.innerHTML = '<option value="">Error al cargar</option>';
+                });
+        } else {
+            selectorSerieComprobante.innerHTML = '<option value="">Seleccione sucursal y tipo...</option>';
+        }
+    }
+    if (selectorSucursal) selectorSucursal.addEventListener('change', cargarSeries);
+    if (selectorTipoComprobante) selectorTipoComprobante.addEventListener('change', cargarSeries);
+
+    if (btnAnadirMembresia) {
+        btnAnadirMembresia?.addEventListener('click', function() {
+            const selectedOption = selectPlanMembresia.options[selectPlanMembresia.selectedIndex];
+            if (!selectedOption || !selectedOption.value) {
+                alert("Por favor, seleccione un plan de membresía.");
+                return;
+            }
+
+            // Validar que no se añada más de una membresía por venta
+            if (itemsEnVenta.some(item => item.tipo_item === 'Membresía')) {
+                alert("Solo se puede vender una membresía por transacción.");
+                return;
+            }
+
+            const planId = selectedOption.value;
+            const planNombre = selectedOption.dataset.nombre;
+            const planPrecio = parseFloat(selectedOption.dataset.precio);
+
+            // Añadir la membresía como un tipo especial de ítem
+            itemsEnVenta.push({
+                tipo_item: 'Membresía',
+                item_id: planId,
+                descripcion_item_venta: `Membresía: ${planNombre}`,
+                cantidad: 1,
+                precio_unitario_venta: planPrecio,
+                es_trabajo_extra: false,
+                subtotal_item_neto: planPrecio,
+                subtotal_item_bruto: planPrecio
+            });
+
+            renderizarItemsTabla();
+            actualizarTotales();
+            
+            // Deshabilitar la sección para no añadir más de una
+            selectPlanMembresia.disabled = true;
+            this.disabled = true;
+        });
+    }
+
+    // --- Lógica para Ítems y Pagos (como antes) ---
+    // (Esta parte no necesita cambios)
+    if (selectServicio) {
+        selectServicio.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            precioServicioInput.value = (selectedOption && selectedOption.value) ? (selectedOption.dataset.precio || '') : '';
+        });
+    }
+
+    if (selectProducto) {
+        selectProducto.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            precioProductoInput.value = (selectedOption && selectedOption.value) ? (selectedOption.dataset.precio || '') : '';
+        });
+    }
+    
+    if (btnAplicarPuntos) {
+        btnAplicarPuntos.addEventListener('click', function() {
+            const puntosACanjear = parseInt(puntosACanjearInput.value) || 0;
+            if (puntosACanjear <= 0) { infoCanjePuntosDiv.textContent = "Ingrese una cantidad de puntos válida."; return; }
+            if (puntosACanjear > puntosDisponiblesCliente) { infoCanjePuntosDiv.textContent = `No tiene suficientes puntos. Disponibles: ${puntosDisponiblesCliente}.`; return; }
+            const descuentoPorPuntos = puntosACanjear / PUNTOS_POR_SOL;
+            descuentoMontoInput.value = descuentoPorPuntos.toFixed(2);
+            puntosCanjeadosHiddenInput.value = puntosACanjear;
+            infoCanjePuntosDiv.textContent = `${puntosACanjear} puntos aplicados como un descuento de S/ ${descuentoPorPuntos.toFixed(2)}.`;
+            actualizarTotales();
+        });
+    }
+
+    btnAnadirServicio?.addEventListener('click', function() {
+        const sel = document.getElementById('selectServicio');
+        const opt = sel.options[sel.selectedIndex];
+        if (!opt?.value) { alert("Seleccione un servicio."); return; }
+        
+        const servicioId = opt.value;
+        const servicioNombre = opt.dataset.nombre;
+        let precio = parseFloat(precioServicioInput.value);
+        let usarCredito = false;
+        let creditoIdUsado = null;
+
+        const creditoDisponible = creditosDisponiblesCliente.find(c => c.servicio_id == servicioId);
+
+        if (creditoDisponible) {
+            if (confirm(`Este cliente tiene ${creditoDisponible.cantidad_restante} crédito(s) para "${creditoDisponible.servicio_nombre}".\n\n¿Desea usar un crédito ahora? (El precio será S/ 0.00)`)) {
+                precio = 0.00;
+                usarCredito = true;
+                creditoIdUsado = creditoDisponible.credito_id;
+            }
+        }
+        
+        if (isNaN(precio) || precio < 0) { alert("Precio de servicio inválido."); return; }
+        
+        const nuevoItem = {
+            tipo_item: 'Servicio', 
+            item_id: servicioId,
+            descripcion_item_venta: servicioNombre, 
+            cantidad: 1, 
+            precio_unitario_venta: precio, 
+            es_trabajo_extra: checkServicioExtra.checked,
+            usado_como_beneficio: usarCredito, 
+            credito_id_usado: creditoIdUsado,
+            subtotal_item_neto: precio, // Para un servicio, el subtotal es el precio
+            subtotal_item_bruto: precio
+        };
+        itemsEnVenta.push(nuevoItem);
+        
+        renderizarItemsTabla(); 
+        actualizarTotales();
+        sel.value = ""; 
+        precioServicioInput.value = ""; 
+        checkServicioExtra.checked = false;
+    });
+        
+    if (btnAnadirProducto) {
+        btnAnadirProducto.addEventListener('click', function() {
+            const selectedOption = selectProducto.options[selectProducto.selectedIndex];
+            if (!selectedOption || !selectedOption.value) { alert("Seleccione un producto."); return; }
+            const itemId = selectedOption.value;
+            const itemName = selectedOption.dataset.nombre;
+            const stockActual = parseInt(selectedOption.dataset.stock) || 0;
+            const cantidad = parseInt(cantidadProductoInput.value) || 1;
+            const precioUnitario = parseFloat(precioProductoInput.value);
+            if (isNaN(precioUnitario) || precioUnitario < 0) { alert("Precio de producto inválido."); return; }
+            if (cantidad <= 0) { alert("Cantidad debe ser mayor a 0."); return; }
+            if (cantidad > stockActual) { alert(`Stock insuficiente para "${itemName}". Stock: ${stockActual}.`); return; }
+            itemsEnVenta.push({
+                tipo_item: 'Producto', item_id: itemId, descripcion_item_venta: itemName,
+                cantidad: cantidad, precio_unitario_venta: precioUnitario, descuento_item_monto: 0,
+                subtotal_item_bruto: cantidad * precioUnitario, subtotal_item_neto: cantidad * precioUnitario
+            });
+            renderizarItemsTabla(); actualizarTotales();
+            document.getElementById('checkServicioExtra').checked = false; // Resetear el checkbox
+            selectProducto.value = ""; cantidadProductoInput.value = "1"; precioProductoInput.value = "";
+        });
+    }
+
+     if (btnAnadirPago) {
+        btnAnadirPago.addEventListener('click', function() {
+            const metodo = selectMetodoPago.value;
+            const monto = parseFloat(inputMontoPago.value);
+            const referencia = inputReferenciaPago.value.trim();
+            if (!metodo) { alert("Seleccione un método de pago."); return; }
+            if (isNaN(monto) || monto <= 0) { alert("Ingrese un monto de pago válido y positivo."); return; }
+            pagosEnVenta.push({ metodo_pago: metodo, monto: monto, referencia_pago: referencia });
+            renderizarPagosTabla();
+            actualizarTotales();
+            selectMetodoPago.value = ""; inputMontoPago.value = ""; inputReferenciaPago.value = "";
+        });
+    }
+
+    function renderizarItemsTabla() {
+        // Busca el cuerpo de la tabla de ítems
+        const tablaItemsVentaBody = document.querySelector('#tablaItemsVenta tbody');
+        
+        // Limpia cualquier contenido anterior
+        tablaItemsVentaBody.innerHTML = ''; 
+
+        // Si no hay ítems en la venta, muestra el mensaje por defecto y termina
+        if (itemsEnVenta.length === 0) {
+            tablaItemsVentaBody.innerHTML = '<tr id="filaSinItems"><td colspan="5" class="text-center text-muted">No hay ítems añadidos a la venta.</td></tr>';
+            return;
+        }
+
+        // Itera sobre cada ítem en el array 'itemsEnVenta' para crear una fila en la tabla
+        itemsEnVenta.forEach((item, index) => {
+            const subtotalItem = item.cantidad * item.precio_unitario_venta;
+            const fila = tablaItemsVentaBody.insertRow();
+            
+            // --- Lógica para la Descripción ---
+            let descripcionHtml = item.descripcion_item_venta;
+            // Añadir etiquetas distintivas según el tipo de ítem
+            if (item.tipo_item === 'Servicio' && item.es_trabajo_extra) {
+                descripcionHtml += ' <span class="badge bg-warning text-dark">Extra</span>';
+            } else if (item.tipo_item === 'Membresía') {
+                descripcionHtml += ' <span class="badge bg-info">Plan</span>';
+            }
+
+            // --- Crear las celdas de la fila ---
+            // Usamos innerHTML para la descripción para que renderice la etiqueta <span>
+            fila.insertCell().innerHTML = descripcionHtml; 
+            
+            const celdaCantidad = fila.insertCell();
+            celdaCantidad.textContent = item.cantidad;
+            celdaCantidad.className = 'text-center';
+
+            const celdaPrecio = fila.insertCell();
+            celdaPrecio.textContent = item.precio_unitario_venta.toFixed(2);
+            celdaPrecio.className = 'text-end';
+            
+            const celdaSubtotal = fila.insertCell();
+            celdaSubtotal.textContent = subtotalItem.toFixed(2);
+            celdaSubtotal.className = 'text-end';
+
+            // Celda para el botón de eliminar
+            const cellAccion = fila.insertCell();
+            cellAccion.className = 'text-center';
+            const btnEliminar = document.createElement('button');
+            btnEliminar.type = 'button';
+            btnEliminar.className = 'btn btn-danger btn-xs';
+            btnEliminar.innerHTML = '&times;'; // Un ícono de 'x' simple
+            btnEliminar.title = 'Eliminar ítem';
+            btnEliminar.dataset.index = index; // Guardamos el índice del ítem en el botón
+
+            btnEliminar.addEventListener('click', function() {
+                const indexToRemove = parseInt(this.dataset.index);
+                // Si se eliminó una membresía, volver a habilitar el selector
+                if (itemsEnVenta[indexToRemove].tipo_item === 'Membresía') {
+                    const selectPlanMembresia = document.getElementById('selectPlanMembresia');
+                    const btnAnadirMembresia = document.getElementById('btnAnadirMembresia');
+                    if(selectPlanMembresia) selectPlanMembresia.disabled = false;
+                    if(btnAnadirMembresia) btnAnadirMembresia.disabled = false;
+                }
+                
+                itemsEnVenta.splice(indexToRemove, 1); // Eliminar el ítem del array
+                renderizarItemsTabla(); // Volver a dibujar la tabla
+                actualizarTotales();    // Recalcular los totales
+            });
+
+            cellAccion.appendChild(btnEliminar);
+            // --- NUEVA LÓGICA: AÑADIR CAMPO DE NOTAS/ESTILO PARA SERVICIOS ---
+            if (item.tipo_item === 'Servicio') {
+                const filaNota = tablaItemsVentaBody.insertRow();
+                const celdaNota = filaNota.insertCell();
+                celdaNota.colSpan = 5;
+                celdaNota.className = 'pt-0 pb-3';
+
+                // Crear un datalist para las sugerencias del catálogo
+                let datalistHtml = '<datalist id="estilos-sugerencias">';
+                estilosCatalogo.forEach(estilo => {
+                    datalistHtml += `<option value="${estilo.nombre}">`;
+                });
+                datalistHtml += '</datalist>';
+
+                celdaNota.innerHTML = `
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="fas fa-cut"></i></span>
+                        <input type="text" class="form-control form-control-sm nota-item-input" 
+                               list="estilos-sugerencias"
+                               data-index="${index}"
+                               value="${item.notas_item || ''}"
+                               placeholder="Añadir nota o seleccionar estilo (ej. Corte Americano, Taper Fade)...">
+                        ${datalistHtml}
+                    </div>
+                `;
+            }
+        });
+    }
+
+
+    
+   // --- NUEVO LISTENER PARA LAS NOTAS DE ÍTEMS ---
+    document.querySelector('#tablaItemsVenta tbody').addEventListener('input', function(event) {
+        if (event.target && event.target.classList.contains('nota-item-input')) {
+            const index = parseInt(event.target.dataset.index, 10);
+            itemsEnVenta[index].notas_item = event.target.value;
+            // Actualizar el JSON que se enviará al backend
+            document.getElementById('items_json').value = JSON.stringify(itemsEnVenta);
+        }
+    });
+    
+    function renderizarPagosTabla() {
+        tablaPagosAgregadosBody.innerHTML = ''; 
+        if (pagosEnVenta.length === 0) {
+            const filaVacia = tablaPagosAgregadosBody.insertRow();
+            filaVacia.id = 'filaSinPagos';
+            const tdVacia = filaVacia.insertCell();
+            tdVacia.colSpan = 4;
+            tdVacia.className = 'text-center text-muted';
+            tdVacia.textContent = 'No hay pagos registrados.';
+            return;
+        }
+        pagosEnVenta.forEach((pago, index) => {
+            const fila = tablaPagosAgregadosBody.insertRow();
+            fila.insertCell().textContent = pago.metodo_pago;
+            fila.insertCell().textContent = pago.monto.toFixed(2);
+            fila.insertCell().textContent = pago.referencia_pago || '-';
+            const cellAccion = fila.insertCell();
+            const btnEliminar = document.createElement('button');
+            btnEliminar.type = 'button'; btnEliminar.className = 'btn btn-danger btn-xs';
+            btnEliminar.innerHTML = '<i class="fas fa-trash-alt"></i>';
+            btnEliminar.title = 'Eliminar pago';
+            btnEliminar.onclick = function() { pagosEnVenta.splice(index, 1); renderizarPagosTabla(); actualizarTotales(); };
+            cellAccion.appendChild(btnEliminar);
+        });
+    }
+
+    function actualizarTotales() {
+        // --- 1. Calcular Subtotales por Tipo ---
+        let subtotalServicios = 0;
+        let subtotalProductos = 0;
+
+        itemsEnVenta.forEach(item => {
+            const subtotalItem = item.cantidad * item.precio_unitario_venta;
+            
+            // Tratamos la 'Membresía' como si fuera un servicio para la suma del subtotal
+            if (item.tipo_item === 'Servicio' || item.tipo_item === 'Membresía') {
+                subtotalServicios += subtotalItem;
+            } else if (item.tipo_item === 'Producto') {
+                subtotalProductos += subtotalItem;
+            }
+        });
+
+        // --- 2. Calcular Montos Generales ---
+        const descuento = parseFloat(descuentoMontoInput.value) || 0;
+        const montoTotalVenta = (subtotalServicios + subtotalProductos) - descuento;
+
+        // --- 3. Calcular Desglose de IGV ---
+        const baseImponible = montoTotalVenta > 0 ? montoTotalVenta / (1 + IGV_TASA) : 0;
+        const montoIGV = montoTotalVenta - baseImponible;
+        
+        // --- 4. Calcular Totales de Pago y Saldo ---
+        const totalPagado = pagosEnVenta.reduce((sum, pago) => sum + parseFloat(pago.monto), 0);
+        const saldoPendiente = montoTotalVenta - totalPagado;
+
+        // --- 5. Determinar Estado del Pago ---
+        let estadoPagoCalculado = "Pendiente de Pago";
+        if (montoTotalVenta > 0 && (Math.abs(totalPagado - montoTotalVenta) < 0.01 || totalPagado > montoTotalVenta)) {
+            estadoPagoCalculado = "Pagado";
+        } else if (totalPagado > 0) {
+            estadoPagoCalculado = "Parcialmente Pagado";
+        } else if (montoTotalVenta <= 0) {
+            estadoPagoCalculado = "Pagado";
+        }
+        
+        // --- 6. Actualizar la Interfaz de Usuario (Displays) ---
+        // Usamos .toFixed(2) para asegurar que siempre se muestren dos decimales
+        document.getElementById('displaySubtotalServicios').textContent = `S/ ${subtotalServicios.toFixed(2)}`;
+        document.getElementById('displaySubtotalProductos').textContent = `S/ ${subtotalProductos.toFixed(2)}`;
+        document.getElementById('displayMontoVenta').textContent = `S/ ${montoTotalVenta.toFixed(2)}`;
+        document.getElementById('displayTotalPagado').textContent = `S/ ${totalPagado.toFixed(2)}`;
+        document.getElementById('displaySaldoPendiente').textContent = `S/ ${saldoPendiente.toFixed(2)}`;
+        document.getElementById('displayBaseImponible').textContent = `S/ ${baseImponible.toFixed(2)}`;
+        document.getElementById('displayIGV').textContent = `S/ ${montoIGV.toFixed(2)}`;
+
+        // --- 7. Actualizar los Campos Ocultos para el Envío del Formulario ---
+        document.getElementById('items_json').value = JSON.stringify(itemsEnVenta);
+        document.getElementById('pagos_json').value = JSON.stringify(pagosEnVenta);
+        document.getElementById('hidden_estado_pago').value = estadoPagoCalculado;
+        document.getElementById('final_subtotal_servicios').value = subtotalServicios.toFixed(2);
+        document.getElementById('final_subtotal_productos').value = subtotalProductos.toFixed(2);
+        document.getElementById('final_descuento_aplicado').value = descuento.toFixed(2);
+        document.getElementById('final_monto_impuestos').value = montoIGV.toFixed(2);
+        document.getElementById('final_monto_total_venta').value = montoTotalVenta.toFixed(2);
+    }
+
+    if (descuentoMontoInput) {
+        descuentoMontoInput.addEventListener('input', actualizarTotales);
+    }
+    if (btnBuscarDocumento) {
+        btnBuscarDocumento.addEventListener('click', function() {
+            const numeroDoc = inputDocumento.value.trim();
+            if (numeroDoc === '') return;
+
+            // Mostrar un indicador de carga
+            btnBuscarDocumento.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            btnBuscarDocumento.disabled = true;
+
+            // Llamar a nuestra nueva API de búsqueda
+            fetch(`/api/clientes/buscar_por_documento?numero_doc=${numeroDoc}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.id) {
+                        // ¡Éxito! Cliente encontrado.
+                        // Seleccionamos al cliente en el desplegable principal.
+                        selectorCliente.value = data.id;
+
+                        // Disparamos un evento 'change' para que se carguen sus puntos y créditos.
+                        const event = new Event('change');
+                        selectorCliente.dispatchEvent(event);
+
+                        alert(`Cliente "${data.nombres} ${data.apellidos}" encontrado y seleccionado.`);
+                    } else {
+                        // Cliente no encontrado en nuestra BD.
+                        alert(data.error || "No se encontró ningún cliente con ese documento. Puede registrarlo como un cliente nuevo.");
+                    }
+                })
+                .catch(error => {
+                    console.error('Error al buscar cliente:', error);
+                    alert("Ocurrió un error de red al intentar buscar el cliente.");
+                })
+                .finally(() => {
+                    // Restaurar el botón de búsqueda a su estado original
+                    btnBuscarDocumento.innerHTML = '<i class="fas fa-search"></i>';
+                    btnBuscarDocumento.disabled = false;
+                });
+        });
+    }
+    
+    renderizarItemsTabla(); // <-- AÑADIR esta llamada para dibujar los ítems al inicio
+    renderizarPagosTabla();
+    actualizarTotales(); 
+});
+</script>
+{% endblock %}

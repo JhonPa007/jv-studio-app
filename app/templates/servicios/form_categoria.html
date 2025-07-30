@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{# El título del bloque y el H2 se adaptan si es nueva o edición #}
+{% block title %}{{ titulo_form | default('Gestionar Categoría') }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .form-section {
+        background-color: #3a3a3a; /* Color de fondo oscuro para la sección del formulario */
+        padding: 25px;
+        border-radius: 8px; /* Bordes redondeados */
+        margin-bottom: 20px;
+    }
+    .form-section h2 {
+        color: var(--color-acento-dorado); /* Color dorado para el título */
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--color-secundario-gris); /* Línea divisoria sutil */
+        padding-bottom: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="form-section">
+        <h2>
+            {# El icono y el título cambian según si es nueva o edición #}
+            <i class="fas {{ 'fa-plus-circle' if es_nueva else 'fa-edit' }} me-2"></i>
+            {{ titulo_form | default('Gestionar Categoría de Servicio') }}
+        </h2>
+        
+        {# Bloque para mostrar mensajes flash (errores, éxito, etc.) #}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {# Determinar la URL a la que el formulario enviará los datos #}
+        {# Si 'es_nueva' es True, apunta a 'nueva_categoria_servicio'. #}
+        {# Si no, apunta a 'editar_categoria_servicio' con el ID de la categoría. #}
+        {% set action_url = url_for('main.nueva_categoria_servicio') if es_nueva else url_for('main.editar_categoria_servicio', categoria_id=categoria.id if categoria else 0) %}
+        
+        {# Determinar la fuente de datos para los campos del formulario: #}
+        {# 1. 'form_data': Si venimos de un error de validación en un POST (contiene lo que el usuario ya escribió). #}
+        {# 2. 'categoria': Si estamos editando una categoría existente (GET para editar). #}
+        {# 3. '{}': Un diccionario vacío si es un formulario nuevo y no hay 'form_data'. #}
+        {% set data_source = form_data if form_data else (categoria if categoria else {}) %}
+
+        <form method="POST" action="{{ action_url }}">
+            <div class="mb-3">
+                <label for="nombre" class="form-label">Nombre de la Categoría <span class="text-danger">*</span></label>
+                {# Usamos data_source.get('nombre', '') para obtener el valor. #}
+                {# Si la clave 'nombre' no existe, devuelve una cadena vacía. #}
+                <input type="text" class="form-control" id="nombre" name="nombre" 
+                       value="{{ data_source.get('nombre', '') }}" required>
+            </div>
+            
+            <div class="mb-3">
+                <label for="descripcion" class="form-label">Descripción (Opcional)</label>
+                {# Para el textarea, el contenido va entre las etiquetas, no en 'value'. #}
+                <textarea class="form-control" id="descripcion" name="descripcion" 
+                          rows="4">{{ data_source.get('descripcion', '') }}</textarea>
+            </div>
+            
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{{ url_for('main.listar_categorias_servicios') }}" class="btn btn-secondary me-2">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>
+                    {# El texto del botón también cambia #}
+                    {{ 'Guardar Categoría' if es_nueva else 'Actualizar Categoría' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

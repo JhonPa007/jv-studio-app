@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .comanda-card {
+        background-color: #495057;
+        border: 1px solid var(--color-secundario-gris);
+        transition: transform 0.2s ease-in-out;
+    }
+    .comanda-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-tasks me-2"></i>{{ titulo_pagina }}</h2>
+    </div>
+
+    <div class="card bg-dark text-light mb-4">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('main.listar_comandas_pendientes') }}" class="row g-3 align-items-center">
+                <div class="col-md-5">
+                    <label for="sucursal_id_selector" class="form-label">Mostrar comandas para la sucursal:</label>
+                    <select name="sucursal_id" id="sucursal_id_selector" class="form-select" onchange="this.form.submit()">
+                        <option value="">-- Elija una sucursal --</option>
+                        {% for suc in sucursales %}
+                        <option value="{{ suc.id }}" {% if sucursal_seleccionada_id == suc.id %}selected{% endif %}>
+                            {{ suc.nombre }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {# Mostrar las comandas solo si se ha seleccionado una sucursal #}
+    {% if sucursal_seleccionada_id %}
+        <div class="row">
+            {% for comanda in comandas %}
+            <div class="col-xl-3 col-lg-4 col-md-6 mb-4">
+                <div class="card text-white comanda-card h-100">
+                    <div class="card-header d-flex justify-content-between">
+                        <strong>Comanda #{{ comanda.id }}</strong>
+                        <span class="text-muted"><small>{{ comanda.fecha_venta.strftime('%H:%M') }}hs</small></span>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text mb-1">
+                            <i class="fas fa-user-tag fa-fw me-2 text-muted"></i>
+                            <strong>Cliente:</strong> {{ comanda.cliente_nombre }}
+                        </p>
+                        <p class="card-text">
+                            <i class="fas fa-user-tie fa-fw me-2 text-muted"></i>
+                            <strong>Colaborador:</strong> {{ comanda.colaborador_nombre }}
+                        </p>
+                        <h4 class="card-title text-center my-3" style="color: var(--color-acento-dorado);">
+                            S/ {{ "%.2f"|format(comanda.monto_final_venta) }}
+                        </h4>
+                    </div>
+                    <div class="card-footer p-2">
+                        <a href="{{ url_for('main.nueva_venta', comanda_id=comanda.id) }}" class="btn btn-success w-100">
+                            <i class="fas fa-cash-register me-2"></i>Procesar Venta
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="col">
+                <div class="alert alert-info-custom">No hay comandas pendientes para esta sucursal.</div>
+            </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}

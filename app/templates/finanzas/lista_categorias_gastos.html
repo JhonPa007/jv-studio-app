@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina | default('Categorías de Gastos') }} - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-tags me-2"></i>{{ titulo_pagina }}</h2>
+        <a href="{{ url_for('main.nueva_categoria_gasto') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Nueva Categoría de Gasto
+        </a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {% if categorias %}
+    <div class="table-responsive">
+        <table class="table table-hover table-custom table-sm">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Descripción</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cat in categorias %}
+                <tr>
+                    <td>{{ cat.id }}</td>
+                    <td>{{ cat.nombre }}</td>
+                    <td>{{ cat.descripcion if cat.descripcion else '-' }}</td>
+                    <td class="table-actions">
+                        {# Estos enlaces apuntarán a rutas que crearemos después #}
+                        <a href="{{ url_for('main.editar_categoria_gasto', categoria_id=cat.id) }}" class="btn btn-xs btn-warning" title="Editar"><i class="fas fa-edit"></i></a>
+                        <a href="{{ url_for('main.eliminar_categoria_gasto', categoria_id=cat.id) }}" class="btn btn-xs btn-danger ms-1" title="Eliminar" onclick="return confirm('¿Estás seguro de que deseas eliminar esta categoría? Si tiene gastos asociados, no se podrá eliminar.');"><i class="fas fa-trash"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info-custom">
+        <i class="fas fa-info-circle me-2"></i>No hay categorías de gastos registradas todavía.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

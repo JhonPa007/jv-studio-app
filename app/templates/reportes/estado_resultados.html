@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .report-section { background-color: #3a3a3a; padding: 25px; border-radius: 8px; margin-bottom:20px; }
+    .report-section h3 { color: var(--color-acento-dorado); border-bottom: 1px solid var(--color-secundario-gris); padding-bottom: 10px; margin-bottom: 20px; }
+    .report-summary-item { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #4f4f4f; font-size: 1.1em; }
+    .report-summary-item.total { font-weight: bold; border-top: 2px solid var(--color-acento-dorado); margin-top: 1rem; padding-top: 1rem; }
+    .report-summary-item.grand-total { font-size: 1.4em; color: var(--color-acento-dorado); }
+    .text-success-custom { color: #28a745; }
+    .text-danger-custom { color: #dc3545; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-chart-pie me-2"></i>{{ titulo_pagina }}</h2>
+
+    <div class="card bg-dark text-light my-4">
+        <div class="card-header">Filtros del Reporte</div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('main.reporte_estado_resultados') }}" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="sucursal_id" class="form-label">Sucursal</label>
+                    <select name="sucursal_id" id="sucursal_id" class="form-select" required>
+                        <option value="">Todas las sucursales</option> {# Podríamos implementar lógica para "todas" #}
+                        {% for suc in sucursales %}
+                        <option value="{{ suc.id }}" {% if filtros.get('sucursal_id')|string == suc.id|string %}selected{% endif %}>{{ suc.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="fecha_inicio" class="form-label">Fecha Inicio</label>
+                    <input type="date" class="form-control" name="fecha_inicio" id="fecha_inicio" value="{{ filtros.get('fecha_inicio', '') }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="fecha_fin" class="form-label">Fecha Fin</label>
+                    <input type="date" class="form-control" name="fecha_fin" id="fecha_fin" value="{{ filtros.get('fecha_fin', '') }}" required>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">Generar Reporte</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {% if resultados %}
+    <div class="report-section">
+        <h3>Resultados del Período</h3>
+        <div class="row">
+            <div class="col-md-6">
+                <h4 class="text-light">Ingresos</h4>
+                <div class="report-summary-item">
+                    <span>(+) Ingresos por Servicios</span>
+                    <span class="text-success-custom">S/ {{ "%.2f"|format(resultados.total_ingresos_servicios) }}</span>
+                </div>
+                <div class="report-summary-item">
+                    <span>(+) Ingresos por Productos</span>
+                    <span class="text-success-custom">S/ {{ "%.2f"|format(resultados.total_ingresos_productos) }}</span>
+                </div>
+                <div class="report-summary-item total">
+                    <span>Total Ingresos Brutos</span>
+                    <span>S/ {{ "%.2f"|format(resultados.total_ingresos) }}</span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h4 class="text-light">Gastos</h4>
+                {% for gasto in resultados.gastos_desglosados %}
+                <div class="report-summary-item">
+                    <span>(-) {{ gasto.categoria }}</span>
+                    <span class="text-danger-custom">S/ {{ "%.2f"|format(gasto.total_por_categoria) }}</span>
+                </div>
+                {% else %}
+                <div class="report-summary-item">
+                    <span class="text-muted">No se registraron gastos en este período.</span>
+                    <span>S/ 0.00</span>
+                </div>
+                {% endfor %}
+                <div class="report-summary-item total">
+                    <span>Total Gastos</span>
+                    <span>S/ {{ "%.2f"|format(resultados.total_gastos) }}</span>
+                </div>
+            </div>
+        </div>
+        <hr class="my-4" style="border-color: var(--color-secundario-gris);">
+        <div class="report-summary-item grand-total">
+            <span>UTILIDAD NETA (Ganancia/Pérdida)</span>
+            <span class="{{ 'text-success-custom' if resultados.utilidad_neta >= 0 else 'text-danger-custom' }}">
+                S/ {{ "%.2f"|format(resultados.utilidad_neta) }}
+            </span>
+        </div>
+    </div>
+    {% else %}
+        {% if filtros %}
+        <div class="alert alert-info-custom">No se encontraron datos para los filtros seleccionados.</div>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

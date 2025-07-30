@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_form | default('Gestionar Sucursal') }} - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="form-section-venta"> {# Reutilizando estilo de form_venta #}
+        <h2>
+            <i class="fas {{ 'fa-plus-circle' if es_nueva else 'fa-edit' }} me-2"></i>
+            {{ titulo_form }}
+        </h2>
+        
+        {% include 'partials/_flash_messages.html' %}
+
+        {% set data_source = form_data if form_data else (sucursal if sucursal else {}) %}
+
+        <form method="POST" action="{{ action_url }}">
+            <div class="mb-3">
+                <label for="nombre" class="form-label">Nombre de la Sucursal <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="nombre" name="nombre" 
+                       value="{{ data_source.get('nombre', '') }}" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="direccion" class="form-label">Dirección (Opcional)</label>
+                <textarea class="form-control" id="direccion" name="direccion" rows="2">{{ data_source.get('direccion', '') }}</textarea>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="ciudad" class="form-label">Ciudad (Opcional)</label>
+                    <input type="text" class="form-control" id="ciudad" name="ciudad" value="{{ data_source.get('ciudad', '') }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="telefono" class="form-label">Teléfono (Opcional)</label>
+                    <input type="tel" class="form-control" id="telefono" name="telefono" value="{{ data_source.get('telefono', '') }}">
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="email" class="form-label">Email (Opcional)</label>
+                    <input type="email" class="form-control" id="email" name="email" value="{{ data_source.get('email', '') }}">
+                </div>
+                 <div class="col-md-6 mb-3">
+                    <label for="codigo_establecimiento_sunat" class="form-label">Código de Establecimiento SUNAT (Opcional)</label>
+                    <input type="text" class="form-control" id="codigo_establecimiento_sunat" name="codigo_establecimiento_sunat" value="{{ data_source.get('codigo_establecimiento_sunat', '') }}">
+                </div>
+            </div>
+
+            <div class="mb-3 form-check">
+                {% set activo_val = True if es_nueva and not form_data else data_source.get('activo', False) %}
+                {% if activo_val == 'activo' %}{% set activo_val = True %}{% endif %}
+                <input type="checkbox" class="form-check-input" id="activo" name="activo" value="activo" {% if activo_val %}checked{% endif %}>
+                <label class="form-check-label" for="activo">Sucursal Activa</label>
+            </div>
+            
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{{ url_for('main.listar_sucursales') }}" class="btn btn-secondary me-2">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>{{ 'Guardar Sucursal' if es_nueva else 'Actualizar Sucursal' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

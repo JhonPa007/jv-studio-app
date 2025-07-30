@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_form | default('Gestionar Reserva') }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .form-section {
+        background-color: #3a3a3a;
+        padding: 25px;
+        border-radius: 8px;
+    }
+    .form-section h2 {
+        color: var(--color-acento-dorado);
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--color-secundario-gris);
+        padding-bottom: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="form-section">
+        <h2>
+            <i class="fas {{ 'fa-calendar-plus' if es_nueva else 'fa-calendar-check' }} me-2"></i>
+            {{ titulo_form | default('Gestionar Reserva') }}
+        </h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {# Determinar la URL de acción del formulario #}
+        {% set action_url = url_for('main.nueva_reserva') if es_nueva else url_for('main.editar_reserva', reserva_id=reserva.id if reserva else 0) %}
+        
+        {# Determinar la fuente de datos para los campos del formulario: #}
+        {% set data_source = form_data if form_data else ( prefill_data if prefill_data and es_nueva else (reserva if reserva else {}) ) %}
+
+
+        <form method="POST" action="{{ action_url }}">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="cliente_id" class="form-label">Cliente <span class="text-danger">*</span></label>
+                    <select class="form-select" id="cliente_id" name="cliente_id" required>
+                        <option value="">Seleccione un cliente...</option>
+                        {% for cli in clientes %} {# Asume que 'clientes' se pasa a esta plantilla #}
+                            <option value="{{ cli.id }}" {% if data_source.get('cliente_id')|string == cli.id|string %}selected{% endif %}>
+                                {{ cli.nombres }} {{ cli.apellidos }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="empleado_id" class="form-label">Empleado <span class="text-danger">*</span></label>
+                    <select class="form-select" id="empleado_id" name="empleado_id" required>
+                        <option value="">Seleccione un empleado...</option>
+                        {% for emp in empleados %} {# Asume que 'empleados' (activos) se pasa a esta plantilla #}
+                            <option value="{{ emp.id }}" {% if data_source.get('empleado_id')|string == emp.id|string %}selected{% endif %}>
+                                {{ emp.nombres }} {{ emp.apellidos }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="servicio_id" class="form-label">Servicio <span class="text-danger">*</span></label>
+                    <select class="form-select" id="servicio_id" name="servicio_id" required>
+                        <option value="">Seleccione un servicio...</option>
+                        {% for srv in servicios %} {# Asume que 'servicios' (activos) se pasa a esta plantilla #}
+                            <option value="{{ srv.id }}" {% if data_source.get('servicio_id')|string == srv.id|string %}selected{% endif %}>
+                                {{ srv.nombre }} ({{ srv.duracion_minutos }} min - S/ {{ "%.2f"|format(srv.precio) }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="fecha_hora_inicio" class="form-label">Fecha y Hora de Inicio <span class="text-danger">*</span></label>
+                    {# El valor para datetime-local debe ser YYYY-MM-DDTHH:MM #}
+                    {% set fhi_value = data_source.get('fecha_hora_inicio', '') %}
+                    {% if fhi_value and fhi_value is not string and fhi_value.strftime is defined %} {# Si es objeto datetime (ej. desde el objeto 'reserva' al editar) #}
+                        {% set fhi_value_str = fhi_value.strftime('%Y-%m-%dT%H:%M') %}
+                    {% else %} {# Si es string (ej. desde 'form_data' en error, o 'prefill_data' que ya viene formateado) #}
+                        {% set fhi_value_str = fhi_value %}
+                    {% endif %}
+                    <input type="datetime-local" class="form-control" id="fecha_hora_inicio" name="fecha_hora_inicio"
+                           value="{{ fhi_display_value }}" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="precio_cobrado" class="form-label">Precio Final Cobrado (S/) (Opcional)</label>
+                    <input type="number" step="0.01" min="0" class="form-control" id="precio_cobrado" name="precio_cobrado"
+                           value="{{ data_source.get('precio_cobrado', '') }}" placeholder="Precio estándar del servicio">
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="notas_cliente" class="form-label">Notas del Cliente (Opcional)</label>
+                <textarea class="form-control" id="notas_cliente" name="notas_cliente" rows="2">{{ data_source.get('notas_cliente', '') }}</textarea>
+            </div>
+
+            <div class="mb-3">
+                <label for="notas_internas" class="form-label">Notas Internas (Opcional, para el personal)</label>
+                <textarea class="form-control" id="notas_internas" name="notas_internas" rows="2">{{ data_source.get('notas_internas', '') }}</textarea>
+            </div>
+            
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{{ url_for('main.listar_reservas') }}" class="btn btn-secondary me-2">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>{{ 'Guardar Reserva' if es_nueva else 'Actualizar Reserva' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fechaHoraInput = document.getElementById('fecha_hora_inicio');
+    // Solo poner fecha actual por defecto si es NUEVO, NO hay prefill_data, y NO hay form_data
+    const esNuevoSinPrefillNiFormData = {{ 'true' if es_nueva and not prefill_data and not form_data else 'false' }};
+    if (fechaHoraInput && !fechaHoraInput.value && esNuevoSinPrefillNiFormData) {
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); 
+        now.setSeconds(0); 
+        now.setMilliseconds(0); 
+        fechaHoraInput.value = now.toISOString().slice(0,16);
+    }
+});
+</script>
+{% endblock %}

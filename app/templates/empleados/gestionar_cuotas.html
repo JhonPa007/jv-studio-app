@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina }} - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-bullseye me-2"></i>Cuotas de Producción</h2>
+            <p class="text-muted mb-0">Para: <strong>{{ colaborador.nombres }} {{ colaborador.apellidos }}</strong></p>
+        </div>
+        <a href="{{ url_for('main.listar_empleados') }}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>Volver</a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="form-section-venta">
+                <h3>Añadir Nueva Cuota</h3>
+                <form method="POST" action="{{ url_for('main.gestionar_cuotas', colaborador_id=colaborador.id) }}">
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label for="anio" class="form-label">Año</label>
+                            <input type="number" class="form-control" name="anio" id="anio" value="{{ anio_actual }}" required>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label for="mes" class="form-label">Mes</label>
+                            <select class="form-select" name="mes" id="mes" required>
+                                <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option><option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+                            </select>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="mb-3">
+                        <label for="tipo_cuota" class="form-label">Medir Cuota por:</label>
+                        <select class="form-select" name="tipo_cuota" id="tipo_cuota" required>
+                            <option value="VALOR">Valor (S/)</option>
+                            <option value="CANTIDAD">Cantidad (Nº de servicios)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="valor_objetivo_cuota" id="label_valor_objetivo" class="form-label">Objetivo de la Cuota</label>
+                        <input type="number" step="0.01" min="0" class="form-control" name="valor_objetivo_cuota" id="valor_objetivo_cuota" required>
+                    </div>
+                    <hr>
+                    <div class="mb-3">
+                        <label for="tipo_bono" class="form-label">Si supera la cuota, pagar bono por:</label>
+                        <select class="form-select" name="tipo_bono" id="tipo_bono" required>
+                            <option value="PORCENTAJE_EXCEDENTE">Porcentaje del Excedente (%)</option>
+                            <option value="MONTO_FIJO_POR_UNIDAD">Monto Fijo por Servicio Extra (S/)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="valor_bono" id="label_valor_bono" class="form-label">Valor del Bono</label>
+                        <input type="number" step="0.01" min="0" class="form-control" name="valor_bono" id="valor_bono" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 mt-3"><i class="fas fa-plus me-1"></i>Añadir Cuota</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="form-section-venta">
+                <h3>Historial de Cuotas</h3>
+                {% if cuotas %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-custom table-sm">
+                        <thead><tr><th>Período</th><th>Tipo de Cuota</th><th>Objetivo</th><th>Tipo de Bono</th><th class="text-end">Valor Bono</th><th>Acciones</th></tr></thead>
+                        <tbody>
+                            {% for cuota in cuotas %}
+                            <tr>
+                                <td>{{ cuota.mes }}/{{ cuota.anio }}</td>
+                                <td>{{ cuota.tipo_cuota }}</td>
+                                <td>{{ cuota.valor_objetivo_cuota }}</td>
+                                <td>{{ cuota.tipo_bono }}</td>
+                                <td class="text-end">{{ "%.2f"|format(cuota.valor_bono) }}</td>
+                                <td class="table-actions">
+                                    <a href="#" class="btn btn-xs btn-warning disabled"><i class="fas fa-edit"></i></a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted fst-italic">Este colaborador no tiene cuotas registradas.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tipoCuotaSelect = document.getElementById('tipo_cuota');
+    const labelObjetivo = document.getElementById('label_valor_objetivo');
+    const inputObjetivo = document.getElementById('valor_objetivo_cuota');
+
+    const tipoBonoSelect = document.getElementById('tipo_bono');
+    const labelBono = document.getElementById('label_valor_bono');
+
+    function actualizarFormulario() {
+        // Actualizar etiquetas según el tipo de cuota
+        if (tipoCuotaSelect.value === 'VALOR') {
+            labelObjetivo.textContent = 'Objetivo (S/)';
+            inputObjetivo.step = '0.01';
+        } else {
+            labelObjetivo.textContent = 'Objetivo (Nº de servicios)';
+            inputObjetivo.step = '1';
+        }
+
+        // Actualizar etiquetas según el tipo de bono
+        if (tipoBonoSelect.value === 'PORCENTAJE_EXCEDENTE') {
+            labelBono.textContent = 'Valor del Bono (%)';
+        } else {
+            labelBono.textContent = 'Valor del Bono por Servicio (S/)';
+        }
+    }
+    
+    tipoCuotaSelect.addEventListener('change', actualizarFormulario);
+    tipoBonoSelect.addEventListener('change', actualizarFormulario);
+    
+    // Llamada inicial para establecer el estado correcto al cargar
+    actualizarFormulario();
+});
+</script>
+{% endblock %}

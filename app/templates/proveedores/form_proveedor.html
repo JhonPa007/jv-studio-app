@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_form | default('Gestionar Proveedor') }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .form-section {
+        background-color: #3a3a3a;
+        padding: 25px;
+        border-radius: 8px;
+    }
+    .form-section h2 {
+        color: var(--color-acento-dorado);
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--color-secundario-gris);
+        padding-bottom: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="form-section">
+        <h2>
+            <i class="fas {{ 'fa-plus-circle' if es_nuevo else 'fa-edit' }} me-2"></i>
+            {{ titulo_form | default('Gestionar Proveedor') }}
+        </h2>
+        
+        {% include 'partials/_flash_messages.html' %}
+
+        {% set data_source = form_data if form_data else (proveedor if proveedor else {}) %}
+
+        <form method="POST" action="{{ action_url }}"> {# action_url se pasa desde Flask #}
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="nombre_empresa" class="form-label">Nombre Empresa/Proveedor <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="nombre_empresa" name="nombre_empresa" 
+                           value="{{ data_source.get('nombre_empresa', '') }}" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="ruc" class="form-label">RUC (Opcional)</label>
+                    <input type="text" class="form-control" id="ruc" name="ruc" 
+                           value="{{ data_source.get('ruc', '') }}" maxlength="11">
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="nombre_contacto" class="form-label">Nombre Contacto (Opcional)</label>
+                    <input type="text" class="form-control" id="nombre_contacto" name="nombre_contacto" 
+                           value="{{ data_source.get('nombre_contacto', '') }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="telefono" class="form-label">Teléfono (Opcional)</label>
+                    <input type="tel" class="form-control" id="telefono" name="telefono" 
+                           value="{{ data_source.get('telefono', '') }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="email" class="form-label">Email (Opcional)</label>
+                    <input type="email" class="form-control" id="email" name="email" 
+                           value="{{ data_source.get('email', '') }}">
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="direccion" class="form-label">Dirección (Opcional)</label>
+                <textarea class="form-control" id="direccion" name="direccion" rows="2">{{ data_source.get('direccion', '') }}</textarea>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="ciudad" class="form-label">Ciudad (Opcional)</label>
+                    <input type="text" class="form-control" id="ciudad" name="ciudad" 
+                           value="{{ data_source.get('ciudad', '') }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="pais" class="form-label">País (Opcional)</label>
+                    <input type="text" class="form-control" id="pais" name="pais" 
+                           value="{{ data_source.get('pais', '') }}">
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="notas" class="form-label">Notas Adicionales (Opcional)</label>
+                <textarea class="form-control" id="notas" name="notas" rows="2">{{ data_source.get('notas', '') }}</textarea>
+            </div>
+
+            <div class="mb-3 form-check">
+                {% set activo_val = True if es_nuevo and not form_data else data_source.get('activo', False) %}
+                {% if activo_val == 'activo' %}{% set activo_val = True %}{% endif %}
+                <input type="checkbox" class="form-check-input" id="activo" name="activo" value="activo" {% if activo_val %}checked{% endif %}>
+                <label class="form-check-label" for="activo">Proveedor Activo</label>
+            </div>
+            
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{{ url_for('main.listar_proveedores') }}" class="btn btn-secondary me-2">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>{{ 'Guardar Proveedor' if es_nuevo else 'Actualizar Proveedor' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

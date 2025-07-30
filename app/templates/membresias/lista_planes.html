@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina }} - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-id-card me-2"></i>{{ titulo_pagina }}</h2>
+        <a href="{{ url_for('main.nuevo_plan_membresia') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Nuevo Plan de Membresía
+        </a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    <div class="table-responsive">
+        <table class="table table-hover table-custom table-sm">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Descripción</th>
+                    <th class="text-end">Precio (S/)</th>
+                    <th class="text-center">Duración</th>
+                    <th>Activo</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for plan in planes %}
+                <tr>
+                    <td><strong>{{ plan.nombre }}</strong></td>
+                    <td style="max-width: 400px;">{{ plan.descripcion if plan.descripcion else '-' }}</td>
+                    <td class="text-end">{{ "%.2f"|format(plan.precio) }}</td>
+                    <td class="text-center">{{ plan.duracion_dias }} días</td>
+                    <td>{% if plan.activo %}<span class="badge bg-success">Sí</span>{% else %}<span class="badge bg-danger">No</span>{% endif %}</td>
+                    <td class="table-actions">
+                        <a href="{{ url_for('main.editar_plan_membresia', plan_id=plan.id) }}" class="btn btn-xs btn-warning" title="Editar"><i class="fas fa-edit"></i></a>
+                        {# --- NUEVO BOTÓN PARA ACTIVAR/DESACTIVAR --- #}
+                        <a href="{{ url_for('main.toggle_activo_plan_membresia', plan_id=plan.id) }}" 
+                        class="btn btn-xs {% if plan.activo %}btn-outline-danger{% else %}btn-outline-success{% endif %} ms-1" 
+                        title="{{ 'Desactivar' if plan.activo else 'Activar' }} Plan">
+                            <i class="fas {% if plan.activo %}fa-toggle-on{% else %}fa-toggle-off{% endif %}"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+     {% if not planes %}
+        <div class="alert alert-info-custom mt-3">
+            <i class="fas fa-info-circle me-2"></i>No hay planes de membresía registrados todavía.
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

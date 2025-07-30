@@ -1,0 +1,76 @@
+{# En app/templates/configuracion/form_serie.html #}
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_form | default('Gestionar Serie') }} - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="form-section-venta"> 
+        <h2>
+            <i class="fas {{ 'fa-plus-circle' if es_nueva else 'fa-edit' }} me-2"></i>
+            {{ titulo_form }}
+        </h2>
+        
+        {% include 'partials/_flash_messages.html' %}
+
+        {% set data_source = form_data if form_data else (serie_item if serie_item else {}) %}
+
+        <form method="POST" action="{{ action_url }}">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="sucursal_id" class="form-label">Sucursal <span class="text-danger">*</span></label>
+                    <select class="form-select" id="sucursal_id" name="sucursal_id" required>
+                        <option value="">Seleccione una sucursal...</option>
+                        {% for suc in sucursales %}
+                        <option value="{{ suc.id }}" {% if data_source.get('sucursal_id')|string == suc.id|string %}selected{% endif %}>
+                            {{ suc.nombre }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="tipo_comprobante" class="form-label">Tipo de Comprobante <span class="text-danger">*</span></label>
+                    <select class="form-select" id="tipo_comprobante" name="tipo_comprobante" required>
+                        <option value="">Seleccione un tipo...</option>
+                        {% for tipo in tipos_comprobante %}
+                        <option value="{{ tipo }}" {% if data_source.get('tipo_comprobante') == tipo %}selected{% endif %}>
+                            {{ tipo }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="serie" class="form-label">Código de Serie <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="serie" name="serie" 
+                           value="{{ data_source.get('serie', '') }}" required placeholder="Ej: B001, F001">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="ultimo_numero_usado" class="form-label">Último Número Usado <span class="text-danger">*</span></label>
+                    <input type="number" min="0" class="form-control" id="ultimo_numero_usado" name="ultimo_numero_usado" 
+                           value="{{ data_source.get('ultimo_numero_usado', '0') }}" required>
+                    <small class="form-text text-muted">Si la primera factura será la N° 1, ingrese 0 aquí.</small>
+                </div>
+            </div>
+
+            <div class="mb-3 form-check">
+                {% set activo_val = True if es_nueva and not form_data else data_source.get('activo', False) %}
+                {% if activo_val == 'activo' %}{% set activo_val = True %}{% endif %}
+                <input type="checkbox" class="form-check-input" id="activo" name="activo" value="activo" {% if activo_val %}checked{% endif %}>
+                <label class="form-check-label" for="activo">Serie Activa</label>
+            </div>
+            
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{{ url_for('main.listar_series') }}" class="btn btn-secondary me-2">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>{{ 'Guardar Serie' if es_nueva else 'Actualizar Serie' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

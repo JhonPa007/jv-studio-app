@@ -1,0 +1,65 @@
+{# En app/templates/configuracion/lista_series.html #}
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina | default('Configuración de Series') }} - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-file-invoice me-2"></i>{{ titulo_pagina }}</h2>
+        <a href="{{ url_for('main.nueva_serie') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Nueva Serie
+        </a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {% if series %}
+    <div class="table-responsive">
+        <table class="table table-hover table-custom table-sm">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Sucursal</th> {# <-- NUEVA COLUMNA #}
+                    <th>Tipo de Comprobante</th>
+                    <th>Serie</th>
+                    <th>Último Número Usado</th>
+                    <th>Activa</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in series %}
+                <tr>
+                    <td>{{ s.id }}</td>
+                    <td>{{ s.sucursal_nombre }}</td> {# <-- NUEVO DATO #}
+                    <td>{{ s.tipo_comprobante }}</td>
+                    <td>{{ s.serie }}</td>
+                    <td>{{ s.ultimo_numero_usado }}</td>
+                    <td>
+                        {% if s.activo %}
+                            <span class="badge bg-success">Sí</span>
+                        {% else %}
+                            <span class="badge bg-danger">No</span>
+                        {% endif %}
+                    </td>
+                    <td class="table-actions">
+                        <a href="{{ url_for('main.editar_serie', serie_id=s.id) }}" class="btn btn-xs btn-warning" title="Editar"><i class="fas fa-edit"></i></a>
+                        <a href="{{ url_for('main.toggle_activo_serie', serie_id=s.id) }}" 
+                           class="btn btn-xs {% if s.activo %}btn-outline-danger{% else %}btn-outline-success{% endif %} ms-1" 
+                           title="{{ 'Desactivar' if s.activo else 'Activar' }} Serie">
+                           <i class="fas {% if s.activo %}fa-toggle-on{% else %}fa-toggle-off{% endif %}"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info-custom">
+        <i class="fas fa-info-circle me-2"></i>No hay series de comprobantes configuradas todavía.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

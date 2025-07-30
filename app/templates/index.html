@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);">
+            <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+            {% if current_user.is_authenticated and current_user.rol == 'Administrador' %}
+                <span class="fs-5 text-muted">| Vista de Administrador</span>
+            {% else %}
+                <span class="fs-5 text-muted">| {{ current_user.nombres }}</span>
+            {% endif %}
+        </h2>
+        {#<span class="text-light">{{ "now"|strftime('%A, %d de %B de %Y') }}</span>#}
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {# --- VISTA PARA EL ROL DE ADMINISTRADOR --- #}
+    {% if current_user.rol == 'Administrador' %}
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="card bg-dark text-white h-100">
+                    <div class="card-body text-center">
+                        <div class="mt-auto">
+                            <p class="mb-1">Servicios: 
+                                <strong class="fs-5">S/ {{ "%.2f"|format(ventas_hoy.total_servicios or 0) }}</strong>
+                            </p>
+                            <p class="mb-2">Productos: 
+                                <strong class="fs-5">S/ {{ "%.2f"|format(ventas_hoy.total_productos or 0) }}</strong>
+                            </p>
+                            <small class="text-muted">{{ ventas_hoy.numero_ventas or 0 }} transacciones en total</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card bg-dark text-white h-100">
+                    <div class="card-body text-center">
+                        <div class="fs-1"><i class="fas fa-calendar-check text-info"></i></div>
+                        <h5 class="card-title mt-2">Citas Agendadas Hoy</h5>
+                        <p class="card-text display-4 fw-bold">{{ citas_hoy.numero_citas or 0 }}</p>
+                        <a href="{{ url_for('main.render_agenda_diaria') }}" class="btn btn-sm btn-outline-info">Ir a la Agenda</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card bg-dark text-white h-100">
+                    <div class="card-body">
+                         <h5 class="card-title text-center"><i class="fas fa-exclamation-triangle text-warning me-2"></i>Alerta de Stock Bajo</h5>
+                         <ul class="list-group list-group-flush mt-3">
+                            {% for producto in productos_stock_bajo %}
+                                <li class="list-group-item bg-transparent text-light d-flex justify-content-between">
+                                    <span>{{ producto.nombre }}</span>
+                                    <span class="badge bg-danger rounded-pill">Quedan: {{ producto.stock_actual }}</span>
+                                </li>
+                            {% else %}
+                                <li class="list-group-item bg-transparent text-muted text-center">¡Todo bien! No hay productos con stock bajo.</li>
+                            {% endfor %}
+                         </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6 mb-4">
+                <div class="card bg-dark text-light h-100">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="fas fa-user-clock me-2"></i>Membresías por Vencer (Próx. 7 días)</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if membresias_por_vencer %}
+                            <p>Contacta a estos clientes para incentivar su renovación.</p>
+                            <ul class="list-group list-group-flush">
+                                {% for membresia in membresias_por_vencer %}
+                                
+                                {# --- Lógica para el mensaje de WhatsApp --- #}
+                                {% set telefono_limpio = membresia.telefono.replace('+', '').replace(' ', '') if membresia.telefono else '' %}
+                                {% set nombre_saludo = membresia.razon_social_nombres.split(' ')[0] %}
+                                {% set mensaje_whatsapp = "Hola " + nombre_saludo + ", notamos que tu membresia '" + membresia.plan_nombre + "' vence pronto. ¡Te esperamos en JV Studio para que la renueves y sigas disfrutando de todos los beneficios!" %}
+                                {% set enlace_whatsapp = "https://wa.me/" + telefono_limpio %}
+
+                                <li class="list-group-item bg-transparent text-light d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ membresia.razon_social_nombres }} {{ membresia.apellidos or '' }}</strong>
+                                        <small class="d-block text-muted">Vence: {{ membresia.fecha_fin.strftime('%A, %d de %B') }}</small>
+                                    </div>
+                                    <div class="position-relative">
+                                        <button class="btn btn-warning btn-sm btn-enviar-comunicacion"
+                                                data-whatsapp-link="{{ enlace_whatsapp }}"
+                                                data-mensaje="{{ mensaje_whatsapp }}">
+                                            <i class="fab fa-whatsapp me-1"></i> Recordar
+                                        </button>
+                                    </div>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted fst-italic">No hay membresías próximas a vencer.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+
+        </div>
+    {# --- VISTA PARA COLABORADORES NORMALES --- #}
+    {% else %}
+        <div class="row">
+            <div class="col-12">
+                <div class="card bg-dark text-light">
+                    <div class="card-header"><h5 class="mb-0"><i class="fas fa-clock me-2"></i>Mis Próximas Citas de Hoy</h5></div>
+                    <div class="card-body">
+                        {% if proximas_citas %}
+                            <ul class="list-group list-group-flush">
+                            {% for cita in proximas_citas %}
+                                <li class="list-group-item bg-transparent text-light">
+                                    <strong>{{ cita.fecha_hora_inicio.strftime('%I:%M %p') }}</strong> - {{ cita.cliente_nombre }} ({{ cita.servicio_nombre }})
+                                </li>
+                            {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted">No tienes más citas programadas para hoy.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+    
+    <hr class="my-4" style="border-color: var(--color-secundario-gris);">
+        <h3 class="text-light">Recordatorios y Alertas</h3>
+
+        <div class="row">
+            <div class="col-lg-6 mb-4">
+                <div class="card bg-dark text-light h-100">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="fas fa-gift me-2"></i>Cumpleaños de Hoy ({{ fecha_alerta_hoy.strftime('%d/%m') }})</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if clientes_cumpleanos_hoy %}
+                            <p>¡No te olvides de enviarles un saludo!</p>
+                            <ul class="list-group list-group-flush">
+                                {% for cliente in clientes_cumpleanos_hoy %}
+
+                                {% set telefono_limpio = cliente.telefono.replace('+', '').replace(' ', '') if cliente.telefono else '' %}
+                                {% set nombre_saludo = cliente.razon_social_nombres.split(' ')[0] %}
+                                
+                                {# 1. Crear el mensaje de texto simple #}
+                                {% set mensaje_texto = "Feliz Cumpleaños, " + nombre_saludo + "! De parte de todo el equipo de JV Studio, te deseamos un dia increible. Un fuerte abrazo." %}
+                                
+                                {# 2. Crear el enlace usando la función url_for para la codificación #}
+                                {% set enlace_whatsapp = "https://wa.me/" + telefono_limpio + "?text=" + mensaje_texto|urlencode %}
+                                
+                                <li class="list-group-item bg-transparent text-light d-flex justify-content-between align-items-center" id="com-saludo-{{cliente.id}}">
+                                    <div><strong>{{ cliente.razon_social_nombres }} {{ cliente.apellidos or '' }}</strong></div>
+                                    <button class="btn btn-success btn-sm btn-enviar-comunicacion"
+                                            data-cliente-id="{{ cliente.id }}"
+                                            data-tipo="SALUDO_CUMPLEANOS"
+                                            data-anio="{{ fecha_alerta_hoy.year }}"
+                                            data-whatsapp-link="{{ enlace_whatsapp }}">
+                                        <i class="fab fa-whatsapp me-1"></i> Saludar
+                                    </button>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted fst-italic">No hay cumpleaños de clientes para saludar hoy.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6 mb-4">
+                <div class="card bg-dark text-light h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-birthday-cake me-2"></i>Invitaciones (Cumpleaños en 2 días)</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if clientes_cumpleanos_proximos %}
+                            <p>Contacta a estos clientes para enviarles una promoción especial.</p>
+                            <ul class="list-group list-group-flush">
+                            {% for cliente in clientes_cumpleanos_proximos %}
+                            
+                            {% set telefono_limpio = cliente.telefono.replace('+', '').replace(' ', '') if cliente.telefono else '' %}
+                            {% set nombre_saludo = cliente.razon_social_nombres.split(' ')[0] %}
+
+                            {% set mensaje_texto = "Hola " + nombre_saludo + ", se acerca tu cumpleaños y en JV Studio queremos celebrarlo contigo. Visitanos y obten un descuento especial." %}
+                            
+                            {% set enlace_whatsapp = "https://wa.me/" + telefono_limpio + "?text=" + mensaje_texto|urlencode %}
+                            
+                            <li class="list-group-item bg-transparent text-light d-flex justify-content-between align-items-center" id="com-invitacion-{{cliente.id}}">
+                                <div><strong>{{ cliente.razon_social_nombres }} {{ cliente.apellidos or '' }}</strong></div>
+                                <div class="position-relative">
+                                    <button class="btn btn-info btn-sm btn-enviar-comunicacion"
+                                            data-cliente-id="{{ cliente.id }}"
+                                            data-tipo="INVITACION_CUMPLEANOS"
+                                            data-anio="{{ fecha_alerta_proxima.year }}"
+                                            data-whatsapp-link="{{ enlace_whatsapp }}"
+                                            data-mensaje="{{ mensaje_whatsapp }}">
+                                        <i class="fab fa-whatsapp me-1"></i> Enviar Invitación
+                                    </button>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                            <p class="text-muted fst-italic">No hay cumpleaños de clientes para invitar.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+</div>
+
+
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const botonesComunicacion = document.querySelectorAll('.btn-enviar-comunicacion');
+
+    botonesComunicacion.forEach(boton => {
+        boton.addEventListener('click', function(event) {
+            // Detener la propagación para evitar problemas
+            event.stopPropagation();
+            
+            const clienteId = this.dataset.clienteId;
+            const tipoComunicacion = this.dataset.tipo;
+            const anioAplicable = this.dataset.anio;
+            const whatsappLink = this.dataset.whatsappLink;
+            const mensaje = this.dataset.mensaje;
+
+            // 1. Copiar el mensaje al portapapeles
+            navigator.clipboard.writeText(mensaje).then(() => {
+                // 2. Mostrar una notificación temporal de "copiado"
+                const notification = document.createElement('div');
+                notification.className = 'copy-notification';
+                notification.textContent = '¡Mensaje Copiado!';
+                this.parentNode.appendChild(notification);
+                
+                // Hacer visible la notificación
+                setTimeout(() => { notification.style.opacity = '1'; }, 10);
+                
+                // Ocultar y eliminar la notificación después de 2 segundos
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    setTimeout(() => { notification.remove(); }, 300);
+                }, 2000);
+
+            }).catch(err => {
+                console.error('Error al copiar el mensaje: ', err);
+                alert("No se pudo copiar el mensaje. Por favor, cópielo manualmente.");
+            });
+
+            // 3. Abrir la ventana de WhatsApp
+            if (whatsappLink) {
+                window.open(whatsappLink, '_blank');
+            }
+
+            // 4. Registrar la acción en el backend
+            fetch('/api/clientes/registrar_comunicacion', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ cliente_id: clienteId, tipo_comunicacion: tipoComunicacion, anio_aplicable: anioAplicable })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const listItem = this.closest('li');
+                    listItem.style.transition = 'opacity 0.5s';
+                    listItem.style.opacity = '0';
+                    setTimeout(() => { listItem.style.display = 'none'; }, 500);
+                } else {
+                    alert("Hubo un error al registrar el envío: " + data.message);
+                }
+            })
+            .catch(error => {
+                alert("Hubo un error de red al intentar registrar el envío.");
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

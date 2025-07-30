@@ -1,0 +1,47 @@
+{# app/templates/estilos/form_estilo.html #}
+{% extends "base.html" %}
+{% block title %}{{ titulo_form }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="form-section-venta" style="max-width: 700px; margin: auto;">
+        <h2><i class="fas {{ 'fa-plus-circle' if es_nueva else 'fa-edit' }} me-2"></i>{{ titulo_form }}</h2>
+        
+        {% include 'partials/_flash_messages.html' %}
+
+        {# Definimos la fuente de datos: si estamos editando, usamos 'estilo' #}
+        {% set data_source = estilo if estilo else {} %}
+
+        <form method="POST" action="{{ action_url }}" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="nombre" class="form-label">Nombre del Estilo/Corte <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="nombre" name="nombre" value="{{ data_source.get('nombre', '') }}" required>
+            </div>
+            <div class="mb-3">
+                <label for="descripcion" class="form-label">Descripción (Opcional)</label>
+                <textarea class="form-control" id="descripcion" name="descripcion" rows="3">{{ data_source.get('descripcion', '') }}</textarea>
+            </div>
+            <div class="mb-3">
+                <label for="foto" class="form-label">Foto de Referencia</label>
+                {% if data_source.foto_path %}
+                    <p class="small text-muted">Imagen actual: 
+                        <a href="{{ url_for('static', filename=data_source.foto_path) }}" target="_blank">{{ data_source.foto_path.split('/')[-1] }}</a>
+                    </p>
+                    <small>Sube un archivo nuevo solo si deseas reemplazar la imagen actual.</small>
+                {% else %}
+                    <small class="form-text text-muted">Sube una imagen de referencia (opcional).</small>
+                {% endif %}
+                <input class="form-control mt-2" type="file" id="foto" name="foto" accept="image/*">
+            </div>
+            <div class="mb-3 form-check">
+                <input class="form-check-input" type="checkbox" id="activo" name="activo" value="activo" {% if data_source.get('activo', True) %}checked{% endif %}>
+                <label class="form-check-label" for="activo">Estilo Activo</label>
+            </div>
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{{ url_for('main.listar_estilos') }}" class="btn btn-secondary me-2"><i class="fas fa-times me-1"></i>Cancelar</a>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>{{ 'Guardar Estilo' if es_nueva else 'Actualizar Estilo' }}</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

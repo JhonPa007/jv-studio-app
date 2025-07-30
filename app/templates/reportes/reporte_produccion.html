@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .report-section { background-color: #3a3a3a; padding: 25px; border-radius: 8px; margin-bottom:20px; }
+    .report-section h3 { color: var(--color-acento-dorado); border-bottom: 1px solid var(--color-secundario-gris); padding-bottom: 10px; margin-bottom: 20px; }
+    .summary-card { background-color: #4f4f4f; border: none; }
+    .summary-card .card-title { color: var(--color-secundario-gris); font-size: 0.9em; text-transform: uppercase;}
+    .summary-card .card-text { color: var(--color-acento-dorado); font-size: 1.8em; font-weight: bold;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-user-chart me-2"></i>{{ titulo_pagina }}</h2>
+    
+    {# --- NUEVO BOTÓN DE EXPORTACIÓN --- #}
+    {# Solo se muestra si hay resultados para exportar #}
+    {% if resultados %}
+    <a href="{{ url_for('main.exportar_reporte_produccion', **filtros) }}" class="btn btn-success">
+        <i class="fas fa-file-excel me-2"></i>Exportar a Excel
+    </a>
+    {% endif %}
+
+    <div class="card bg-dark text-light my-4">
+        <div class="card-header">Filtros del Reporte</div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('main.reporte_produccion') }}" class="row g-3 align-items-end">
+                <div class="col-md-3"><label for="sucursal_id" class="form-label">Sucursal</label><select name="sucursal_id" id="sucursal_id" class="form-select" required><option value="">Seleccione...</option>{% for s in sucursales %}<option value="{{ s.id }}" {% if filtros.get('sucursal_id')|int == s.id %}selected{% endif %}>{{ s.nombre }}</option>{% endfor %}</select></div>
+                <div class="col-md-3"><label for="colaborador_id" class="form-label">Colaborador</label><select name="colaborador_id" id="colaborador_id" class="form-select" required><option value="">Seleccione...</option>{% for c in colaboradores %}<option value="{{ c.id }}" {% if filtros.get('colaborador_id')|int == c.id %}selected{% endif %}>{{ c.nombres }} {{c.apellidos }}</option>{% endfor %}</select></div>
+                <div class="col-md-2"><label for="fecha_inicio" class="form-label">Fecha Inicio</label><input type="date" class="form-control" name="fecha_inicio" id="fecha_inicio" value="{{ filtros.get('fecha_inicio', '') }}" required></div>
+                <div class="col-md-2"><label for="fecha_fin" class="form-label">Fecha Fin</label><input type="date" class="form-control" name="fecha_fin" id="fecha_fin" value="{{ filtros.get('fecha_fin', '') }}" required></div>
+                <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Generar Reporte</button></div>
+            </form>
+        </div>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {% if resultados %}
+    <div class="report-section">
+        <h3>Resumen del Período</h3>
+        <div class="row">
+            <div class="col-md-4"><div class="card summary-card text-center p-2"><h6 class="card-title">Total Producción Servicios</h6><p class="card-text">S/ {{ "%.2f"|format(resultados.total_produccion_servicios) }}</p></div></div>
+            <div class="col-md-4"><div class="card summary-card text-center p-2"><h6 class="card-title">Total Producción Productos</h6><p class="card-text">S/ {{ "%.2f"|format(resultados.total_produccion_productos) }}</p></div></div>
+            <div class="col-md-4"><div class="card summary-card text-center p-2"><h6 class="card-title">Total Comisiones Generadas</h6><p class="card-text">S/ {{ "%.2f"|format(resultados.total_comisiones) }}</p></div></div>
+        </div>
+    </div>
+    
+    <div class="report-section">
+        <h3>Detalle de Servicios Realizados</h3>
+        <div class="table-responsive">
+            <table class="table table-sm table-custom">
+                <thead><tr><th>Fecha</th><th>Cliente</th><th>Servicio</th><th class="text-end">Valor Producción (S/)</th><th>Tipo</th></tr></thead>
+                <tbody>
+                    {% for s in resultados.servicios_vendidos %}
+                    <tr>
+                        <td>{{ s.fecha_venta.strftime('%d/%m/%Y') }}</td>
+                        <td>{{ s.cliente_nombre }}</td>
+                        <td>{{ s.servicio_nombre }}</td>
+                        <td class="text-end">{{ "%.2f"|format(s.valor_produccion) }}</td>
+                        <td>
+                            {% if s.usado_como_beneficio %}
+                                <span class="badge bg-info">Beneficio Membresía</span>
+                            {% elif s.es_trabajo_extra %}
+                                <span class="badge bg-warning text-dark">Extra</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Normal</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="text-center text-muted">No se encontraron servicios.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>  
+
+    <div class="report-section">
+        <h3>Detalle de Productos Vendidos</h3>
+        <div class="table-responsive">
+            <table class="table table-sm table-custom">
+                <thead><tr><th>Fecha</th><th>Cliente</th><th>Producto - Marca</th><th class="text-center">Cant.</th><th class="text-end">P. Venta</th><th class="text-end">Subtotal</th><th class="text-end">Comisión</th></tr></thead>
+                <tbody>
+                    {% for p in resultados.productos_vendidos %}
+                    <tr><td>{{ p.fecha_venta.strftime('%d/%m/%Y') }}</td><td>{{ p.cliente_nombres }} {{ p.cliente_apellidos }}</td><td>{{ p.producto_nombre }} - <small class="text-muted">{{ p.marca_nombre if p.marca_nombre else 'S/M' }}</small></td><td class="text-center">{{ p.cantidad }}</td><td class="text-end">{{ "%.2f"|format(p.precio_unitario_venta) }}</td><td class="text-end">{{ "%.2f"|format(p.subtotal_item_neto) }}</td><td class="text-end">{{ "%.2f"|format(p.monto_comision) if p.monto_comision else '0.00' }}</td></tr>
+                    {% else %}
+                    <tr><td colspan="7" class="text-center text-muted">No se encontraron productos vendidos por este colaborador en el período seleccionado.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}  

@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_form }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .form-section-venta { background-color: #3a3a3a; padding: 25px; border-radius: 8px; margin-bottom:20px; }
+    .form-section-venta h2, .form-section-venta h3 { color: var(--color-acento-dorado); margin-bottom: 20px; border-bottom: 1px solid var(--color-secundario-gris); padding-bottom: 10px;}
+    .items-table th, .items-table td, .pagos-table th, .pagos-table td { vertical-align: middle; font-size:0.9em; color: #040404; }
+    .items-table thead th, .pagos-table thead th { color: var(--color-acento-dorado); }
+    .total-section { font-size: 1.0em; color: #f8f9fa; }
+    .total-section strong { font-size: 1.2em; color: var(--color-acento-dorado); }
+    .items-table-readonly td { background-color: #4f4f4f; }
+    .form-control-sm { background-color: #4f4f4f; color: #f8f9fa; border-color: var(--color-secundario-gris); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="form-section-venta">
+        <h2><i class="fas fa-edit me-2"></i>{{ titulo_form }}</h2>
+        
+        {% include 'partials/_flash_messages.html' %}
+
+        {% set data_source = form_data if form_data else venta %}
+
+        <form method="POST" action="{{ action_url }}" id="formEditarVenta">
+            {# SECCIÓN 1: DATOS GENERALES (EDITABLES) #}
+            <h3>Datos de la Venta</h3>
+            <div class="row">
+                 <div class="col-md-4 mb-3"><label for="sucursal_id" class="form-label">Sucursal</label><select class="form-select" id="sucursal_id" name="sucursal_id" required>{% for suc in sucursales %}<option value="{{ suc.id }}" {% if data_source.get('sucursal_id')|string == suc.id|string %}selected{% endif %}>{{ suc.nombre }}</option>{% endfor %}</select></div>
+                <div class="col-md-4 mb-3"><label for="cliente_id" class="form-label">Cliente</label><select class="form-select" id="cliente_id" name="cliente_id"><option value="0">Cliente Varios</option>{% for cli in clientes %}<option value="{{ cli.id }}" {% if data_source.get('cliente_id')|string == cli.id|string %}selected{% endif %}>{{ cli.nombres }} {{ cli.apellidos }}</option>{% endfor %}</select></div>
+                <div class="col-md-4 mb-3"><label for="empleado_id" class="form-label">Colaborador</label><select class="form-select" id="empleado_id" name="empleado_id" required><option value="">Seleccione...</option>{% for emp in empleados %}<option value="{{ emp.id }}" {% if data_source.get('empleado_id')|string == emp.id|string %}selected{% endif %}>{{ emp.nombres }} {{ emp.apellidos }}</option>{% endfor %}</select></div>
+                <div class="col-md-4 mb-3"><label for="fecha_venta" class="form-label">Fecha de Venta</label><input type="datetime-local" class="form-control" id="fecha_venta" name="fecha_venta" value="{{ data_source.get('fecha_venta_str') or data_source.get('fecha_venta') }}" required></div>
+                <div class="col-md-4 mb-3"><label for="tipo_comprobante" class="form-label">Tipo Comprobante</label><select class="form-select" id="tipo_comprobante" name="tipo_comprobante"><option value="">Seleccione tipo...</option>{% for tipo in tipos_comprobante %}<option value="{{ tipo }}" {% if data_source.get('tipo_comprobante') == tipo %}selected{% endif %}>{{ tipo }}</option>{% endfor %}</select></div>
+                <div class="col-md-4 mb-3"><label for="serie_comprobante" class="form-label">Serie-Número</label><input type="text" class="form-control" id="serie_comprobante" name="serie_comprobante" value="{{ data_source.get('serie_comprobante', '') }}-{{ data_source.get('numero_comprobante', '') }}" readonly></div>
+            </div>
+
+            {# SECCIÓN 2: ÍTEMS DE LA VENTA (SOLO LECTURA) #}
+            <h3 class="mt-4">Ítems Vendidos (No editable)</h3>
+            <div class="table-responsive mt-2"><table class="table table-sm table-custom items-table-readonly"><thead><tr><th>Descripción</th><th class="text-center">Cant.</th><th class="text-end">P. Unit.</th><th class="text-end">Subtotal</th></tr></thead><tbody>{% for item in items_venta %}<tr><td>{{ item.descripcion_item_venta }} <small class="text-muted">({{ "Servicio" if item.servicio_id else "Producto" }})</small></td><td class="text-center">{{ item.cantidad }}</td><td class="text-end">{{ "%.2f"|format(item.precio_unitario_venta) }}</td><td class="text-end">{{ "%.2f"|format(item.subtotal_item_neto) }}</td></tr>{% endfor %}</tbody></table></div>
+
+            {# SECCIÓN 3: PAGOS (EDITABLE) #}
+            <h3 class="mt-4">Pagos</h3>
+            <div class="p-3 border rounded mb-3" style="border-color: var(--color-secundario-gris) !important;">
+                <h5 class="text-light">Añadir Pago:</h5>
+                <div class="row g-2 align-items-end"><div class="col-md-4"><label for="selectMetodoPago" class="form-label">Método</label><select id="selectMetodoPago" class="form-select form-select-sm"><option value="">Seleccione método...</option>{% for metodo in metodos_pago %}<option value="{{ metodo }}">{{ metodo }}</option>{% endfor %}</select></div><div class="col-md-3"><label for="inputMontoPago" class="form-label">Monto (S/)</label><input type="number" step="0.01" min="0.01" class="form-control form-control-sm" id="inputMontoPago"></div><div class="col-md-3"><label for="inputReferenciaPago" class="form-label">Referencia</label><input type="text" class="form-control form-control-sm" id="inputReferenciaPago" placeholder="Opcional"></div><div class="col-md-2"><button type="button" class="btn btn-info btn-sm w-100" id="btnAnadirPago"><i class="fas fa-plus"></i> Añadir</button></div></div>
+            </div>
+            <div class="table-responsive mt-2">
+                <table class="table table-sm table-custom pagos-table" id="tablaPagosAgregados">
+                    <thead><tr><th>Método</th><th>Monto (S/)</th><th>Referencia</th><th>Acción</th></tr></thead>
+                    <tbody><tr id="filaSinPagos"><td colspan="4" class="text-center text-muted">No hay pagos registrados.</td></tr></tbody>
+                </table>
+            </div>
+             <div class="mt-3"><label for="notas_venta" class="form-label">Notas Adicionales</label><textarea class="form-control" id="notas_venta" name="notas_venta" rows="2">{{ data_source.get('notas_venta', '') }}</textarea></div>
+            
+             <input type="hidden" name="pagos_json" id="pagos_json">
+             <input type="hidden" name="estado_pago" id="hidden_estado_pago">
+
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{{ url_for('main.ver_detalle_venta', venta_id=venta.id) }}" class="btn btn-secondary me-2"><i class="fas fa-times me-1"></i>Cancelar</a>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Guardar Cambios</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar la lista de pagos con los datos existentes pasados desde Flask
+    let pagosEnVenta = JSON.parse('{{ pagos_venta_json | safe }}');
+    
+    // Selectores DOM
+    const selectMetodoPago = document.getElementById('selectMetodoPago');
+    const inputMontoPago = document.getElementById('inputMontoPago');
+    const inputReferenciaPago = document.getElementById('inputReferenciaPago');
+    const btnAnadirPago = document.getElementById('btnAnadirPago');
+    const tablaPagosAgregadosBody = document.querySelector('#tablaPagosAgregados tbody');
+    const pagosJsonInput = document.getElementById('pagos_json');
+    const hiddenEstadoPagoInput = document.getElementById('hidden_estado_pago');
+    const totalVenta = parseFloat('{{ venta.monto_final_venta }}');
+
+    // Listener para añadir un nuevo pago a la lista
+    if (btnAnadirPago) {
+        btnAnadirPago.addEventListener('click', function() {
+            const metodo = selectMetodoPago.value;
+            const monto = parseFloat(inputMontoPago.value);
+            const referencia = inputReferenciaPago.value.trim();
+
+            if (!metodo || isNaN(monto) || monto <= 0) {
+                alert("Seleccione un método e ingrese un monto de pago válido.");
+                return;
+            }
+            pagosEnVenta.push({
+                metodo_pago: metodo,
+                monto: monto,
+                referencia_pago: referencia
+            });
+            renderizarPagosTabla();
+            selectMetodoPago.value = "";
+            inputMontoPago.value = "";
+            inputReferenciaPago.value = "";
+        });
+    }
+
+    // Función para dibujar la tabla de pagos
+    function renderizarPagosTabla() {
+        tablaPagosAgregadosBody.innerHTML = '';
+        if (pagosEnVenta.length === 0) {
+            const filaVacia = tablaPagosAgregadosBody.insertRow();
+            filaVacia.id = 'filaSinPagos';
+            const tdVacia = filaVacia.insertCell();
+            tdVacia.colSpan = 4;
+            tdVacia.className = 'text-center text-muted';
+            tdVacia.textContent = 'No hay pagos registrados.';
+        } else {
+            pagosEnVenta.forEach((pago, index) => {
+                const fila = tablaPagosAgregadosBody.insertRow();
+                fila.insertCell().textContent = pago.metodo_pago;
+                fila.insertCell().textContent = parseFloat(pago.monto).toFixed(2);
+                fila.insertCell().textContent = pago.referencia_pago || '-';
+                
+                const cellAccion = fila.insertCell();
+                const btnEliminar = document.createElement('button');
+                btnEliminar.type = 'button';
+                btnEliminar.className = 'btn btn-danger btn-xs';
+                btnEliminar.innerHTML = '<i class="fas fa-trash-alt"></i>';
+                btnEliminar.title = 'Eliminar pago';
+                btnEliminar.onclick = function() {
+                    pagosEnVenta.splice(index, 1);
+                    renderizarPagosTabla();
+                };
+                cellAccion.appendChild(btnEliminar);
+            });
+        }
+        // Actualizar el campo oculto cada vez que se redibuja la tabla
+        actualizarCamposOcultos();
+    }
+    
+    // Función para actualizar los campos ocultos que se enviarán
+    function actualizarCamposOcultos() {
+        pagosJsonInput.value = JSON.stringify(pagosEnVenta);
+
+        // Calcular y establecer el estado de pago
+        let totalPagado = pagosEnVenta.reduce((sum, pago) => sum + parseFloat(pago.monto), 0);
+        let estadoPagoCalculado = "Pendiente de Pago";
+        if (totalVenta > 0 && (Math.abs(totalPagado - totalVenta) < 0.01 || totalPagado > totalVenta)) {
+            estadoPagoCalculado = "Pagado";
+        } else if (totalPagado > 0) {
+            estadoPagoCalculado = "Parcialmente Pagado";
+        } else if (totalVenta <= 0) {
+            estadoPagoCalculado = "Pagado";
+        }
+        hiddenEstadoPagoInput.value = estadoPagoCalculado;
+    }
+
+    // Llamada inicial para mostrar los pagos existentes al cargar la página
+    renderizarPagosTabla();
+});
+</script>
+{% endblock %}

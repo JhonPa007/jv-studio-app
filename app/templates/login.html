@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Iniciar Sesión - JV Studio</title>
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <style>
+        body {
+            background-color: #212529;
+            color: #f8f9fa;
+        }
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            background-color: #3a3a3a;
+            border: 1px solid #495057;
+            border-radius: 15px;
+            padding: 2rem;
+            max-width: 450px;
+            width: 100%;
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .login-header h2 {
+            color: var(--color-acento-dorado, #D4AF37);
+        }
+        .form-control {
+            background-color: #4f4f4f;
+            border-color: #6c757d;
+            color: #f8f9fa;
+        }
+        .form-control:focus {
+            background-color: #4f4f4f;
+            border-color: var(--color-acento-dorado, #D4AF37);
+            color: #f8f9fa;
+            box-shadow: 0 0 0 0.25rem rgba(212, 175, 55, 0.25);
+        }
+        .form-check-input:checked {
+            background-color: var(--color-acento-dorado, #D4AF37);
+            border-color: var(--color-acento-dorado, #D4AF37);
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h2>JV Studio</h2>
+                <p class="text-muted">Inicia sesión para continuar</p>
+            </div>
+            
+            {% include 'partials/_flash_messages.html' %}
+
+            <form method="POST" action="{{ url_for('main.login') }}">
+                <div class="mb-3">
+                    <label for="email" class="form-label">Correo Electrónico</label>
+                    <input type="email" class="form-control" id="email" name="email" required>
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">Contraseña</label>
+                    <input type="password" class="form-control" id="password" name="password" required>
+                </div>
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="remember" name="remember">
+                    <label class="form-check-label" for="remember">Recordarme</label>
+                </div>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary">Ingresar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+</body>
+</html>

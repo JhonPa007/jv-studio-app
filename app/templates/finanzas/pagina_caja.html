@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Caja - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .detalle-seccion, .form-section-venta {
+        background-color: #3a3a3a;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .detalle-seccion h3, .form-section-venta h3 {
+        color: var(--color-acento-dorado);
+        border-bottom: 1px solid var(--color-secundario-gris);
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+    }
+    .dl-horizontal dt { 
+        font-weight: bold;
+        color: var(--color-secundario-gris);
+    }
+    .dl-horizontal dd {
+        margin-bottom: .5rem;
+        color: #f8f9fa;
+    }
+    .total-section dt {
+        font-size: 1.1em;
+    }
+    .total-section dd {
+        font-size: 1.1em;
+    }
+    .total-section .text-success { color: #198754 !important; }
+    .total-section .text-danger { color: #dc3545 !important; }
+    .total-section .saldo-pendiente { color: #ffc107 !important; } /* Amarillo para el saldo pendiente */
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-cash-register me-2"></i>Gestión de Caja</h2>
+    </div>
+
+    <div class="card bg-dark text-light mb-4">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('main.pagina_caja') }}" class="row g-3 align-items-center">
+                <div class="col-md-5">
+                    <label for="sucursal_id_selector" class="form-label">Seleccione la Sucursal a Gestionar:</label>
+                    <select name="sucursal_id" id="sucursal_id_selector" class="form-select" onchange="this.form.submit()">
+                        <option value="">-- Elija una sucursal --</option>
+                        {% for suc in sucursales %}
+                        <option value="{{ suc.id }}" {% if sucursal_seleccionada_id == suc.id %}selected{% endif %}>
+                            {{ suc.nombre }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {# El botón ya no es necesario con onchange en el select #}
+            </form>
+        </div>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {# Solo mostrar el resto del contenido si se ha seleccionado una sucursal #}
+    {% if sucursal_seleccionada_id %}
+        
+        {# Formulario para Abrir Caja (si no hay sesión abierta) #}
+        {% if not sesion_abierta %}
+        <div class="form-section-venta"> 
+            <h3><i class="fas fa-door-open me-2"></i>Abrir Nueva Sesión de Caja</h3>
+            <p class="text-muted">No hay una sesión de caja activa para esta sucursal. Ingrese los datos para comenzar.</p>
+            <form method="POST" action="{{ url_for('main.abrir_caja') }}">
+                <input type="hidden" name="sucursal_id" value="{{ sucursal_seleccionada_id }}">
+                <div class="row align-items-end">
+                    <div class="col-md-5 mb-3">
+                        <label for="usuario_apertura_id" class="form-label">Abierto por:</label>
+                         <select class="form-select" id="usuario_apertura_id" name="usuario_apertura_id" required>
+                            <option value="">Seleccione colaborador...</option>
+                            {% for colab in colaboradores %}
+                            <option value="{{ colab.id }}">{{ colab.nombres }} {{ colab.apellidos }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="monto_inicial_efectivo" class="form-label">Monto Inicial en Caja (S/):</label>
+                        <input type="number" step="0.01" min="0" class="form-control" id="monto_inicial_efectivo" name="monto_inicial_efectivo" value="0.00" required>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-success w-100">Abrir Caja</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        {% else %}
+        {# Resumen de Sesión Abierta (si hay sesión abierta) #}
+        <div class="alert alert-success">
+            <h4 class="alert-heading">¡Caja Abierta!</h4>
+            <p class="mb-0">Sesión iniciada por **{{ sesion_abierta.apertura_nombres }} {{ sesion_abierta.apertura_apellidos }}** el {{ sesion_abierta.fecha_hora_apertura.strftime('%d/%m/%Y a las %H:%M') }}.</p>
+        </div>
+        <div class="row">
+            <div class="col-lg-7">
+                <div class="detalle-seccion">
+                    <h3><i class="fas fa-exchange-alt me-2"></i>Movimientos de la Sesión</h3>
+                    <h5 class="text-light mt-4">Ingresos por Método de Pago</h5>
+                    {% if resumen.ingresos_por_metodo %}
+                    <ul class="list-group list-group-flush">
+                    {% for ingreso in resumen.ingresos_por_metodo %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent text-light border-secondary">
+                            {{ ingreso.metodo_pago }}
+                            <span class="badge bg-success rounded-pill fs-6">S/ {{ "%.2f"|format(ingreso.total) }}</span>
+                        </li>
+                    {% endfor %}
+                    </ul>
+                    {% else %}
+                        <p class="text-muted fst-italic">No hay ingresos registrados en esta sesión.</p>
+                    {% endif %}
+
+                    <h5 class="text-light mt-4">Egresos en Efectivo de Caja</h5>
+                    <ul class="list-group list-group-flush">
+                        {% for egreso in resumen.egresos_por_categoria %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent text-light border-secondary">
+                            {{ egreso.categoria_nombre }}
+                            <span class="badge bg-danger rounded-pill fs-6">- S/ {{ "%.2f"|format(egreso.total) }}</span>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item bg-transparent text-muted fst-italic">No hay egresos en efectivo en esta sesión.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="detalle-seccion">
+                    <h3><i class="fas fa-cash-register me-2"></i>Estado de Caja (Efectivo)</h3>
+                    <dl class="row dl-horizontal total-section">
+                        <dt class="col-7">Monto Inicial:</dt>
+                        <dd class="col-5 text-end">S/ {{ "%.2f"|format(sesion_abierta.monto_inicial_efectivo) }}</dd>
+
+                        {# --- INICIO DE LA CORRECCIÓN --- #}
+                        <dt class="col-7">Ingresos en Efectivo:</dt>
+                        {# Creamos un objeto 'namespace' para poder modificar su valor dentro del bucle #}
+                        {% set ns = namespace(total_efectivo=0) %}
+                        {% for ingreso in resumen.ingresos_por_metodo %}
+                            {% if ingreso.metodo_pago|lower == 'efectivo' %}
+                                {# Modificamos el atributo del objeto namespace #}
+                                {% set ns.total_efectivo = ingreso.total %}
+                            {% endif %}
+                        {% endfor %}
+                        {# Ahora mostramos el valor del objeto namespace, que sí fue modificado #}
+                        <dd class="col-5 text-end text-success">+ S/ {{ "%.2f"|format(ns.total_efectivo) }}</dd>
+
+                        <dt class="col-7">Egresos en Efectivo:</dt>
+                        {# Hacemos lo mismo para el total de egresos para mantener la consistencia #}
+                        {% set ns.total_egresos = (resumen.egresos_por_categoria | sum(attribute='total')) | float %}
+                        <dd class="col-5 text-end text-danger">- S/ {{ "%.2f"|format(ns.total_egresos) }}</dd>
+                        {# --- FIN DE LA CORRECCIÓN --- #}
+
+                        <dt class="col-7 border-top pt-2 mt-2 fs-5" style="border-color: var(--color-secundario-gris) !important;">Efectivo Calculado:</dt>
+                        <dd class="col-5 text-end border-top pt-2 mt-2 fs-5" style="border-color: var(--color-secundario-gris) !important; color: var(--color-acento-dorado);">
+                            <strong>S/ {{ "%.2f"|format(resumen.efectivo_calculado) }}</strong>
+                        </dd>
+                    </dl>
+                     <hr>
+                     <h5 class="text-light mt-4">Cerrar Sesión de Caja</h5>
+                     <form method="POST" action="{{ url_for('main.cerrar_caja', sesion_id=sesion_abierta.id) }}" onsubmit="return confirm('¿Estás seguro de que deseas cerrar la caja? Esta acción es final para esta sesión.');">
+                        <div class="row align-items-end">
+                            <div class="col-md-3 mb-2"><label for="monto_final_efectivo_contado" class="form-label">Efectivo Contado (S/):</label><input type="number" step="0.01" min="0" class="form-control" name="monto_final_efectivo_contado" required></div>
+                            <div class="col-md-3 mb-2"><label for="usuario_cierre_id" class="form-label">Cerrado por:</label><select class="form-select" id="usuario_cierre_id" name="usuario_cierre_id" required><option value="">Seleccione...</option>{% for colab in colaboradores %}<option value="{{ colab.id }}">{{ colab.nombres }} {{ colab.apellidos }}</option>{% endfor %}</select></div>
+                            <div class="col-md-4 mb-2"><label for="notas_cierre" class="form-label">Notas de Cierre:</label><input type="text" class="form-control" name="notas_cierre"></div>
+                            <div class="col-md-2"><button type="submit" class="btn btn-danger w-100"><i class="fas fa-door-closed"></i> Cerrar</button></div>
+                        </div>
+                     </form>
+                </div>
+            </div>
+        </div>
+        {% endif %} {# Cierre de if sesion_abierta #}
+
+        <div class="detalle-seccion mt-4">
+            <h3><i class="fas fa-hand-holding-usd me-2"></i>Comisiones Pendientes de Pago</h3>
+            {% if comisiones_pendientes %}
+            <form method="POST" action="{{ url_for('main.pagar_comisiones_caja') }}" onsubmit="return confirm('¿Seguro que deseas registrar el pago de las comisiones seleccionadas?');">
+                <input type="hidden" name="caja_sesion_id" value="{{ sesion_abierta.id if sesion_abierta else '' }}">
+                <div class="table-responsive"><table class="table table-hover table-custom table-sm">
+                    <thead><tr><th><input type="checkbox" id="checkAllComisiones" title="Seleccionar Todas"></th><th>Fecha Gen.</th><th>Colaborador</th><th>Origen (Venta)</th><th class="text-end">Monto (S/)</th></tr></thead>
+                    <tbody>
+                    {% for comision in comisiones_pendientes %}
+                    <tr>
+                        <td><input type="checkbox" class="check-comision" name="comision_id" value="{{ comision.id }}" data-monto="{{ comision.monto_comision }}"></td>
+                        <td>{{ comision.fecha_generacion.strftime('%d/%m/%Y') }}</td>
+                        <td>{{ comision.colaborador_nombre }}</td>
+                        <td><a href="{{ url_for('main.ver_detalle_venta', venta_id=comision.venta_id) }}" target="_blank">Venta #{{ comision.venta_id }}</a><small class="d-block text-muted">{{ comision.descripcion_item_venta }}</small></td>
+                        <td class="text-end">{{ "%.2f"|format(comision.monto_comision) }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table></div>
+                <div class="d-flex justify-content-end align-items-center mt-3 flex-wrap">
+                    {# NUEVO DESPLEGABLE PARA SELECCIONAR QUIÉN PAGA #}
+                    <div class="me-3">
+                        <label for="registrado_por_colaborador_id" class="form-label mb-0">Pago Registrado Por:</label>
+                        <select class="form-select form-select-sm d-inline-block" style="width: auto;" name="registrado_por_colaborador_id" id="registrado_por_colaborador_id" required>
+                            <option value="">Seleccione...</option>
+                            {% for colab in colaboradores %}
+                            <option value="{{ colab.id }}">{{ colab.nombres }} {{ colab.apellidos }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <span class="me-3 fw-bold text-light">Total Seleccionado: <span id="totalComisionesSeleccionadas">S/ 0.00</span></span>
+                    <button type="submit" class="btn btn-success" id="btnPagarComisiones" disabled>
+                        <i class="fas fa-check me-1"></i>Pagar Comisiones Seleccionadas
+                    </button>
+                </div>
+            </form>
+            {% else %}
+            <p class="text-muted fst-italic">No hay comisiones pendientes de pago en esta sucursal.</p>
+            {% endif %} {# Cierre de if comisiones_pendientes #}
+        </div>
+    
+    {% else %} {# Si no se ha seleccionado sucursal #}
+        <div class="alert alert-info-custom">
+            <p><i class="fas fa-arrow-up me-2"></i>Por favor, seleccione una sucursal en el menú de arriba para empezar a gestionar la caja.</p>
+        </div>
+    {% endif %} {# Cierre de if sucursal_seleccionada_id #}
+</div>
+{% endblock content %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log("Script de página de caja cargado.");
+
+    // --- LÓGICA PARA LA SECCIÓN DE PAGO DE COMISIONES ---
+    const checkAllComisiones = document.getElementById('checkAllComisiones');
+    const comisionCheckboxes = document.querySelectorAll('.check-comision');
+    const totalComisionesDisplay = document.getElementById('totalComisionesSeleccionadas');
+    const formPagarComisiones = document.querySelector('#comisionesPendientes form');
+    const btnPagarComisiones = document.getElementById('btnPagarComisiones');
+
+    // Imprimir en consola los elementos encontrados para verificar que no sean nulos
+    console.log("Checkbox 'Seleccionar Todas':", checkAllComisiones);
+    console.log(`Checkboxes de comisiones encontrados: ${comisionCheckboxes.length}`);
+    console.log("Elemento para mostrar total:", totalComisionesDisplay);
+    console.log("Botón de Pagar Comisiones:", btnPagarComisiones);
+    
+    /**
+     * Función para actualizar el total y el botón de pago.
+     */
+    function actualizarTotalComisiones() {
+        console.log("-> Ejecutando actualizarTotalComisiones()...");
+        let totalSeleccionado = 0;
+        let algunaSeleccionada = false;
+
+        comisionCheckboxes.forEach((checkbox, index) => {
+            if (checkbox.checked) {
+                algunaSeleccionada = true;
+                const montoStr = checkbox.dataset.monto || '0';
+                const monto = parseFloat(montoStr);
+                
+                console.log(`  - Checkbox #${index} está MARCADO. Monto leído: '${montoStr}', convertido a: ${monto}`);
+
+                if (!isNaN(monto)) {
+                    totalSeleccionado += monto;
+                } else {
+                    console.error(`  - ERROR: El monto para el checkbox #${index} no es un número válido.`);
+                }
+            }
+        });
+
+        console.log("  Total calculado: " + totalSeleccionado);
+
+        if (totalComisionesDisplay) {
+            totalComisionesDisplay.textContent = `S/ ${totalSeleccionado.toFixed(2)}`;
+        }
+
+        if (btnPagarComisiones) {
+            btnPagarComisiones.disabled = !algunaSeleccionada;
+            console.log(`  Botón de pago 'disabled' se establece a: ${!algunaSeleccionada}`);
+        }
+    }
+
+    // Event listener para el checkbox "Seleccionar Todas"
+    if (checkAllComisiones) {
+        checkAllComisiones.addEventListener('change', function() {
+            console.log("EVENTO: Clic en 'Seleccionar Todas'. Nuevo estado: ", this.checked);
+            comisionCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            actualizarTotalComisiones();
+        });
+    }
+
+    // Event listeners para cada checkbox individual
+    if(comisionCheckboxes.length > 0){
+        comisionCheckboxes.forEach((checkbox, index) => {
+            checkbox.addEventListener('change', function() {
+                console.log(`EVENTO: Clic en checkbox individual #${index}. Nuevo estado:`, this.checked);
+                if (!this.checked) {
+                    if (checkAllComisiones) checkAllComisiones.checked = false;
+                } else {
+                    const todosMarcados = Array.from(comisionCheckboxes).every(cb => cb.checked);
+                    if (checkAllComisiones) checkAllComisiones.checked = todosMarcados;
+                }
+                actualizarTotalComisiones();
+            });
+        });
+    }
+
+    // Llamada inicial para establecer el estado correcto al cargar la página
+    console.log("Llamando a actualizarTotalComisiones() al cargar la página...");
+    actualizarTotalComisiones();
+});
+</script>
+{% endblock %}

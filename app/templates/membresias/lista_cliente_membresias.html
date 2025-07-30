@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina }} - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-id-card me-2"></i>{{ titulo_pagina }}</h2>
+    </div>
+
+    <div class="d-flex justify-content-end mb-3">
+        <div class="btn-group" role="group" aria-label="Filtros de estado">
+            <a href="{{ url_for('main.listar_cliente_membresias', filtro_estado='Activa') }}" class="btn btn-sm {% if filtro_actual == 'Activa' %}btn-success{% else %}btn-outline-success{% endif %}">Activas</a>
+            <a href="{{ url_for('main.listar_cliente_membresias', filtro_estado='Expirada') }}" class="btn btn-sm {% if filtro_actual == 'Expirada' %}btn-danger{% else %}btn-outline-danger{% endif %}">Expiradas</a>
+            <a href="{{ url_for('main.listar_cliente_membresias', filtro_estado='Todas') }}" class="btn btn-sm {% if filtro_actual == 'Todas' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Todas</a>
+        </div>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    <div class="table-responsive">
+        <table class="table table-hover table-custom table-sm">
+            <thead>
+                <tr>
+                    <th>Cliente</th>
+                    <th>Plan de Membresía</th>
+                    <th>Fecha Inicio</th>
+                    <th>Fecha Vencimiento</th>
+                    <th class="text-center">Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in membresias %}
+                <tr>
+                    <td>{{ m.cliente_nombre }}</td>
+                    <td><strong>{{ m.plan_nombre }}</strong></td>
+                    <td>{{ m.fecha_inicio.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ m.fecha_fin.strftime('%d/%m/%Y') }}</td>
+                    <td class="text-center">
+                        {% set estado = m.estado_calculado %}
+                        <span class="badge p-2 {% if estado == 'Activa' %}bg-success{% elif estado == 'Expirada' %}bg-danger{% else %}bg-secondary{% endif %}">
+                            {{ estado }}
+                        </span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted fst-italic p-4">No se encontraron membresías para el filtro seleccionado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

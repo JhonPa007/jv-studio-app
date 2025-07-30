@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Gestionar Ausencias de {{ empleado.nombres }} {{ empleado.apellidos }}{% endblock %}
+
+{% block head_extra %}
+<style>
+    .ausencia-item { margin-bottom: 5px; }
+    .form-add-ausencia {
+        background-color: #424242; /* Un gris un poco más claro que el fondo de día en horarios */
+        padding: 20px;
+        border-radius: 8px;
+        margin-top: 30px;
+    }
+    .form-add-ausencia h4 {
+        color: var(--color-acento-dorado);
+        border-bottom: 1px solid var(--color-secundario-gris);
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);">
+            <i class="fas fa-user-clock me-2"></i>Ausencias de: {{ empleado.nombres }} {{ empleado.apellidos }}
+        </h2>
+        <a href="{{ url_for('main.gestionar_horarios_empleado', empleado_id=empleado.id) }}" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-clock me-1"></i>Ver Horarios Habituales
+        </a>
+        <a href="{{ url_for('main.listar_empleados') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i>Volver a Lista de Empleados
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    {# Lista de Ausencias Existentes #}
+    <h3 class="text-light mt-4">Ausencias Registradas</h3>
+    {% if ausencias %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover table-custom">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Tipo</th>
+                    <th>Desde</th>
+                    <th>Hasta</th>
+                    <th>Descripción</th>
+                    <th>Aprobado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ausencia in ausencias %}
+                <tr>
+                    <td>{{ ausencia.id }}</td>
+                    <td>{{ ausencia.tipo_ausencia }}</td>
+                    <td>{{ ausencia.inicio_f }}</td>
+                    <td>{{ ausencia.fin_f }}</td>
+                    <td style="white-space: pre-wrap; max-width: 300px;">{{ ausencia.descripcion if ausencia.descripcion else '-' }}</td>
+                    <td>
+                        {% if ausencia.aprobado %}
+                            <span class="badge bg-success">Sí</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">No</span>
+                        {% endif %}
+                    </td>
+                    <td class="table-actions">
+                        <a href="{{ url_for('main.editar_ausencia_empleado', ausencia_id=ausencia.id) }}" class="btn btn-xs btn-warning" title="Editar Ausencia"><i class="fas fa-edit"></i></a>
+                        <a href="{{ url_for('main.eliminar_ausencia_empleado', ausencia_id=ausencia.id) }}" class="btn btn-xs btn-danger ms-1" title="Eliminar Ausencia" onclick="return confirm('¿Estás seguro de que deseas eliminar esta ausencia/excepción?');"><i class="fas fa-trash-alt"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <p class="text-muted fst-italic"><em>Este colaborador no tiene ausencias registradas.</em></p>
+    {% endif %}
+
+    {# Formulario para Agregar Nueva Ausencia #}
+    <div class="form-add-ausencia">
+        <h4><i class="fas fa-plus-circle me-2"></i>Registrar Nueva Ausencia/Excepción</h4>
+        <form method="POST" action="{{ url_for('main.agregar_ausencia_empleado', empleado_id=empleado.id) }}">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="fecha_hora_inicio" class="form-label">Fecha y Hora de Inicio <span class="text-danger">*</span></label>
+                    <input type="datetime-local" class="form-control" id="fecha_hora_inicio" name="fecha_hora_inicio" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="fecha_hora_fin" class="form-label">Fecha y Hora de Fin <span class="text-danger">*</span></label>
+                    <input type="datetime-local" class="form-control" id="fecha_hora_fin" name="fecha_hora_fin" required>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="tipo_ausencia" class="form-label">Tipo de Ausencia <span class="text-danger">*</span></label>
+                    <select class="form-select" id="tipo_ausencia" name="tipo_ausencia" required>
+                        <option value="">Seleccione un tipo...</option>
+                        {% for tipo in tipos_ausencia_comunes %}
+                        <option value="{{ tipo }}">{{ tipo }}</option>
+                        {% endfor %}
+                        <option value="Otro">Otro (especificar en descripción)</option>
+                    </select>
+                </div>
+                 <div class="col-md-6 mb-3 align-self-center"> {# Para alinear el checkbox verticalmente #}
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" value="True" id="aprobado" name="aprobado" checked>
+                        <label class="form-check-label" for="aprobado">
+                            Ausencia Aprobada
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label for="descripcion" class="form-label">Descripción / Motivo (Opcional)</label>
+                <textarea class="form-control" id="descripcion" name="descripcion" rows="3"></textarea>
+            </div>
+            <div class="d-flex justify-content-end">
+                <button type="submit" class="btn btn-success"><i class="fas fa-save me-1"></i>Guardar Ausencia</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

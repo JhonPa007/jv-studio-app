@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Categorías de Productos - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-stream me-2"></i>Categorías de Productos</h2>
+        <a href="{{ url_for('main.nueva_categoria_producto') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Nueva Categoría
+        </a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %} {# Asumiendo que tienes mensajes flash en un parcial #}
+    {# O si no, el bloque with messages = get_flashed_messages... directo aquí #}
+    {# {% with messages = get_flashed_messages(with_categories=true) %} ... {% endwith %} #}
+
+
+    {% if categorias %}
+    <div class="table-responsive">
+        <table class="table table-hover table-custom">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Descripción</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cat_prod in categorias %}
+                <tr>
+                    <td>{{ cat_prod.id }}</td>
+                    <td>{{ cat_prod.nombre }}</td>
+                    <td>{{ cat_prod.descripcion if cat_prod.descripcion else '-' }}</td>
+                    <td class="table-actions">
+                        <a href="{{ url_for('main.editar_categoria_producto', categoria_id=cat_prod.id) }}" class="btn btn-sm btn-warning" title="Editar"><i class="fas fa-edit"></i></a>
+                        <a href="{{ url_for('main.eliminar_categoria_producto', categoria_id=cat_prod.id) }}" class="btn btn-sm btn-danger ms-1" title="Eliminar" onclick="return confirm('¿Estás seguro de que deseas eliminar la categoría de producto \'{{ cat_prod.nombre }}\'? Esto podría afectar a los productos asociados.');"><i class="fas fa-trash"></i></a>
+                        {# Estos href para editar y eliminar apuntarán a rutas que crearemos después #}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info-custom"> {# Usar clase custom para estilo oscuro si es necesario #}
+        <i class="fas fa-info-circle me-2"></i>No hay categorías de productos registradas todavía.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

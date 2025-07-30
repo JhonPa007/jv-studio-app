@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_form | default('Gestionar Colaborador') }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .form-section { background-color: #3a3a3a; padding: 25px; border-radius: 8px; }
+    .form-section h2 { color: var(--color-acento-dorado); margin-bottom: 20px; border-bottom: 1px solid var(--color-secundario-gris); padding-bottom: 10px;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="form-section">
+        <h2>
+            <i class="fas {{ 'fa-user-plus' if es_nueva else 'fa-user-edit' }} me-2"></i>
+            {{ titulo_form }}
+        </h2>
+        
+        {% include 'partials/_flash_messages.html' %}
+
+        {% set data_source = form_data if form_data else (empleado if empleado else {}) %}
+
+        <form method="POST" action="{{ action_url }}">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="nombres" class="form-label">Nombres Completos <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="nombres" name="nombres" 
+                           value="{{ data_source.get('nombres', '') }}" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="apellidos" class="form-label">Apellidos Completos <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="apellidos" name="apellidos" 
+                           value="{{ data_source.get('apellidos', '') }}" required>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="nombre_display" class="form-label">Nombre a Mostrar (Resumido)</label>
+                    <input type="text" class="form-control" id="nombre_display" name="nombre_display" 
+                           value="{{ data_source.get('nombre_display', '') }}" placeholder="Ej: Pablo Casas">
+                     <small class="form-text text-muted">Para la agenda, ventas, etc. Si se deja vacío, se generará uno.</small>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="dni" class="form-label">DNI (Opcional)</label>
+                    <input type="text" class="form-control" id="dni" name="dni" 
+                           value="{{ data_source.get('dni', '') }}" maxlength="15">
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="fecha_nacimiento" class="form-label">Fecha de Nacimiento (Opcional)</label>
+                    {# Formatear fecha para el input type="date" si estamos editando #}
+                    {% set fn_value = data_source.get('fecha_nacimiento', '') %}
+                    {% if fn_value and fn_value is not string and fn_value.strftime is defined %}
+                        {% set fn_value_str = fn_value.strftime('%Y-%m-%d') %}
+                    {% else %}
+                        {% set fn_value_str = fn_value %}
+                    {% endif %}
+                    <input type="date" class="form-control" id="fecha_nacimiento" name="fecha_nacimiento"
+                           value="{{ fn_value_str }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="fecha_contratacion" class="form-label">Fecha de Contratación (Opcional)</label>
+                    {% set fc_value = data_source.get('fecha_contratacion', '') %}
+                    {% if fc_value and fc_value is not string and fc_value.strftime is defined %}
+                        {% set fc_value_str = fc_value.strftime('%Y-%m-%d') %}
+                    {% else %}
+                        {% set fc_value_str = fc_value %}
+                    {% endif %}
+                    <input type="date" class="form-control" id="fecha_contratacion" name="fecha_contratacion"
+                           value="{{ fc_value_str }}">
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="email" class="form-label">Correo Electrónico (Opcional)</label>
+                    <input type="email" class="form-control" id="email" name="email" 
+                           value="{{ data_source.get('email', '') }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="telefono" class="form-label">Teléfono (Opcional)</label>
+                    <input type="tel" class="form-control" id="telefono" name="telefono" 
+                           value="{{ data_source.get('telefono', '') }}">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="rol_id" class="form-label">Rol <span class="text-danger">*</span></label>
+                    <select class="form-select" id="rol_id" name="rol_id" required>
+                        <option value="">Seleccione un rol...</option>
+                        {# La variable 'roles' la pasaremos desde la función de Flask #}
+                        {% for rol_opcion in roles %}
+                        <option value="{{ rol_opcion.id }}" {% if data_source.get('rol_id')|string == rol_opcion.id|string %}selected{% endif %}>
+                            {{ rol_opcion.nombre }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="sueldo_base" class="form-label">Sueldo Base Mensual (S/)</label>
+                    <input type="number" step="0.01" min="0" class="form-control" id="sueldo_base" name="sueldo_base" 
+                           value="{{ data_source.get('sueldo_base', '0.00') }}">
+                </div>
+                 <div class="col-md-6 mb-3">
+                    <label for="sucursal_id" class="form-label">Sucursal Principal (Opcional)</label>
+                    <select class="form-select" id="sucursal_id" name="sucursal_id">
+                        <option value="">Sin Asignar</option>
+                        {% for suc in sucursales %}
+                        <option value="{{ suc.id }}" {% if data_source.get('sucursal_id')|string == suc.id|string %}selected{% endif %}>
+                            {{ suc.nombre }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="notas" class="form-label">Notas Adicionales</label>
+                <textarea class="form-control" id="notas" name="notas" 
+                          rows="3">{{ data_source.get('notas', '') }}</textarea>
+            </div>
+
+            <div class="mb-3 form-check">
+                {% set activo_val = True if es_nueva and not form_data else data_source.get('activo', False) %}
+                {% if activo_val == 'activo' %}{% set activo_val = True %}{% endif %}
+                <input type="checkbox" class="form-check-input" id="activo" name="activo" value="activo" {% if activo_val %}checked{% endif %}>
+                <label class="form-check-label" for="activo">Colaborador Activo</label>
+            </div>
+            {# --- NUEVA SECCIÓN PARA CAMBIAR CONTRASEÑA --- #}
+            <hr class="my-4" style="border-color: var(--color-secundario-gris);">
+            <h4 class="text-light mb-3">Establecer / Cambiar Contraseña</h4>
+            <p class="text-muted small">Deje estos campos en blanco si no desea cambiar la contraseña actual.</p>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="password_nuevo" class="form-label">Nueva Contraseña</label>
+                    <input type="password" class="form-control" id="password_nuevo" name="password_nuevo" autocomplete="new-password">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="password_confirmacion" class="form-label">Confirmar Nueva Contraseña</label>
+                    <input type="password" class="form-control" id="password_confirmacion" name="password_confirmacion" autocomplete="new-password">
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{{ url_for('main.listar_empleados') }}" class="btn btn-secondary me-2">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>{{ 'Guardar Colaborador' if es_nuevo else 'Actualizar Colaborador' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo_pagina }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-trophy me-2"></i>{{ titulo_pagina }}</h2>
+        <a href="{{ url_for('main.nuevo_bono') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Crear Nuevo Bono
+        </a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    <div class="table-responsive">
+        <table class="table table-hover table-custom table-sm">
+            <thead>
+                <tr>
+                    <th>Nombre del Bono</th>
+                    <th>Descripción</th>
+                    <th class="text-end">Monto (S/)</th>
+                    <th>Activo</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for bono in bonos %}
+                <tr>
+                    <td><strong>{{ bono.nombre }}</strong></td>
+                    <td>{{ bono.descripcion or '-' }}</td>
+                    <td class="text-end">{{ "%.2f"|format(bono.monto_bono) }}</td>
+                    <td>{% if bono.activo %}<span class="badge bg-success">Sí</span>{% else %}<span class="badge bg-danger">No</span>{% endif %}</td>
+                    <td class="table-actions">
+                        <a href="{{ url_for('main.gestionar_reglas_bono', bono_id=bono.id) }}" class="btn btn-xs btn-info" title="Gestionar Reglas"><i class="fas fa-tasks"></i> Reglas</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

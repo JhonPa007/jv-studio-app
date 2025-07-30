@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Cliente: {{ cliente.nombres }} {{ cliente.apellidos }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .form-section {
+        background-color: #3a3a3a;
+        padding: 25px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .form-section h2 {
+        color: var(--color-acento-dorado);
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--color-secundario-gris);
+        padding-bottom: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="form-section">
+        <h2><i class="fas fa-user-edit me-2"></i>Editar Cliente: {{ cliente.nombres }} {{ cliente.apellidos }}</h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {# Usamos form_data si existe (en caso de error de validación POST), sino usamos cliente (para GET inicial) #}
+        {% set data_source = form_data if form_data else cliente %}
+
+        <form method="POST" action="{{ url_for('main.editar_cliente', cliente_id=cliente.id) }}">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="nombres" class="form-label">Nombres <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="nombres" name="nombres" 
+                           value="{{ data_source.nombres if data_source.nombres is defined else data_source.get('nombres', '') }}" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="apellidos" class="form-label">Apellidos <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="apellidos" name="apellidos" 
+                           value="{{ data_source.apellidos if data_source.apellidos is defined else data_source.get('apellidos', '') }}" required>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="email" class="form-label">Correo Electrónico</label>
+                    <input type="email" class="form-control" id="email" name="email" 
+                           value="{{ data_source.email if data_source.email is defined else data_source.get('email', '') }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="telefono" class="form-label">Teléfono</label>
+                    <input type="tel" class="form-control" id="telefono" name="telefono" 
+                           value="{{ data_source.telefono if data_source.telefono is defined else data_source.get('telefono', '') }}">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="fecha_nacimiento" class="form-label">Fecha de Nacimiento</label>
+                    {# Para campos de fecha, el formato de 'value' debe ser YYYY-MM-DD #}
+                    {% set fn_value = data_source.fecha_nacimiento if data_source.fecha_nacimiento is defined else data_source.get('fecha_nacimiento', '') %}
+                    {% if fn_value and fn_value is not string %} {# Si es objeto date/datetime #}
+                        {% set fn_value_str = fn_value.strftime('%Y-%m-%d') if fn_value else '' %}
+                    {% else %} {# Si es string (ej. desde form_data en error) #}
+                        {% set fn_value_str = fn_value %}
+                    {% endif %}
+                    <input type="date" class="form-control" id="fecha_nacimiento" name="fecha_nacimiento" 
+                           value="{{ fn_value_str }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="puntos_fidelidad" class="form-label">Puntos de Fidelidad</label>
+                    <input type="number" class="form-control" id="puntos_fidelidad" name="puntos_fidelidad"
+                           value="{{ data_source.puntos_fidelidad if data_source.puntos_fidelidad is defined else data_source.get('puntos_fidelidad', 0) }}" min="0">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label for="notas_adicionales" class="form-label">Notas Adicionales</label>
+                <textarea class="form-control" id="notas_adicionales" name="notas_adicionales" 
+                          rows="3">{{ data_source.notas_adicionales if data_source.notas_adicionales is defined else data_source.get('notas_adicionales', '') }}</textarea>
+            </div>
+            <div class="d-flex justify-content-end">
+                <a href="{{ url_for('main.ver_cliente', cliente_id=cliente.id) }}" class="btn btn-secondary me-2">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>Guardar Cambios
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

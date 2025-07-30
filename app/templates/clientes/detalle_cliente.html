@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}{{ cliente.razon_social_nombres }} {{ cliente.apellidos or '' }}{% endblock %}
+
+{% block head_extra %}
+<style>
+    .info-card { background-color: #3a3a3a; padding: 20px; border-radius: 8px; }
+    .info-card dt { font-weight: bold; color: var(--color-secundario-gris); }
+    .info-card dd { margin-bottom: .5rem; color: #f8f9fa; }
+    .timeline { list-style: none; padding: 0; position: relative; }
+    .timeline:before { content: ''; position: absolute; top: 0; bottom: 0; width: 4px; background: #4f4f4f; left: 20px; margin-left: -2px; }
+    .timeline-item { position: relative; margin-bottom: 20px; padding-left: 40px; }
+    .timeline-icon { position: absolute; left: 20px; top: 0; width: 24px; height: 24px; line-height: 24px; text-align: center; color: white; background-color: var(--color-acento-dorado); border-radius: 50%; margin-left: -12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-user-tag me-2"></i>Ficha de Cliente</h2>
+            <p class="text-muted mb-0"><strong>{{ cliente.razon_social_nombres }} {{ cliente.apellidos or '' }}</strong></p>
+        </div>
+        <div>
+            <a href="{{ url_for('main.listar_clientes') }}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>Volver a la Lista</a>
+            <a href="{{ url_for('main.editar_cliente', cliente_id=cliente.id) }}" class="btn btn-warning ms-2"><i class="fas fa-edit me-1"></i>Editar Cliente</a>
+        </div>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    <div class="row">
+        <div class="col-lg-4 mb-4">
+            <div class="info-card">
+                <h4><i class="fas fa-id-card me-2"></i>Información de Contacto</h4>
+                <hr>
+                <dl>
+                    <dt>Documento:</dt>
+                    <dd>{{ cliente.tipo_documento or 'N/A' }} - {{ cliente.numero_documento or 'No registrado' }}</dd>
+                    <dt>Teléfono:</dt>
+                    <dd>{{ cliente.telefono or '-' }}</dd>
+                    <dt>Email:</dt>
+                    <dd>{{ cliente.email or '-' }}</dd>
+                    <dt>Dirección:</dt>
+                    <dd>{{ cliente.direccion or '-' }}</dd>
+                    <dt>Fecha de Nacimiento:</dt>
+                    <dd>{{ cliente.fecha_nacimiento.strftime('%d de %B') if cliente.fecha_nacimiento else '-' }}</dd>
+                </dl>
+
+                <h4 class="mt-4"><i class="fas fa-star me-2"></i>Fidelización</h4>
+                <hr>
+                <dl>
+                    <dt>JV Puntos:</dt>
+                    <dd>{{ cliente.puntos_fidelidad or 0 }} Puntos</dd>
+                    <dt>Membresías:</dt>
+                    {% for m in historial_membresias %}
+                        <dd>{{ m.plan_nombre }} (Vence: {{ m.fecha_fin.strftime('%d/%m/%Y') }})</dd>
+                    {% else %}
+                        <dd>Sin membresías activas.</dd>
+                    {% endfor %}
+                </dl>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="info-card">
+                <h4><i class="fas fa-history me-2"></i>Historial de Visitas</h4>
+                <hr>
+                <ul class="timeline">
+                    {% for venta in historial_ventas %}
+                    <li class="timeline-item">
+                        <div class="timeline-icon"><i class="fas fa-shopping-cart"></i></div>
+                        <div class="card bg-dark">
+                            <div class="card-header d-flex justify-content-between">
+                                <strong>Venta #{{ venta.id }}</strong>
+                                <small>{{ venta.fecha_venta.strftime('%d/%m/%Y a las %H:%M') }}</small>
+                            </div>
+                            <div class="card-body">
+                                <p class="mb-1"><strong class="text-muted">Atendido por:</strong> {{ venta.colaborador_nombre }}</p>
+                                <a href="{{ url_for('main.ver_detalle_venta', venta_id=venta.id) }}" class="btn btn-outline-info btn-sm mt-2">Ver Detalle Completo</a>
+                            </div>
+                        </div>
+                    </li>
+                    {% else %}
+                    <p class="text-muted fst-italic">Este cliente aún no tiene un historial de visitas.</p>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

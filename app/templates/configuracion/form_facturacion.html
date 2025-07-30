@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina }} - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-file-invoice-dollar me-2"></i>{{ titulo_pagina }}</h2>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    <div class="form-section-venta">
+        <h3>Credenciales SUNAT</h3>
+        <p class="text-muted">Sube tu Certificado Digital y las credenciales de tu Usuario Secundario SOL.</p>
+        
+        <form method="POST" enctype="multipart/form-data">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="emisor_ruc" class="form-label">RUC de la Empresa</label>
+                    <input type="text" class="form-control" id="emisor_ruc" name="emisor_ruc" value="{{ credenciales.get('emisor_ruc', '') }}" required maxlength="11">
+                    <small class="form-text text-muted">El RUC de tu empresa que emitirá los comprobantes.</small>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="certificado_digital" class="form-label">Certificado Digital (.pfx)</label>
+                    {% if certificado_existente %}
+                        <div class="alert alert-success small p-2">
+                            <i class="fas fa-check-circle me-1"></i> Ya hay un certificado guardado. Sube uno nuevo solo si deseas reemplazarlo.
+                        </div>
+                    {% endif %}
+                    <input class="form-control" type="file" id="certificado_digital" name="certificado_digital" accept=".pfx,.pem">
+                </div>
+                 <div class="col-md-6 mb-3">
+                    <label for="password_certificado" class="form-label">Contraseña del Certificado</label>
+                    <input type="password" class="form-control" id="password_certificado" name="password_certificado" value="{{ credenciales.get('password_certificado', '') }}">
+                    <small class="form-text text-muted">Deja en blanco para no cambiar la contraseña guardada.</small>
+                </div>
+            </div>
+             <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="usuario_sol" class="form-label">Usuario SOL (Secundario)</label>
+                    <input type="text" class="form-control" id="usuario_sol" name="usuario_sol" value="{{ credenciales.get('usuario_sol', '') }}">
+                    <small class="form-text text-muted">Ej: 20123456789MODDATOS</small>
+                </div>
+                 <div class="col-md-6 mb-3">
+                    <label for="clave_sol" class="form-label">Clave SOL (Secundaria)</label>
+                    <input type="password" class="form-control" id="clave_sol" name="clave_sol" value="{{ credenciales.get('clave_sol', '') }}">
+                </div>
+            </div>
+            
+            <hr class="my-4">
+            <div class="d-flex justify-content-end">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Guardar Configuración</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

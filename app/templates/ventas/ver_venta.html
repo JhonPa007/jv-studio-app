@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina or "Detalle de Venta" }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .info-card { background-color: #3a3a3a; padding: 20px; border-radius: 8px; }
+    .info-card dt { font-weight: bold; color: var(--color-secundario-gris); }
+    .info-card dd { margin-bottom: .5rem; color: #f8f9fa; }
+    .items-table th { color: var(--color-acento-dorado); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-file-invoice me-2"></i>{{ titulo_pagina }}</h2>
+        
+        <div class="ms-auto">
+            <a href="{{ url_for('main.listar_ventas') }}" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left me-1"></i>Volver</a>
+            
+            <a href="{{ url_for('main.imprimir_ticket_venta', venta_id=venta.venta_id) }}" target="_blank" class="btn btn-outline-light btn-sm ms-2"><i class="fas fa-print me-1"></i>Ticket</a>
+            
+            <a href="{{ url_for('main.generar_xml_venta', venta_id=venta.venta_id) }}" class="btn btn-outline-info btn-sm ms-2"><i class="fas fa-code me-1"></i>XML</a>
+            
+            <form class="d-inline" method="POST" action="{{ url_for('main.enviar_sunat', venta_id=venta.venta_id) }}" onsubmit="return confirm('¿Enviar este comprobante a SUNAT?');">
+                <button type="submit" class="btn btn-primary btn-sm ms-2"><i class="fas fa-paper-plane me-1"></i>Enviar a SUNAT</button>
+            </form>
+
+            {% if venta.estado_pago != 'Anulado' %}
+            <a href="{{ url_for('main.editar_venta', venta_id=venta.venta_id) }}" class="btn btn-warning btn-sm ms-2"><i class="fas fa-edit me-1"></i>Editar</a>
+            <form class="d-inline" method="POST" action="{{ url_for('main.anular_venta', venta_id=venta.venta_id) }}" onsubmit="return confirm('¿Seguro que deseas ANULAR esta venta?');">
+                <button type="submit" class="btn btn-danger btn-sm ms-2"><i class="fas fa-times-circle me-1"></i>Anular</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    <div class="row">
+        <div class="col-lg-7 mb-4">
+            <div class="info-card h-100">
+                <h4><i class="fas fa-info-circle me-2"></i>Detalles de la Venta</h4>
+                <hr>
+                <dl class="row">
+                    <dt class="col-sm-4">Comprobante:</dt>
+                    <dd class="col-sm-8">{{ venta.tipo_comprobante or 'N/A' }} - <strong>{{ venta.serie_comprobante }}-{{ venta.numero_comprobante }}</strong></dd>
+
+                    <dt class="col-sm-4">Fecha:</dt>
+                    <dd class="col-sm-8">{{ venta.fecha_venta.strftime('%d/%m/%Y %H:%M') }}</dd>
+
+                    <dt class="col-sm-4">Sucursal:</dt>
+                    <dd class="col-sm-8">{{ venta.sucursal_nombre }}</dd>
+
+                    <dt class="col-sm-4">Colaborador:</dt>
+                    <dd class="col-sm-8">{{ venta.colaborador_nombre }}</dd>
+
+                    <dt class="col-sm-4">Cliente Atendido:</dt>
+                    <dd class="col-sm-8">{{ venta.cliente_receptor_nombre or 'Cliente Varios' }}</dd>
+
+                    {% if venta.cliente_facturacion_id and venta.cliente_facturacion_id != venta.cliente_receptor_id %}
+                    <dt class="col-sm-4">Facturado a:</dt>
+                    <dd class="col-sm-8">{{ venta.cliente_factura_nombre }}</dd>
+                    {% endif %}
+
+                    <dt class="col-sm-4">Estado SUNAT:</dt>
+                    <dd class="col-sm-8">
+                        {% if venta.estado_sunat == 'Aceptada' %}<span class="badge bg-success">{{ venta.estado_sunat }}</span>
+                        {% elif venta.estado_sunat == 'Rechazada' %}<span class="badge bg-danger">{{ venta.estado_sunat }}</span>
+                        {% else %}<span class="badge bg-secondary">{{ venta.estado_sunat or 'Pendiente' }}</span>
+                        {% endif %}
+                    </dd>
+                </dl>
+            </div>
+        </div>
+        <div class="col-lg-5 mb-4">
+            <div class="info-card h-100">
+                <h4><i class="fas fa-dollar-sign me-2"></i>Resumen Financiero</h4>
+                <hr>
+                <dl class="row total-section">
+                    <dt class="col-sm-6">Subtotal Servicios:</dt>
+                    <dd class="col-sm-6 text-end">S/ {{ "%.2f"|format(venta.subtotal_servicios or 0) }}</dd>
+                    <dt class="col-sm-6">Subtotal Productos:</dt>
+                    <dd class="col-sm-6 text-end">S/ {{ "%.2f"|format(venta.subtotal_productos or 0) }}</dd>
+                    <dt class="col-sm-6">Descuento:</dt>
+                    <dd class="col-sm-6 text-end">- S/ {{ "%.2f"|format(venta.descuento_monto or 0) }}</dd>
+                    <dt class="col-sm-6 border-top pt-2">Total Venta:</dt>
+                    <dd class="col-sm-6 text-end border-top pt-2"><strong>S/ {{ "%.2f"|format(venta.monto_final_venta) }}</strong></dd>
+                </dl>
+                <h5 class="mt-3">Pagos Realizados</h5>
+                <ul class="list-group list-group-flush">
+                {% for pago in pagos %}
+                    <li class="list-group-item bg-transparent text-light d-flex justify-content-between">
+                        <span>{{ pago.metodo_pago }}</span>
+                        <span>S/ {{ "%.2f"|format(pago.monto) }}</span>
+                    </li>
+                {% else %}
+                    <li class="list-group-item bg-transparent text-muted">No se registraron pagos.</li>
+                {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-card mt-2">
+        <h4><i class="fas fa-box-open me-2"></i>Ítems de la Venta</h4>
+        <div class="table-responsive">
+            <table class="table table-sm table-custom items-table">
+                <thead>
+                    <tr>
+                        <th>Cant.</th>
+                        <th>Descripción</th>
+                        <th class="text-end">P. Unitario</th>
+                        <th class="text-end">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td class="text-center">{{ item.cantidad }}</td>
+                        <td>
+                            {{ item.descripcion_item_venta }}
+                            {% if item.notas_item %}
+                                <br><small class="text-muted fst-italic">Nota: {{ item.notas_item }}</small>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">S/ {{ "%.2f"|format(item.precio_unitario_venta) }}</td>
+                        <td class="text-end">S/ {{ "%.2f"|format(item.subtotal_item_neto) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

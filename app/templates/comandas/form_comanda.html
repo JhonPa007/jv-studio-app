@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_form }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* Estilos simplificados y optimizados para móviles */
+    .form-section-comanda { background-color: #3a3a3a; padding: 20px; border-radius: 8px; }
+    .form-section-comanda h2, .form-section-comanda h3 { color: var(--color-acento-dorado); margin-bottom: 20px; border-bottom: 1px solid var(--color-secundario-gris); padding-bottom: 10px;}
+    .items-table th, .items-table td { color: #033465; vertical-align: middle; font-size: 0.9em; }
+    .items-table thead th { color: var(--color-acento-dorado); }
+    .form-control-sm, .form-select-sm { background-color: #4f4f4f; color: #f8f9fa; border-color: var(--color-secundario-gris); }
+    .form-control-sm::placeholder { color: #aaa; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="form-section-comanda">
+        <h2><i class="fas fa-clipboard-list me-2"></i>{{ titulo_form }}</h2>
+        
+        <p class="text-gray">
+            Colaborador: <strong>{{ current_user.nombres }} {{ current_user.apellidos }}</strong><br>
+            {# Para mostrar el nombre de la sucursal, necesitaríamos pasarlo desde la ruta #}
+            {# Sucursal: <strong>{{ sucursal_actual.nombre }}</strong> #}
+        </p>
+
+        {% include 'partials/_flash_messages.html' %}
+
+        <form method="POST" action="{{ action_url }}" id="formComanda">
+            <input type="hidden" name="colaborador_id" value="{{ current_user.id }}">
+            <input type="hidden" name="sucursal_id" value="{{ current_user.sucursal_id }}">
+
+            <div class="mb-3">
+                <label for="cliente_id" class="form-label">Cliente <span class="text-danger">*</span></label>
+                <select class="form-select" id="cliente_id" name="cliente_id" required>
+                    <option value="">Seleccione un cliente...</option>
+                    {% for cli in clientes %}<option value="{{ cli.id }}">{{ cli.razon_social_nombres }} {{ cli.apellidos or '' }}</option>{% endfor %}
+                </select>
+            </div>
+
+            <h3 class="mt-4">Servicios y Productos</h3>
+            <div class="p-3 border rounded mb-2">
+                <h5 class="text-light small">Añadir Servicio</h5>
+                <div class="row g-2 align-items-end">
+                    <div class="col-7"><select id="selectServicio" class="form-select form-select-sm"><option value="">Seleccione...</option>{% for srv in servicios %}<option value="{{ srv.id }}" data-nombre="{{ srv.nombre }}" data-precio="{{ srv.precio }}">{{ srv.nombre }}</option>{% endfor %}</select></div>
+                    <div class="col-5"><button type="button" class="btn btn-info btn-sm w-100" id="btnAnadirServicio"><i class="fas fa-plus"></i> Añadir Servicio</button></div>
+                </div>
+                 <div class="form-check form-switch mt-2">
+                  <input class="form-check-input" type="checkbox" role="switch" id="checkServicioExtra">
+                  <label class="form-check-label text-light small" for="checkServicioExtra">Marcar como Trabajo Extra</label>
+                </div>
+            </div>
+
+            <div class="p-3 border rounded mb-3">
+                <h5 class="text-light small">Añadir Producto</h5>
+                <div class="row g-2 align-items-end">
+                    <div class="col-7"><select id="selectProducto" class="form-select form-select-sm"><option value="">Seleccione...</option>{% for prod in productos %}<option value="{{ prod.id }}" data-nombre="{{ prod.nombre }}" data-precio="{{ prod.precio_venta }}">{{ prod.nombre }} - {{ prod.marca_nombre or 'S/M' }}</option>{% endfor %}</select></div>
+                    <div class="col-2"><input type="number" id="cantidadProducto" class="form-control form-control-sm" value="1" min="1"></div>
+                    <div class="col-3"><button type="button" class="btn btn-info btn-sm w-100" id="btnAnadirProducto"><i class="fas fa-plus"></i> Añadir</button></div>
+                </div>
+            </div>
+            
+            <div class="table-responsive mt-2">
+                <table class="table table-sm table-custom items-table" id="tablaItemsComanda">
+                    <thead><tr><th>Descripción</th><th>Cant.</th><th class="text-end">Precio</th><th class="text-end">Subtotal</th><th></th></tr></thead>
+                    <tbody><tr id="filaSinItemsComanda"><td colspan="5" class="text-center text-muted">No hay ítems en la comanda.</td></tr></tbody>
+                </table>
+            </div>
+
+            <h4 class="text-end text-light mt-3">Total Comanda: <span id="totalComanda" style="color: var(--color-acento-dorado);">S/ 0.00</span></h4>
+            
+            <input type="hidden" name="items_json" id="items_json">
+
+            <div class="d-grid mt-4">
+                <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-paper-plane me-2"></i>Enviar Comanda a Caja</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- INICIALIZACIÓN ---
+    let itemsEnComanda = [];
+    const estilosCatalogo = JSON.parse('{{ estilos_catalogo | tojson | safe if estilos_catalogo else "[]" }}');
+
+    // --- SELECTORES DOM ---
+    const selectServicio = document.getElementById('selectServicio');
+    const checkServicioExtra = document.getElementById('checkServicioExtra');
+    const btnAnadirServicio = document.getElementById('btnAnadirServicio');
+    
+    const selectProducto = document.getElementById('selectProducto');
+    const cantidadProductoInput = document.getElementById('cantidadProducto');
+    const btnAnadirProducto = document.getElementById('btnAnadirProducto');
+
+    const tablaItemsBody = document.querySelector('#tablaItemsComanda tbody');
+    const totalComandaDisplay = document.getElementById('totalComanda');
+    const itemsJsonInput = document.getElementById('items_json');
+
+    // --- FUNCIONES PRINCIPALES ---
+
+    /**
+     * Dibuja la tabla completa de ítems y añade el campo de notas para los servicios.
+     */
+    function renderizarTabla() {
+        tablaItemsBody.innerHTML = '';
+        let totalGeneral = 0;
+
+        if (itemsEnComanda.length === 0) {
+            tablaItemsBody.innerHTML = '<tr id="filaSinItemsComanda"><td colspan="5" class="text-center text-muted">No hay ítems en la comanda.</td></tr>';
+        } else {
+            itemsEnComanda.forEach((item, index) => {
+                const subtotal = item.cantidad * item.precio_unitario_venta;
+                totalGeneral += subtotal;
+                
+                const fila = tablaItemsBody.insertRow();
+                fila.className = "align-middle";
+                let descripcionHtml = item.descripcion_item_venta;
+                if (item.tipo_item === 'Servicio' && item.es_trabajo_extra) {
+                    descripcionHtml += ' <span class="badge bg-warning text-dark">Extra</span>';
+                }
+
+                fila.innerHTML = `
+                    <td>${descripcionHtml}</td>
+                    <td class="text-center">${item.cantidad}</td>
+                    <td class="text-end">${item.precio_unitario_venta.toFixed(2)}</td>
+                    <td class="text-end">${subtotal.toFixed(2)}</td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-danger btn-xs btn-eliminar-item" data-index="${index}" title="Eliminar">&times;</button>
+                    </td>
+                `;
+
+                // Añadir fila extra para notas si es un servicio
+                if (item.tipo_item === 'Servicio') {
+                    const filaNota = tablaItemsBody.insertRow();
+                    const celdaNota = filaNota.insertCell();
+                    celdaNota.colSpan = 5;
+                    celdaNota.className = 'pt-0 pb-3 px-4';
+
+                    let datalistHtml = '<datalist id="estilos-sugerencias">';
+                    estilosCatalogo.forEach(estilo => {
+                        datalistHtml += `<option value="${estilo.nombre}">`;
+                    });
+                    datalistHtml += '</datalist>';
+
+                    celdaNota.innerHTML = `
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-secondary border-secondary text-light"><i class="fas fa-cut"></i></span>
+                            <input type="text" class="form-control form-control-sm nota-item-input" 
+                                   list="estilos-sugerencias"
+                                   data-index="${index}"
+                                   value="${item.notas_item || ''}"
+                                   placeholder="Añadir nota de corte/estilo (ej. Taper Fade)...">
+                            ${datalistHtml}
+                        </div>
+                    `;
+                }
+            });
+        }
+        
+        totalComandaDisplay.textContent = `S/ ${totalGeneral.toFixed(2)}`;
+        itemsJsonInput.value = JSON.stringify(itemsEnComanda);
+    }
+
+    // --- LISTENERS DE EVENTOS ---
+
+    btnAnadirServicio?.addEventListener('click', function() {
+        const selectedOption = selectServicio.options[selectServicio.selectedIndex];
+        if (!selectedOption || !selectedOption.value) return;
+
+        itemsEnComanda.push({
+            tipo_item: 'Servicio',
+            item_id: selectedOption.value,
+            descripcion_item_venta: selectedOption.dataset.nombre,
+            cantidad: 1,
+            precio_unitario_venta: parseFloat(selectedOption.dataset.precio),
+            es_trabajo_extra: checkServicioExtra.checked,
+            notas_item: "" // Inicialmente vacío
+        });
+        renderizarTabla();
+        selectServicio.value = '';
+        checkServicioExtra.checked = false;
+    });
+
+    btnAnadirProducto?.addEventListener('click', function() {
+        const selectedOption = selectProducto.options[selectProducto.selectedIndex];
+        if (!selectedOption || !selectedOption.value) return;
+
+        const cantidad = parseInt(cantidadProductoInput.value);
+        if (isNaN(cantidad) || cantidad < 1) return;
+        
+        itemsEnComanda.push({
+            tipo_item: 'Producto',
+            item_id: selectedOption.value,
+            descripcion_item_venta: selectedOption.dataset.nombre,
+            cantidad: cantidad,
+            precio_unitario_venta: parseFloat(selectedOption.dataset.precio)
+        });
+        renderizarTabla();
+        selectProducto.value = '';
+        cantidadProductoInput.value = '1';
+    });
+
+    // Listener para eliminar ítems y para las notas (usando delegación de eventos)
+    tablaItemsBody.addEventListener('click', function(event) {
+        if (event.target?.classList.contains('btn-eliminar-item')) {
+            const indexToRemove = parseInt(event.target.dataset.index);
+            itemsEnComanda.splice(indexToRemove, 1);
+            renderizarTabla();
+        }
+    });
+
+    tablaItemsBody.addEventListener('input', function(event) {
+        if (event.target?.classList.contains('nota-item-input')) {
+            const index = parseInt(event.target.dataset.index);
+            if (itemsEnComanda[index]) {
+                itemsEnComanda[index].notas_item = event.target.value;
+                itemsJsonInput.value = JSON.stringify(itemsEnComanda); // Actualizar el JSON
+            }
+        }
+    });
+
+    // Llamada inicial para dibujar la tabla vacía
+    renderizarTabla();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina | default('Detalle de Compra') }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* Reutilizamos los mismos estilos del detalle de venta */
+    .detalle-seccion {
+        background-color: #3a3a3a;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .detalle-seccion h3 {
+        color: var(--color-acento-dorado);
+        border-bottom: 1px solid var(--color-secundario-gris);
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+    }
+    .dl-horizontal dt { font-weight: bold; color: var(--color-secundario-gris); }
+    .dl-horizontal dd { margin-bottom: .5rem; color: #f8f9fa; }
+    .items-detalle-table th { color: var(--color-acento-dorado); }
+    .items-detalle-table td { color: #0a0a0a; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-file-invoice me-2"></i>{{ titulo_pagina }}</h2>
+        <a href="{{ url_for('main.listar_compras') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i>Volver al Historial de Compras
+        </a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {% if compra %}
+    <div class="row">
+        <div class="col-lg-7">
+            <div class="detalle-seccion">
+                <h3><i class="fas fa-info-circle me-2"></i>Información General</h3>
+                <dl class="row dl-horizontal">
+                    <dt class="col-sm-4">ID Compra:</dt>
+                    <dd class="col-sm-8">{{ compra.compra_id }}</dd>
+
+                    <dt class="col-sm-4">Fecha de Compra:</dt>
+                    <dd class="col-sm-8">{{ compra.fecha_compra.strftime('%d/%m/%Y') if compra.fecha_compra else '-' }}</dd>
+                    
+                    <dt class="col-sm-4">Fecha de Registro:</dt>
+                    <dd class="col-sm-8">{{ compra.fecha_recepcion.strftime('%d/%m/%Y %H:%M') if compra.fecha_recepcion else '-' }}</dd>
+
+                    <dt class="col-sm-4">Proveedor:</dt>
+                    <dd class="col-sm-8">{{ compra.proveedor_nombre }}</dd>
+
+                    <dt class="col-sm-4">Recibido en (Sucursal):</dt>
+                    <dd class="col-sm-8">{{ compra.sucursal_nombre }}</dd>
+                </dl>
+            </div>
+
+            <div class="detalle-seccion mt-3">
+                <h3><i class="fas fa-receipt me-2"></i>Comprobante y Pago</h3>
+                <dl class="row dl-horizontal">
+                    <dt class="col-sm-4">Tipo Comprobante:</dt>
+                    <dd class="col-sm-8">{{ compra.tipo_comprobante if compra.tipo_comprobante else '-' }}</dd>
+
+                    <dt class="col-sm-4">Serie - Número:</dt>
+                    <dd class="col-sm-8">{{ compra.serie_numero_comprobante if compra.serie_numero_comprobante else '-' }}</dd>
+                    
+                    <dt class="col-sm-4">Estado del Pago:</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge p-2 {% if compra.estado_pago == 'Pagada' %}bg-success{% elif compra.estado_pago == 'Pendiente de Pago' or compra.estado_pago == 'Crédito' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                            {{ compra.estado_pago }}
+                        </span>
+                    </dd>
+                </dl>
+            </div>
+
+            {% if compra.notas %}
+            <div class="detalle-seccion mt-3">
+                <h3><i class="far fa-sticky-note me-2"></i>Notas de la Compra</h3>
+                <p style="white-space: pre-wrap; color: #f8f9fa;">{{ compra.notas }}</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-lg-5">
+            <div class="detalle-seccion">
+                <h3><i class="fas fa-boxes me-2"></i>Productos Comprados</h3>
+                {% if items %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-borderless items-detalle-table">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th class="text-center">Cant.</th>
+                                <th class="text-end">Costo Unit.</th>
+                                <th class="text-end">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td>
+                                    {{ item.producto_nombre }}
+                                    <small class="d-block text-muted">{{ item.marca_nombre if item.marca_nombre else 'Sin Marca' }}</small>
+                                </td>
+                                <td class="text-center">{{ item.cantidad }}</td>
+                                <td class="text-end">{{ "%.2f"|format(item.costo_unitario) }}</td>
+                                <td class="text-end">{{ "%.2f"|format(item.subtotal) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No se encontraron productos para esta compra.</p>
+                {% endif %}
+            </div>
+
+            <div class="detalle-seccion mt-3">
+                <h3><i class="fas fa-calculator me-2"></i>Resumen Financiero</h3>
+                <dl class="row dl-horizontal total-section">
+                    <dt class="col-7">Subtotal:</dt>
+                    <dd class="col-5 text-end">S/ {{ "%.2f"|format(compra.monto_subtotal) }}</dd>
+
+                    <dt class="col-7">Impuestos (IGV):</dt>
+                    <dd class="col-5 text-end">S/ {{ "%.2f"|format(compra.monto_impuestos) }}</dd>
+
+                    <dt class="col-7 fs-5" style="color: var(--color-acento-dorado);">TOTAL COMPRA:</dt>
+                    <dd class="col-5 text-end fs-5" style="color: var(--color-acento-dorado);"><strong>S/ {{ "%.2f"|format(compra.monto_total) }}</strong></dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    {% else %}
+        <div class="alert alert-danger">No se pudo cargar la información de la compra.</div>
+    {% endif %}
+</div>
+{% endblock %}

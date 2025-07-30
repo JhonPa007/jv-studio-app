@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina | default('Gastos') }} - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-file-invoice-dollar me-2"></i>{{ titulo_pagina }}</h2>
+        <a href="{{ url_for('main.nuevo_gasto') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Registrar Nuevo Gasto
+        </a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {% if gastos %}
+    <div class="table-responsive">
+        <table class="table table-hover table-custom table-sm">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Fecha</th>
+                    <th>Descripción</th>
+                    <th>Categoría</th>
+                    <th>Sucursal</th>
+                    <th>Monto (S/)</th>
+                    <th>Método Pago</th>
+                    <th>Registrado por</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for gasto in gastos %}
+                <tr>
+                    <td>{{ gasto.id }}</td>
+                    <td>{{ gasto.fecha.strftime('%d/%m/%Y') if gasto.fecha else '-' }}</td>
+                    <td style="max-width: 300px; white-space: normal;">{{ gasto.descripcion }}</td>
+                    <td>{{ gasto.categoria_nombre }}</td>
+                    <td>{{ gasto.sucursal_nombre }}</td>
+                    <td class="text-end">{{ "%.2f"|format(gasto.monto) }}</td>
+                    <td>{{ gasto.metodo_pago }}</td>
+                    <td>{{ gasto.colaborador_nombre }}</td>
+                    <td class="table-actions">
+                        <a href="{{ url_for('main.editar_gasto', gasto_id=gasto.id) }}" class="btn btn-xs btn-warning" title="Editar Gasto"><i class="fas fa-edit"></i></a>
+                        <a href="{{ url_for('main.eliminar_gasto', gasto_id=gasto.id) }}" class="btn btn-xs btn-danger ms-1" title="Eliminar Gasto" onclick="return confirm('¿Estás seguro de que deseas eliminar este registro de gasto de forma permanente?');"><i class="fas fa-trash"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info-custom">
+        <i class="fas fa-info-circle me-2"></i>No hay gastos registrados todavía.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

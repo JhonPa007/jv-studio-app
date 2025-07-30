@@ -1,0 +1,191 @@
+/* Definición de fuentes y colores de JV Studio */
+@import url('https://fonts.googleapis.com/css2?family=Agency+FB:wght@400;700&display=swap'); /* Aproximación si Agency FB no es web-safe o no tienes los archivos */
+
+:root {
+    --color-predominante: #2E2E2E; /* GrisOscuro */
+    --color-secundario-gris: #999999; /* gris */
+    --color-acento-dorado: #ca8600; /* dorado */
+    --fuente-principal: 'Agency FB', sans-serif; /* O la fuente específica si la tienes */
+}
+
+body {
+    font-family: var(--fuente-principal);
+    background-color: var(--color-predominante);
+    color: #f8f9fa; /* Texto claro para contraste con fondo oscuro */
+    display: flex;
+    min-height: 100vh;
+    flex-direction: column;
+}
+
+/* Estructura principal */
+.main-container {
+    display: flex;
+    flex: 1;
+}
+
+/* Menú Vertical */
+.vertical-menu {
+    width: 250px; /* Ancho del menú vertical */
+    background-color: #1c1c1c; /* Un poco más oscuro que el predominante */
+    padding: 20px;
+    color: var(--color-secundario-gris);
+}
+
+.vertical-menu .nav-link {
+    color: var(--color-secundario-gris);
+    font-family: var(--fuente-principal);
+    font-weight: bold; /* Agency FB Bold */
+    padding: 10px 15px;
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+    border-radius: 4px;
+}
+
+.vertical-menu .nav-link i { /* Para los iconos */
+    margin-right: 10px;
+    color: var(--color-acento-dorado);
+}
+
+.vertical-menu .nav-link:hover,
+.vertical-menu .nav-link.active {
+    background-color: var(--color-acento-dorado);
+    color: var(--color-predominante);
+}
+.vertical-menu .nav-link:hover i,
+.vertical-menu .nav-link.active i {
+    color: var(--color-predominante);
+}
+
+
+/* Menú Superior (Navbar) */
+.top-navbar {
+    background-color: #222222; /* Ligeramente diferente al menú vertical o el body */
+    border-bottom: 2px solid var(--color-acento-dorado);
+}
+
+.top-navbar .navbar-brand {
+    font-family: var(--fuente-principal);
+    font-weight: bold;
+    color: var(--color-acento-dorado) !important;
+    font-size: 1.8rem;
+}
+
+.top-navbar .nav-link {
+    color: var(--color-secundario-gris) !important;
+}
+
+.top-navbar .nav-link:hover {
+    color: var(--color-acento-dorado) !important;
+}
+
+/* Contenido Principal */
+.content-area {
+    flex: 1;
+    padding: 20px;
+    background-color: var(--color-predominante); /* Mismo que el body o un gris más claro si prefieres */
+}
+
+/* Footer */
+.footer {
+    background-color: #1c1c1c;
+    color: var(--color-secundario-gris);
+    padding: 20px 0;
+    text-align: center;
+    border-top: 1px solid var(--color-acento-dorado);
+}
+.footer p {
+    margin-bottom: 5px;
+}
+.footer a {
+    color: var(--color-acento-dorado);
+    text-decoration: none;
+}
+.footer a:hover {
+    text-decoration: underline;
+}
+.social-icons i {
+    font-size: 1.5rem;
+    margin: 0 10px;
+}
+
+/* Tablas (ejemplo con Bootstrap) */
+.table-custom {
+    background-color: #3a3a3a; /* Un fondo para la tabla */
+    color: #f8f9fa;
+}
+.table-custom thead th {
+    background-color: #1c1c1c;
+    color: var(--color-acento-dorado);
+    border-bottom: 2px solid var(--color-acento-dorado);
+}
+.table-custom tbody tr:hover {
+    background-color: #4a4a4a;
+    color: var(--color-acento-dorado);
+}
+.table-custom td, .table-custom th {
+    border-color: #555;
+}
+
+/* Formularios (ejemplo con Bootstrap) */
+.form-control {
+    background-color: #3a3a3a;
+    color: #f1f1f1;
+    border: 1px solid var(--color-secundario-gris);
+}
+.form-control:focus {
+    background-color: #4a4a4a;
+    color: #f1f1f1;
+    border-color: var(--color-acento-dorado);
+    box-shadow: 0 0 0 0.25rem rgba(202, 134, 0, 0.25); /* Dorado con transparencia */
+}
+.form-label {
+    color: var(--color-secundario-gris);
+}
+.btn-primary {
+    background-color: var(--color-acento-dorado);
+    border-color: var(--color-acento-dorado);
+    color: var(--color-predominante);
+    font-weight: bold;
+}
+.btn-primary:hover {
+    background-color: #b37600; /* Dorado más oscuro */
+    border-color: #b37600;
+    color: var(--color-predominante);
+}
+.btn-secondary {
+    background-color: var(--color-secundario-gris);
+    border-color: var(--color-secundario-gris);
+    color: var(--color-predominante);
+    font-weight: bold;
+}
+.btn-secondary:hover{
+    background-color: #808080;
+    border-color: #808080;
+    color: var(--color-predominante);
+}
+
+.vertical-menu .nav-link.छोटे {
+    font-size: 0.9em; /* Un poco más pequeño */
+    padding-left: 25px; /* Mayor indentación */
+}
+
+.vertical-menu .nav-link.छोटे i {
+    font-size: 0.9em; /* Iconos también más pequeños */
+}
+/* Para la fuente Agency FB (si la tienes localmente) */
+/*
+@font-face {
+    font-family: 'Agency FB';
+    src: url('../fonts/AGENCYR.TTF') format('truetype'); /* Agency FB Regular */
+/* font-weight: normal;
+/* font-style: normal;
+/*}
+
+/*@font-face {
+/* font-family: 'Agency FB';
+/* src: url('../fonts/AGENCYB.TTF') format('truetype'); /* Agency FB Bold */
+/* font-weight: bold;
+/* font-style: normal;
+/*}
+*/

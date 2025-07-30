@@ -1,0 +1,83 @@
+{# En app/templates/empleados/lista_empleados.html #}
+{% extends "base.html" %}
+
+{% block title %}Colaboradores - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-user-tie me-2"></i>Lista de Colaboradores</h2>
+        <a href="{{ url_for('main.nuevo_empleado') }}" class="btn btn-primary">
+            <i class="fas fa-user-plus me-2"></i>Registrar Nuevo Colaborador
+        </a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {% if empleados %}
+    <div class="table-responsive">
+        <table class="table table-hover table-custom table-sm">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>DNI</th>
+                    <th>Sucursal</th>
+                    <th>Rol</th>
+                    <th>Sueldo Base (S/)</th>
+                    <th>Activo</th>
+                    <th class="text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in empleados %}
+                <tr>
+                    <td>
+                        <strong>{{ emp.nombre_display if emp.nombre_display else (emp.nombres.split(' ')[0] + ' ' + emp.apellidos.split(' ')[0]) }}</strong>
+                        <small class="d-block text-muted">{{ emp.nombres }} {{ emp.apellidos }}</small>
+                    </td>
+                    <td>{{ emp.dni if emp.dni else '-' }}</td>
+                    <td>{{ emp.sucursal_nombre if emp.sucursal_nombre else '-' }}</td>
+                    <td>{{ emp.rol_nombre if emp.rol_nombre else 'Sin Rol' }}</td>
+                    <td>{{ "%.2f"|format(emp.sueldo_base) if emp.sueldo_base is not none else '-' }}</td>
+                    <td>
+                        {% if emp.activo %}
+                            <span class="badge bg-success">Sí</span>
+                        {% else %}
+                            <span class="badge bg-danger">No</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <div class="dropdown">
+                            <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="dropdownMenuButton-{{ emp.id }}" data-bs-toggle="dropdown" aria-expanded="false">
+                                Acciones
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="dropdownMenuButton-{{ emp.id }}">
+                                <li><a class="dropdown-item" href="{{ url_for('main.editar_empleado', empleado_id=emp.id) }}"><i class="fas fa-edit fa-fw me-2"></i>Editar</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('main.gestionar_horarios_empleado', empleado_id=emp.id) }}"><i class="fas fa-clock fa-fw me-2"></i>Gestionar Horarios</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('main.gestionar_ausencias_empleado', empleado_id=emp.id) }}"><i class="fas fa-calendar-times fa-fw me-2"></i>Gestionar Ausencias</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('main.gestionar_cuotas', colaborador_id=emp.id) }}"><i class="fas fa-bullseye fa-fw me-2"></i>Gestionar Cuotas</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('main.gestionar_ajustes', colaborador_id=emp.id) }}"><i class="fas fa-file-invoice-dollar fa-fw me-2"></i>Gestionar Ajustes</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item {% if emp.activo %}text-danger{% else %}text-success{% endif %}" href="{{ url_for('main.toggle_activo_empleado', empleado_id=emp.id) }}">
+                                        {% if emp.activo %}
+                                            <i class="fas fa-user-slash fa-fw me-2"></i>Desactivar
+                                        {% else %}
+                                            <i class="fas fa-user-check fa-fw me-2"></i>Activar
+                                        {% endif %}
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info-custom"><i class="fas fa-info-circle me-2"></i>No hay colaboradores registrados todavía.</div>
+    {% endif %}
+</div>
+{% endblock %}

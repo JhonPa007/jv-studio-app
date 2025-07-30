@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Marcas de Productos - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-copyright me-2"></i>Marcas de Productos</h2>
+        <a href="{{ url_for('main.nueva_marca') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Nueva Marca
+        </a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {% if marcas %}
+    <div class="table-responsive">
+        <table class="table table-hover table-custom table-sm">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Descripción</th>
+                    <th>Activa</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for marca_item in marcas %} {# Renombrada variable para evitar conflicto con bloque 'marcas' si existiera #}
+                <tr>
+                    <td>{{ marca_item.id }}</td>
+                    <td>{{ marca_item.nombre }}</td>
+                    <td>{{ marca_item.descripcion if marca_item.descripcion else '-' }}</td>
+                    <td>
+                        {% if marca_item.activo %}
+                            <span class="badge bg-success">Sí</span>
+                        {% else %}
+                            <span class="badge bg-danger">No</span>
+                        {% endif %}
+                    </td>
+                    <td class="table-actions">
+                        <a href="{{ url_for('main.editar_marca', marca_id=marca_item.id) }}" class="btn btn-xs btn-warning" title="Editar"><i class="fas fa-edit"></i></a>
+                        <a href="{{ url_for('main.toggle_activo_marca', marca_id=marca_item.id) }}" 
+                           class="btn btn-xs {% if marca_item.activo %}btn-outline-danger{% else %}btn-outline-success{% endif %} ms-1" 
+                           title="{{ 'Desactivar' if marca_item.activo else 'Activar' }} Marca">
+                           <i class="fas {% if marca_item.activo %}fa-toggle-on{% else %}fa-toggle-off{% endif %}"></i>
+                        </a>
+                        {# Podríamos añadir un botón de eliminar si es necesario, pero activar/desactivar es más seguro #}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info-custom">
+        <i class="fas fa-info-circle me-2"></i>No hay marcas registradas todavía.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

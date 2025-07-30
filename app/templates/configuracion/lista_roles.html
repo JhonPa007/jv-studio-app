@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina }} - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-user-shield me-2"></i>{{ titulo_pagina }}</h2>
+        <a href="{{ url_for('main.nuevo_rol') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Crear Nuevo Rol
+        </a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    <div class="table-responsive">
+        <table class="table table-hover table-custom table-sm">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre del Rol</th>
+                    <th>Descripción</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rol in roles %}
+                <tr>
+                    <td>{{ rol.id }}</td>
+                    <td><strong>{{ rol.nombre }}</strong></td>
+                    <td>{{ rol.descripcion if rol.descripcion else '-' }}</td>
+                    <td class="table-actions">
+                        <a href="{{ url_for('main.gestionar_permisos_rol', rol_id=rol.id) }}" class="btn btn-xs btn-info" title="Gestionar Permisos"><i class="fas fa-tasks"></i> Permisos</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

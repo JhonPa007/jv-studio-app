@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .report-section { background-color: #3a3a3a; padding: 25px; border-radius: 8px; margin-bottom:20px; }
+    .report-section h3 { color: var(--color-acento-dorado); border-bottom: 1px solid var(--color-secundario-gris); padding-bottom: 10px; margin-bottom: 20px; }
+    .summary-card { background-color: #4f4f4f; border: none; }
+    .summary-card .card-title { color: var(--color-secundario-gris); font-size: 0.9em; text-transform: uppercase;}
+    .summary-card .card-text { color: var(--color-acento-dorado); font-size: 1.8em; font-weight: bold;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-chart-line me-2"></i>{{ titulo_pagina }}</h2>
+        {# Aquí podríamos añadir un botón de exportar en el futuro #}
+    </div>
+
+    <div class="card bg-dark text-light my-4">
+        <div class="card-header">Filtros del Reporte</div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('main.reporte_produccion_general') }}" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="sucursal_id" class="form-label">Sucursal</label>
+                    <select name="sucursal_id" id="sucursal_id" class="form-select" required>
+                        <option value="">Seleccione...</option>
+                        {% for s in sucursales %}<option value="{{ s.id }}" {% if filtros.get('sucursal_id')|int == s.id %}selected{% endif %}>{{ s.nombre }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="fecha_inicio" class="form-label">Fecha Inicio</label>
+                    <input type="date" class="form-control" name="fecha_inicio" value="{{ filtros.get('fecha_inicio', '') }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="fecha_fin" class="form-label">Fecha Fin</label>
+                    <input type="date" class="form-control" name="fecha_fin" value="{{ filtros.get('fecha_fin', '') }}" required>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">Generar Reporte</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {% if resultados %}
+    <div class="report-section">
+        <h3>Producción por Colaborador</h3>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover table-custom">
+                <thead>
+                    <tr>
+                        <th>Colaborador</th>
+                        <th class="text-end">Producción Servicios (S/)</th>
+                        <th class="text-end">Producción Productos (S/)</th>
+                        <th class="text-end">Producción Total (S/)</th>
+                        <th class="text-end">Comisiones Generadas (S/)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in resultados %}
+                    <tr>
+                        <td><strong>{{ r.colaborador_nombre }}</strong></td>
+                        <td class="text-end">{{ "%.2f"|format(r.produccion_servicios) }}</td>
+                        <td class="text-end">{{ "%.2f"|format(r.produccion_productos) }}</td>
+                        <td class="text-end fw-bold">{{ "%.2f"|format(r.produccion_servicios + r.produccion_productos) }}</td>
+                        <td class="text-end text-info">{{ "%.2f"|format(r.total_comisiones or 0) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot style="border-top: 2px solid var(--color-acento-dorado);">
+                    <tr class="fw-bold">
+                        <td>TOTALES GENERALES</td>
+                        <td class="text-end">S/ {{ "%.2f"|format(totales.total_servicios) }}</td>
+                        <td class="text-end">S/ {{ "%.2f"|format(totales.total_productos) }}</td>
+                        <td class="text-end">S/ {{ "%.2f"|format(totales.total_produccion) }}</td>
+                        <td class="text-end">S/ {{ "%.2f"|format(totales.total_comisiones) }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    {% elif filtros.get('sucursal_id') %}
+        <div class="alert alert-info-custom">No se encontraron datos de producción para los filtros seleccionados.</div>
+    {% endif %}
+</div>
+{% endblock %}

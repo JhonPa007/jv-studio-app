@@ -1,0 +1,16 @@
+{# Ruta del archivo: app/templates/partials/_flash_messages.html #}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      {# Esta línea define el color de la alerta usando las clases de Bootstrap #}
+      <div class="alert alert-{{ category or 'info' }} alert-dismissible fade show mt-3" role="alert">
+        
+        {# ESTA ES LA LÍNEA MÁS IMPORTANTE. DEBE TENER EL FILTRO '| safe' #}
+        {{ message | safe }}
+        
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}

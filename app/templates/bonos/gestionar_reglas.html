@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-tasks me-2"></i>Gestionar Reglas</h2>
+            <p class="text-muted mb-0">Para el bono: <strong>{{ bono.nombre }}</strong></p>
+        </div>
+        <a href="{{ url_for('main.listar_bonos') }}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>Volver a Bonos</a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="form-section-venta">
+                <h3>Añadir Nueva Regla</h3>
+                <form method="POST" action="{{ url_for('main.agregar_regla_bono', bono_id=bono.id) }}">
+                    <div class="mb-3">
+                        <label for="tipo_regla" class="form-label">Tipo de Objetivo</label>
+                        <select class="form-select" name="tipo_regla" id="tipo_regla" required>
+                            <option value="">Seleccione...</option>
+                            {% for key, value in tipos_regla.items() %}<option value="{{ key }}">{{ value }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3" id="campo_servicio_asociado" style="display: none;">
+                        <label for="servicio_id_asociado" class="form-label">Servicio Específico</label>
+                        <select class="form-select" name="servicio_id_asociado" id="servicio_id_asociado">
+                            <option value="">Seleccione un servicio...</option>
+                            {% for srv in servicios_disponibles %}<option value="{{ srv.id }}">{{ srv.nombre }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <label for="operador" class="form-label">Condición</label>
+                            <select class="form-select" name="operador" id="operador" required>
+                                <option value=">=">Mayor o igual a (>=)</option>
+                                <option value="=">Igual a (=)</option>
+                                <option value="<=">Menor o igual a (<=)</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label for="valor_objetivo" class="form-label">Valor Objetivo</label>
+                            <input type="number" step="any" class="form-control" name="valor_objetivo" id="valor_objetivo" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 mt-4"><i class="fas fa-plus me-1"></i>Añadir Regla</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+             <div class="form-section-venta">
+                <h3>Reglas Actuales de este Bono</h3>
+                {% if reglas %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-custom table-sm">
+                        <thead><tr><th>Tipo de Objetivo</th><th>Condición</th><th>Servicio Asociado</th><th>Acciones</th></tr></thead>
+                        <tbody>
+                            {% for regla in reglas %}
+                            <tr>
+                                <td>{{ tipos_regla.get(regla.tipo_regla, regla.tipo_regla) }}</td>
+                                <td>{{ regla.operador }} {{ regla.valor_objetivo }}</td>
+                                <td>{{ regla.servicio_nombre or '-' }}</td>
+                                <td class="table-actions">
+                                    <form class="d-inline" method="POST" action="{{ url_for('main.eliminar_regla_bono', regla_id=regla.id) }}" onsubmit="return confirm('¿Estás seguro de que deseas eliminar esta regla?');">
+                                        <button type="submit" class="btn btn-xs btn-danger ms-1" title="Eliminar Regla">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted fst-italic">Este bono aún no tiene reglas. ¡Un bono sin reglas se aplicará siempre!</p>
+                {% endif %}
+             </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tipoReglaSelect = document.getElementById('tipo_regla');
+    const campoServicio = document.getElementById('campo_servicio_asociado');
+
+    function toggleServicioField() {
+        if (tipoReglaSelect.value === 'CANTIDAD_SERVICIO') {
+            campoServicio.style.display = 'block';
+        } else {
+            campoServicio.style.display = 'none';
+        }
+    }
+    
+    tipoReglaSelect.addEventListener('change', toggleServicioField);
+    toggleServicioField(); // Ejecutar al cargar
+});
+</script>
+{% endblock %}

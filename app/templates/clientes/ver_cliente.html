@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Detalles de {{ cliente.nombres }} {{ cliente.apellidos }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .detail-card {
+        background-color: #3a3a3a;
+        padding: 25px;
+        border-radius: 8px;
+        margin-top: 20px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .detail-card h2 {
+        color: var(--color-acento-dorado);
+        margin-bottom: 25px;
+        border-bottom: 1px solid var(--color-secundario-gris);
+        padding-bottom: 15px;
+    }
+    .detail-item {
+        margin-bottom: 15px;
+    }
+    .detail-item strong {
+        color: var(--color-secundario-gris);
+        min-width: 180px; /* Para alinear un poco los valores */
+        display: inline-block;
+    }
+    .detail-item span {
+        color: #f1f1f1;
+    }
+    .actions-bar {
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid var(--color-secundario-gris);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="detail-card">
+        <h2>
+            <i class="fas fa-user-circle me-2"></i>Detalles del Cliente: 
+            {{ cliente.nombres }} {{ cliente.apellidos }}
+        </h2>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="detail-item">
+                    <strong>ID Cliente:</strong>
+                    <span>{{ cliente.id }}</span>
+                </div>
+                <div class="detail-item">
+                    <strong>Nombres:</strong>
+                    <span>{{ cliente.nombres }}</span>
+                </div>
+                <div class="detail-item">
+                    <strong>Apellidos:</strong>
+                    <span>{{ cliente.apellidos }}</span>
+                </div>
+                <div class="detail-item">
+                    <strong>Email:</strong>
+                    <span>{{ cliente.email if cliente.email else '-' }}</span>
+                </div>
+                <div class="detail-item">
+                    <strong>Teléfono:</strong>
+                    <span>{{ cliente.telefono if cliente.telefono else '-' }}</span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="detail-item">
+                    <strong>Fecha de Nacimiento:</strong>
+                    <span>
+                        {% if cliente.fecha_nacimiento %}
+                            {{ cliente.fecha_nacimiento.strftime('%d/%m/%Y') if cliente.fecha_nacimiento else '-' }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="detail-item">
+                    <strong>Puntos de Fidelidad:</strong>
+                    <span>{{ cliente.puntos_fidelidad }}</span>
+                </div>
+                <div class="detail-item">
+                    <strong>Fecha de Registro:</strong>
+                    <span>
+                        {% if cliente.fecha_registro %}
+                            {{ cliente.fecha_registro.strftime('%d/%m/%Y %H:%M:%S') if cliente.fecha_registro else '-' }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </span>
+                </div>
+                 <div class="detail-item">
+                    <strong>Notas Adicionales:</strong>
+                    <span>{{ cliente.notas_adicionales if cliente.notas_adicionales else '-' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions-bar text-end">
+            <a href="{{ url_for('main.listar_clientes') }}" class="btn btn-secondary me-2">
+                <i class="fas fa-list me-1"></i>Volver a la Lista
+            </a>
+            <a href="{{ url_for('main.editar_cliente', cliente_id=cliente.id) }}" class="btn btn-warning me-2">
+                <i class="fas fa-edit me-1"></i>Editar Cliente
+            </a>
+            <a href="{{ url_for('main.eliminar_cliente', cliente_id=cliente.id) }}" class="btn btn-danger" 
+               onclick="return confirm('¿Estás seguro de que deseas eliminar a {{ cliente.nombres }} {{ cliente.apellidos }}?\n¡Esta acción no se puede deshacer!');">
+                <i class="fas fa-trash me-1"></i>Eliminar Cliente
+            </a>            
+        </div>
+    </div>
+</div>
+{% endblock %}

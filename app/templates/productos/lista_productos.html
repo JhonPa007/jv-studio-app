@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Productos - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-boxes me-2"></i>Lista de Productos</h2>
+        <a href="{{ url_for('main.nuevo_producto') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Nuevo Producto
+        </a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {% if productos %}
+    <div class="table-responsive">
+        <table class="table table-hover table-custom table-sm">
+            <thead>
+                <tr>
+                    <th>Nombre / Marca</th>
+                    <th>Categoría</th>
+                    <th>Proveedor</th>
+                    <th>Contenido</th>
+                    <th class="text-end">Precio Venta</th>
+                    <th class="text-end">Comisión (S/)</th> {# <-- Cabecera actualizada #}
+                    <th class="text-end">Stock</th>
+                    <th>Activo</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for prod in productos %}
+                <tr>
+                    <td>
+                        <strong>{{ prod.nombre }}</strong>
+                        <br>
+                        <small class="text-muted">{{ prod.marca_nombre if prod.marca_nombre else 'Sin Marca' }}</small>
+                    </td>
+                    <td>{{ prod.categoria_nombre if prod.categoria_nombre else '-' }}</td>
+                    <td>{{ prod.proveedor_nombre if prod.proveedor_nombre else '-' }}</td>
+                    <td>
+                        {# Esta lógica ahora funcionará porque recibe los datos correctos #}
+                        {% if prod.contenido_neto_valor is not none %}
+                            {{ prod.contenido_neto_valor|string|replace('.0', '') }} {{ prod.unidad_medida if prod.unidad_medida else '' }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td class="text-end">S/ {{ "%.2f"|format(prod.precio_venta) }}</td>
+                    {# --- Celda de Comisión Actualizada --- #}
+                    <td class="text-end">S/ {{ "%.2f"|format(prod.comision_vendedor_monto) if prod.comision_vendedor_monto is not none else '-' }}</td>
+                    <td class="text-end">
+                        {{ prod.stock_actual }} 
+                        {% if prod.stock_minimo is not none and prod.stock_actual is not none and prod.stock_actual <= prod.stock_minimo and prod.stock_actual > 0 %}
+                            <i class="fas fa-exclamation-triangle text-warning" title="Stock bajo (Mín: {{ prod.stock_minimo }})"></i>
+                        {% elif prod.stock_actual == 0 %}
+                             <i class="fas fa-times-circle text-danger" title="Sin Stock"></i>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if prod.activo %}<span class="badge bg-success">Sí</span>{% else %}<span class="badge bg-danger">No</span>{% endif %}
+                    </td>
+                    <td class="table-actions">
+                        <a href="{{ url_for('main.editar_producto', producto_id=prod.id) }}" class="btn btn-xs btn-warning" title="Editar"><i class="fas fa-edit"></i></a>
+                        <a href="{{ url_for('main.toggle_activo_producto', producto_id=prod.id) }}" class="btn btn-xs {% if prod.activo %}btn-outline-danger{% else %}btn-outline-success{% endif %} ms-1" title="{{ 'Desactivar' if prod.activo else 'Activar' }}"><i class="fas {% if prod.activo %}fa-toggle-on{% else %}fa-toggle-off{% endif %}"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info-custom"><i class="fas fa-info-circle me-2"></i>No hay productos registrados todavía.</div>
+    {% endif %}
+</div>
+{% endblock %}

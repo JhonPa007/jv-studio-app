@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_form | default('Nueva Compra') }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .form-section-compra { background-color: #3a3a3a; padding: 25px; border-radius: 8px; margin-bottom:20px; }
+    .form-section-compra h2, .form-section-compra h3 { color: var(--color-acento-dorado); margin-bottom: 20px; border-bottom: 1px solid var(--color-secundario-gris); padding-bottom: 10px;}
+    .items-table th, .items-table td { vertical-align: middle; font-size:0.9em; color: #000000; }
+    .items-table thead th { color: var(--color-acento-dorado); }
+    .items-table .form-control-sm, .pagos-table .form-control-sm { height: calc(1.5em + .3rem + 2px); padding: .15rem .3rem; font-size: 0.8em; background-color: #4f4f4f; color: #f8f9fa; border-color: var(--color-secundario-gris); }
+    .items-table .btn-xs, .pagos-table .btn-xs { padding: .1rem .3rem; font-size: .75rem; }
+    .total-section { font-size: 1.0em; color: #f8f9fa; }
+    .total-section strong { font-size: 1.2em; color: var(--color-acento-dorado); }
+    .total-section .form-label { color: #f8f9fa; }
+    .total-section .form-control-sm { background-color: #4f4f4f; color: #faf9f8; border-color: var(--color-secundario-gris); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="form-section-compra">
+        <h2><i class="fas fa-dolly-flatbed me-2"></i>{{ titulo_form }}</h2>
+        
+        {% include 'partials/_flash_messages.html' %}
+
+        <form method="POST" action="{{ action_url }}" id="formCompra">
+            {# SECCIÓN 1: DATOS GENERALES DE LA COMPRA #}
+            <h3><i class="fas fa-file-alt me-2"></i>Datos del Comprobante</h3>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="proveedor_id" class="form-label">Proveedor <span class="text-danger">*</span></label>
+                    <select class="form-select" id="proveedor_id" name="proveedor_id" required>
+                        <option value="">Seleccione proveedor...</option>
+                        {% for prov in proveedores %}
+                        <option value="{{ prov.id }}">{{ prov.nombre_empresa }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="sucursal_id" class="form-label">Recibido en (Sucursal) <span class="text-danger">*</span></label>
+                    <select class="form-select" id="sucursal_id" name="sucursal_id" required>
+                        <option value="">Seleccione sucursal...</option>
+                        {% for suc in sucursales %}
+                        <option value="{{ suc.id }}">{{ suc.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="fecha_compra" class="form-label">Fecha del Comprobante <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="fecha_compra" name="fecha_compra" required>
+                </div>
+            </div>
+            <div class="row">
+                 <div class="col-md-4 mb-3">
+                    <label for="tipo_comprobante" class="form-label">Tipo Comprobante</label>
+                     <select class="form-select" id="tipo_comprobante" name="tipo_comprobante">
+                        <option value="">Seleccione tipo...</option>
+                        {% for tipo in tipos_comprobante %}<option value="{{ tipo }}">{{ tipo }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="serie_numero_comprobante" class="form-label">Serie y Número</label>
+                    <input type="text" class="form-control" id="serie_numero_comprobante" name="serie_numero_comprobante" placeholder="Ej: F001-12345">
+                </div>
+            </div>
+
+            {# SECCIÓN 2: ÍTEMS DE LA COMPRA #}
+            <h3 class="mt-4"><i class="fas fa-boxes me-2"></i>Productos Comprados</h3>
+            <div class="p-3 border rounded mb-3" style="border-color: var(--color-secundario-gris) !important;">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-5">
+                        <label for="selectProducto" class="form-label">Producto:</label>
+                        <select id="selectProducto" class="form-select form-select-sm">
+                            <option value="">Seleccione un producto...</option>
+                            {% for prod in productos %}
+                            <option value="{{ prod.id }}" data-nombre="{{ prod.nombre }}" data-costo="{{ "%.2f"|format(prod.precio_compra) if prod.precio_compra else '0.00' }}">
+                                {# Texto actualizado para mostrar producto y marca #}
+                                {{ prod.nombre }} - **{{ prod.marca_nombre if prod.marca_nombre else 'Sin Marca' }}**
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="cantidadProducto" class="form-label">Cantidad:</label>
+                        <input type="number" id="cantidadProducto" class="form-control form-control-sm" value="1" min="1">
+                    </div>
+                     <div class="col-md-3">
+                        <label for="costoProducto" class="form-label">Costo Unitario (S/):</label>
+                        <input type="number" step="0.01" min="0" id="costoProducto" class="form-control form-control-sm" placeholder="Costo de compra">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-info btn-sm w-100" id="btnAnadirProductoCompra"><i class="fas fa-plus"></i> Añadir</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="table-responsive mt-2">
+                <table class="table table-sm table-custom items-table" id="tablaItemsCompra">
+                    <thead><tr><th>Producto</th><th>Cantidad</th><th>Costo Unit. (S/)</th><th>Subtotal (S/)</th><th>Acción</th></tr></thead>
+                    <tbody><tr id="filaSinItemsCompra"><td colspan="5" class="text-center text-muted">No hay productos añadidos a la compra.</td></tr></tbody>
+                </table>
+            </div>
+
+            {# SECCIÓN 3: TOTALES Y PAGO #}
+            <h3 class="mt-4"><i class="fas fa-calculator me-2"></i>Resumen de la Compra</h3>
+            <div class="row">
+                <div class="col-md-7">
+                     <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="estado_pago" class="form-label">Estado del Pago <span class="text-danger">*</span></label>
+                            <select class="form-select" id="estado_pago" name="estado_pago" required>
+                                {% for estado in estados_pago %}<option value="{{ estado }}" {% if estado == 'Pagada' %}selected{% endif %}>{{ estado }}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                     <div class="mb-3">
+                        <label for="notas_compra" class="form-label">Notas Adicionales</label>
+                        <textarea class="form-control" id="notas_compra" name="notas" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="col-md-5 total-section">
+                    <div class="p-3 border rounded" style="background-color: #4f4f4f;">
+                        <div class="d-flex justify-content-between mb-2"><span>Subtotal:</span><span id="displaySubtotalCompra">S/ 0.00</span></div>
+                        <div class="d-flex justify-content-between mb-2 align-items-center"><label for="monto_impuestos" class="form-label mb-0 me-2">Impuestos (IGV):</label><input type="number" step="0.01" min="0" class="form-control form-control-sm d-inline-block" id="monto_impuestos" name="monto_impuestos" value="0.00" style="width: 100px;"></div>
+                        <hr style="border-color: var(--color-secundario-gris);">
+                        <div class="d-flex justify-content-between fw-bold mt-2"><span>TOTAL COMPRA:</span><strong id="displayMontoTotalCompra">S/ 0.00</strong></div>
+                    </div>
+                </div>
+            </div>
+            
+            <input type="hidden" name="items_compra_json" id="items_compra_json">
+            <input type="hidden" name="final_subtotal_compra" id="final_subtotal_compra">
+            <input type="hidden" name="final_impuestos_compra" id="final_impuestos_compra">
+            <input type="hidden" name="final_total_compra" id="final_total_compra">
+            
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{{ url_for('main.listar_compras') }}" class="btn btn-secondary me-2"><i class="fas fa-times me-1"></i>Cancelar</a>
+                <button type="submit" class="btn btn-success"><i class="fas fa-save me-1"></i>Guardar Compra</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fechaCompraInput = document.getElementById('fecha_compra');
+    if (fechaCompraInput && !fechaCompraInput.value) {
+        const now = new Date();
+        fechaCompraInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }
+
+    let itemsEnCompra = [];
+
+    const selectProducto = document.getElementById('selectProducto');
+    const cantidadProductoInput = document.getElementById('cantidadProducto');
+    const costoProductoInput = document.getElementById('costoProducto');
+    const btnAnadirProducto = document.getElementById('btnAnadirProductoCompra');
+    const tablaItemsCompraBody = document.querySelector('#tablaItemsCompra tbody');
+    
+    const displaySubtotalCompra = document.getElementById('displaySubtotalCompra');
+    const montoImpuestosInput = document.getElementById('monto_impuestos');
+    const displayMontoTotalCompra = document.getElementById('displayMontoTotalCompra');
+
+    const itemsJsonInput = document.getElementById('items_compra_json');
+    const finalSubtotalCompraInput = document.getElementById('final_subtotal_compra');
+    const finalImpuestosCompraInput = document.getElementById('final_impuestos_compra');
+    const finalTotalCompraInput = document.getElementById('final_total_compra');
+
+    if (selectProducto) {
+        selectProducto.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption && selectedOption.value) {
+                costoProductoInput.value = selectedOption.dataset.costo || '';
+            } else {
+                costoProductoInput.value = '';
+            }
+        });
+    }
+    
+    if (btnAnadirProducto) {
+        btnAnadirProducto.addEventListener('click', function() {
+            const selectedOption = selectProducto.options[selectProducto.selectedIndex];
+            if (!selectedOption || !selectedOption.value) { alert("Por favor, seleccione un producto."); return; }
+            
+            const productoId = selectedOption.value;
+            const productoNombre = selectedOption.dataset.nombre;
+            const cantidad = parseInt(cantidadProductoInput.value) || 1;
+            const costoUnitario = parseFloat(costoProductoInput.value);
+
+            if (isNaN(costoUnitario) || costoUnitario < 0) { alert("Por favor, ingrese un costo unitario válido."); return; }
+            if (cantidad <= 0) { alert("La cantidad debe ser al menos 1."); return; }
+
+            const itemExistente = itemsEnCompra.find(item => item.producto_id === productoId && item.costo_unitario === costoUnitario);
+            if(itemExistente){
+                itemExistente.cantidad += cantidad;
+            } else {
+                itemsEnCompra.push({
+                    producto_id: productoId,
+                    descripcion_item_compra: productoNombre,
+                    cantidad: cantidad,
+                    costo_unitario: costoUnitario
+                });
+            }
+            renderizarItemsCompraTabla();
+            actualizarTotalesCompra();
+            selectProducto.value = "";
+            cantidadProductoInput.value = "1";
+            costoProductoInput.value = "";
+        });
+    }
+
+    function renderizarItemsCompraTabla() {
+        tablaItemsCompraBody.innerHTML = ''; 
+        if (itemsEnCompra.length === 0) {
+            const filaVacia = tablaItemsCompraBody.insertRow();
+            filaVacia.id = 'filaSinItemsCompra';
+            const tdVacia = filaVacia.insertCell();
+            tdVacia.colSpan = 5;
+            tdVacia.className = 'text-center text-muted';
+            tdVacia.textContent = 'No hay productos añadidos a la compra.';
+            return;
+        }
+
+        itemsEnCompra.forEach((item, index) => {
+            const subtotalItem = item.cantidad * item.costo_unitario;
+            const fila = tablaItemsCompraBody.insertRow();
+            fila.insertCell().textContent = item.descripcion_item_compra;
+            fila.insertCell().textContent = item.cantidad;
+            fila.insertCell().textContent = item.costo_unitario.toFixed(2);
+            fila.insertCell().textContent = subtotalItem.toFixed(2);
+            
+            const cellAccion = fila.insertCell();
+            const btnEliminar = document.createElement('button');
+            btnEliminar.type = 'button';
+            btnEliminar.className = 'btn btn-danger btn-xs';
+            btnEliminar.innerHTML = '<i class="fas fa-trash-alt"></i>';
+            btnEliminar.title = 'Eliminar ítem';
+            btnEliminar.onclick = function() {
+                itemsEnCompra.splice(index, 1);
+                renderizarItemsCompraTabla();
+                actualizarTotalesCompra();    
+            };
+            cellAccion.appendChild(btnEliminar);
+        });
+    }
+
+    function actualizarTotalesCompra() {
+        let subtotalCompra = 0;
+        itemsEnCompra.forEach(item => {
+            subtotalCompra += item.cantidad * item.costo_unitario;
+        });
+
+        const impuestos = parseFloat(montoImpuestosInput.value) || 0;
+        const totalCompra = subtotalCompra + impuestos;
+
+        displaySubtotalCompra.textContent = `S/ ${subtotalCompra.toFixed(2)}`;
+        displayMontoTotalCompra.textContent = `S/ ${totalCompra.toFixed(2)}`;
+
+        itemsJsonInput.value = JSON.stringify(itemsEnCompra);
+        finalSubtotalCompraInput.value = subtotalCompra.toFixed(2);
+        finalImpuestosCompraInput.value = impuestos.toFixed(2);
+        finalTotalCompraInput.value = totalCompra.toFixed(2);
+    }
+
+    if (montoImpuestosInput) {
+        montoImpuestosInput.addEventListener('input', actualizarTotalesCompra);
+    }
+    
+    actualizarTotalesCompra();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,47 @@
+<div class="modal fade text-dark" id="modalNuevaReserva" tabindex="-1" aria-labelledby="modalNuevaReservaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background-color: #f8f9fa;">
+            <form id="formNuevaReservaModal" onsubmit="event.preventDefault();">
+                <div class="modal-header" style="background-color: var(--color-predominante); color: var(--color-acento-dorado);">
+                    <h5 class="modal-title" id="modalNuevaReservaLabel"><i class="fas fa-calendar-plus me-2"></i>Crear Nueva Reserva</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger" role="alert" id="modalErrores" style="display: none;"></div>
+                    <div class="row mb-3">
+                        <div class="col-md-4"><strong>Colaborador:</strong> <span id="modalEmpleadoNombre"></span></div>
+                        <div class="col-md-4"><strong>Fecha:</strong> <span id="modalFecha"></span></div>
+                        <div class="col-md-4"><strong>Hora Inicio:</strong> <span id="modalHoraInicio"></span></div>
+                    </div>
+                    
+                    <input type="hidden" id="modalSucursalId" name="sucursal_id">
+                    <input type="hidden" id="modalEmpleadoId" name="empleado_id">
+                    <input type="hidden" id="modalFechaHoraInicioFull" name="fecha_hora_inicio">
+
+                    <div class="mb-3">
+                        <label for="modalClienteId" class="form-label">Cliente <span class="text-danger">*</span></label>
+                        <select class="form-select" id="modalClienteId" name="cliente_id" required>
+                            <option value="">Seleccione...</option>
+                            {% for cli in clientes_todos %}<option value="{{ cli.id }}">{{ cli.razon_social_nombres }} {{ cli.apellidos or '' }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="modalServicioId" class="form-label">Servicio <span class="text-danger">*</span></label>
+                        <select class="form-select" id="modalServicioId" name="servicio_id" required>
+                            <option value="">Seleccione un servicio...</option>
+                            {% for srv in servicios_todos_activos %}<option value="{{ srv.id }}">{{ srv.nombre }} ({{ srv.duracion_minutos }} min)</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="modalNotasCliente" class="form-label">Notas del Cliente (Opcional)</label>
+                        <textarea class="form-control" id="modalNotasCliente" name="notas_cliente" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer" style="background-color: #e9ecef;">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times me-1"></i>Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Guardar Reserva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

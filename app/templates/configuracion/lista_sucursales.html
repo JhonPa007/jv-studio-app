@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina | default('Sucursales') }} - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-store-alt me-2"></i>{{ titulo_pagina }}</h2>
+        <a href="{{ url_for('main.nueva_sucursal') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Nueva Sucursal
+        </a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {% if sucursales %}
+    <div class="table-responsive">
+        <table class="table table-hover table-custom table-sm">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Ciudad</th>
+                    <th>Teléfono</th>
+                    <th>Email</th>
+                    <th>Activa</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for suc in sucursales %}
+                <tr>
+                    <td>{{ suc.id }}</td>
+                    <td>{{ suc.nombre }}</td>
+                    <td>{{ suc.ciudad if suc.ciudad else '-' }}</td>
+                    <td>{{ suc.telefono if suc.telefono else '-' }}</td>
+                    <td>{{ suc.email if suc.email else '-' }}</td>
+                    <td>
+                        {% if suc.activo %}
+                            <span class="badge bg-success">Sí</span>
+                        {% else %}
+                            <span class="badge bg-danger">No</span>
+                        {% endif %}
+                    </td>
+                    <td class="table-actions">
+                        <a href="{{ url_for('main.editar_sucursal', sucursal_id=suc.id) }}" class="btn btn-xs btn-warning" title="Editar"><i class="fas fa-edit"></i></a>
+                        <a href="{{ url_for('main.toggle_activo_sucursal', sucursal_id=suc.id) }}" class="btn btn-xs {% if suc.activo %}btn-outline-danger{% else %}btn-outline-success{% endif %} ms-1" title="{{ 'Desactivar' if suc.activo else 'Activar' }} Sucursal"><i class="fas {% if suc.activo %}fa-toggle-on{% else %}fa-toggle-off{% endif %}"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info-custom">
+        <i class="fas fa-info-circle me-2"></i>No hay sucursales registradas todavía.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

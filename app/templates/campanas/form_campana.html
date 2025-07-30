@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_form }} - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="form-section-venta">
+        <h2><i class="fas {{ 'fa-plus-circle' if es_nueva else 'fa-edit' }} me-2"></i>{{ titulo_form }}</h2>
+        
+        {% include 'partials/_flash_messages.html' %}
+
+        {% set data_source = form_data if form_data else (campana if campana else {}) %}
+
+        <form method="POST" action="{{ action_url }}">
+            <div class="mb-3">
+                <label for="nombre" class="form-label">Nombre de la Campaña <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="nombre" name="nombre" value="{{ data_source.get('nombre', '') }}" required>
+            </div>
+            <div class="mb-3">
+                <label for="descripcion" class="form-label">Descripción (Opcional)</label>
+                <textarea class="form-control" id="descripcion" name="descripcion" rows="2">{{ data_source.get('descripcion', '') }}</textarea>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="fecha_inicio" class="form-label">Fecha de Inicio <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ data_source.get('fecha_inicio', '') }}" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="fecha_fin" class="form-label">Fecha de Fin <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="{{ data_source.get('fecha_fin', '') }}" required>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="tipo_regla" class="form-label">Tipo de Regla <span class="text-danger">*</span></label>
+                    <select class="form-select" id="tipo_regla" name="tipo_regla" required>
+                        <option value="">Seleccione un tipo de beneficio...</option>
+                        {% for key, value in tipos_regla.items() %}
+                        <option value="{{ key }}" {% if data_source.get('tipo_regla') == key %}selected{% endif %}>{{ value }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="valor_regla" class="form-label">Valor de la Regla <span class="text-danger">*</span></label>
+                    <input type="number" step="any" class="form-control" id="valor_regla" name="valor_regla" value="{{ data_source.get('valor_regla', '') }}" required>
+                    <small class="form-text text-muted">Ej: '2' para duplicar puntos, '15' para 15% de descuento.</small>
+                </div>
+            </div>
+            <div class="mb-3 form-check">
+                <input class="form-check-input" type="checkbox" id="activo" name="activo" value="activo" {% if data_source.get('activo', True) %}checked{% endif %}>
+                <label class="form-check-label" for="activo">Campaña Activa</label>
+            </div>
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{{ url_for('main.listar_campanas') }}" class="btn btn-secondary me-2"><i class="fas fa-times me-1"></i>Cancelar</a>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Guardar Campaña</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

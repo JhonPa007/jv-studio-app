@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_form | default('Gestionar Gasto') }} - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="form-section-venta"> {# Reutilizando estilo #}
+        <h2>
+            <i class="fas {{ 'fa-plus-circle' if es_nueva else 'fa-edit' }} me-2"></i>
+            {{ titulo_form }}
+        </h2>
+        
+        {% include 'partials/_flash_messages.html' %}
+
+        {% set data_source = form_data if form_data else (gasto if gasto else {}) %}
+
+        <form method="POST" action="{{ action_url }}">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="fecha" class="form-label">Fecha del Gasto <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="fecha" name="fecha" value="{{ data_source.get('fecha', '') }}" required>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="sucursal_id" class="form-label">Sucursal <span class="text-danger">*</span></label>
+                    <select class="form-select" id="sucursal_id" name="sucursal_id" required>
+                        <option value="">Seleccione...</option>
+                        {% for suc in sucursales %}<option value="{{ suc.id }}" {% if data_source.get('sucursal_id')|string == suc.id|string %}selected{% endif %}>{{ suc.nombre }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="categoria_gasto_id" class="form-label">Categoría del Gasto <span class="text-danger">*</span></label>
+                    <select class="form-select" id="categoria_gasto_id" name="categoria_gasto_id" required>
+                        <option value="">Seleccione...</option>
+                        {% for cat in categorias_gastos %}<option value="{{ cat.id }}" {% if data_source.get('categoria_gasto_id')|string == cat.id|string %}selected{% endif %}>{{ cat.nombre }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="descripcion" class="form-label">Descripción del Gasto <span class="text-danger">*</span></label>
+                <textarea class="form-control" id="descripcion" name="descripcion" rows="3" required>{{ data_source.get('descripcion', '') }}</textarea>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="monto" class="form-label">Monto (S/) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" min="0.01" class="form-control" id="monto" name="monto" value="{{ data_source.get('monto', '') }}" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="metodo_pago" class="form-label">Método de Pago <span class="text-danger">*</span></label>
+                    <select class="form-select" id="metodo_pago" name="metodo_pago" required>
+                        <option value="">Seleccione...</option>
+                        <option value="Efectivo de Caja" {% if data_source.get('metodo_pago') == 'Efectivo de Caja' %}selected{% endif %}>Efectivo de Caja</option>
+                        <option value="Cuenta Bancaria" {% if data_source.get('metodo_pago') == 'Cuenta Bancaria' %}selected{% endif %}>Cuenta Bancaria</option>
+                        <option value="Tarjeta Empresa" {% if data_source.get('metodo_pago') == 'Tarjeta Empresa' %}selected{% endif %}>Tarjeta Empresa</option>
+                        <option value="Yape/Plin" {% if data_source.get('metodo_pago') == 'Yape/Plin' %}selected{% endif %}>Yape/Plin</option>
+                        <option value="Otro" {% if data_source.get('metodo_pago') == 'Otro' %}selected{% endif %}>Otro</option>
+                    </select>
+                </div>
+            </div>
+            
+            {# --- NUEVA SECCIÓN PARA COMPROBANTE DE GASTO --- #}
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="checkRegistrarComprobante" data-bs-toggle="collapse" data-bs-target="#collapseComprobante" aria-expanded="false" aria-controls="collapseComprobante">
+                <label class="form-check-label" for="checkRegistrarComprobante">
+                    Registrar Comprobante de Gasto (Opcional)
+                </label>
+            </div>
+
+            <div class="collapse" id="collapseComprobante">
+                <div class="p-3 border rounded" style="border-color: var(--color-secundario-gris) !important;">
+                    <h5 class="text-light">Detalles del Comprobante</h5>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                             <label for="comprobante_tipo" class="form-label">Tipo</label>
+                             <select class="form-select" id="comprobante_tipo" name="comprobante_tipo">
+                                <option value="">Seleccione tipo...</option>
+                                <option value="Boleta de Venta" {% if data_source.get('comprobante_tipo') == 'Boleta de Venta' %}selected{% endif %}>Boleta de Venta</option>
+                                <option value="Factura" {% if data_source.get('comprobante_tipo') == 'Factura' %}selected{% endif %}>Factura</option>
+                                <option value="Recibo por Honorarios" {% if data_source.get('comprobante_tipo') == 'Recibo por Honorarios' %}selected{% endif %}>Recibo por Honorarios</option>
+                                <option value="Ticket" {% if data_source.get('comprobante_tipo') == 'Ticket' %}selected{% endif %}>Ticket</option>
+                                <option value="Otro" {% if data_source.get('comprobante_tipo') == 'Otro' %}selected{% endif %}>Otro</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="comprobante_serie" class="form-label">Serie</label>
+                            <input type="text" class="form-control" id="comprobante_serie" name="comprobante_serie" value="{{ data_source.get('comprobante_serie', '') }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="comprobante_numero" class="form-label">Número</label>
+                            <input type="text" class="form-control" id="comprobante_numero" name="comprobante_numero" value="{{ data_source.get('comprobante_numero', '') }}">
+                        </div>
+                    </div>
+                    <div class="row">
+                         <div class="col-md-4 mb-3">
+                            <label for="comprobante_ruc_emisor" class="form-label">RUC del Emisor</label>
+                            <input type="text" class="form-control" id="comprobante_ruc_emisor" name="comprobante_ruc_emisor" value="{{ data_source.get('comprobante_ruc_emisor', '') }}" maxlength="11">
+                        </div>
+                        <div class="col-md-8 mb-3">
+                            <label for="comprobante_razon_social_emisor" class="form-label">Razón Social del Emisor</label>
+                            <input type="text" class="form-control" id="comprobante_razon_social_emisor" name="comprobante_razon_social_emisor" value="{{ data_source.get('comprobante_razon_social_emisor', '') }}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {# --- FIN DE LA NUEVA SECCIÓN --- #}
+
+             <div class="mb-3 mt-3">
+                <label for="registrado_por_colaborador_id" class="form-label">Registrado por <span class="text-danger">*</span></label>
+                <select class="form-select" id="registrado_por_colaborador_id" name="registrado_por_colaborador_id" required>
+                    <option value="">Seleccione colaborador...</option>
+                    {% for colab in colaboradores %}<option value="{{ colab.id }}" {% if data_source.get('registrado_por_colaborador_id')|string == colab.id|string %}selected{% endif %}>{{ colab.nombres }} {{ colab.apellidos }}</option>{% endfor %}
+                </select>
+            </div>
+            
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{{ url_for('main.listar_gastos') }}" class="btn btn-secondary me-2"><i class="fas fa-times me-1"></i>Cancelar</a>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Guardar Gasto</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

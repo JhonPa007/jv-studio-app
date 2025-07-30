@@ -1,0 +1,449 @@
+{% extends "base.html" %}
+
+{% block title %}Agenda Diaria de Citas - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    
+    #calendar { 
+        border: 1px solid var(--color-secundario-gris); 
+        border-radius: 8px; 
+        padding: 10px; 
+        background-color: #302f2dda; 
+    }
+    
+    #controlesAgenda { 
+        background-color: #0e0d0d; 
+        padding: 15px; 
+        border-radius: 8px; 
+        margin-bottom: 20px; 
+        display: flex; 
+        gap: 15px; 
+        align-items: center; 
+        flex-wrap: wrap; 
+    }
+    
+   
+    /* Estilo por defecto para TODAS las celdas de tiempo (No disponible) */
+    .fc-timegrid-slot {
+        background-color: rgba(0, 0, 0, 0.15); /* Gris oscuro semi-transparente */
+    }
+
+    /* Estilo para las celdas DENTRO del horario de trabajo (Disponible) */
+    .fc-timegrid-slot-business {
+        background-color: rgba(40, 167, 69, 0.2) !important; /* Verde semi-transparente */
+    }
+
+    /* --- Otros Estilos (Textos, Eventos, etc.) --- */
+    .fc-event {
+        font-size: 0.8em !important;
+        padding: 2px !important;
+        border: none !important;
+    }
+    .fc-event-main {
+        color: #212529 !important;
+        font-weight: bold;
+    }
+    .fc-col-header-cell-cushion {
+        color: var(--color-acento-dorado) !important;
+        text-decoration: none !important;
+    }
+    .fc-timegrid-slot-label-cushion {
+        color: var(--color-secundario-gris);
+    }
+    .fc .fc-timegrid-slot-minor {
+        border-top-style: dotted !important;
+    }
+</style>
+
+{% endblock head_extra %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2 style="color: var(--color-acento-dorado);" class="mb-3"><i class="fas fa-calendar-day me-2"></i>Agenda Diaria de Citas</h2>
+
+    <div id="controlesAgenda" class="d-flex flex-wrap align-items-center gap-3 p-3 rounded mb-4" style="background-color: #3a3a3a;">
+        <div>
+            <label for="selectorSucursalAgenda" class="form-label text-light small">Sucursal:</label>
+            <select id="selectorSucursalAgenda" class="form-select form-select-sm" style="width: auto; display: inline-block;">
+                <option value="">Seleccione una sucursal...</option>
+                {% for suc in sucursales_para_selector %}
+                <option value="{{ suc.id }}">{{ suc.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="ms-md-3">
+            <label for="selectorFechaAgenda" class="form-label text-light small">Fecha:</label>
+            <button id="btnDiaAnterior" class="btn btn-outline-light btn-sm" title="Día Anterior"><i class="fas fa-chevron-left"></i></button>
+            <input type="date" id="selectorFechaAgenda" class="form-control form-control-sm mx-1" style="width: auto; display: inline-block;">
+            <button id="btnDiaSiguiente" class="btn btn-outline-light btn-sm" title="Día Siguiente"><i class="fas fa-chevron-right"></i></button>
+            <button id="btnHoy" class="btn btn-outline-light btn-sm ms-2" title="Hoy"><i class="fas fa-calendar-day"></i> Hoy</button>
+        </div>
+        <div class="ms-md-3 mt-2 mt-md-0">
+            <label for="selectorEmpleadosAgenda" class="form-label text-light small">Colaboradores:</label>
+            <select multiple class="form-select form-select-sm" id="selectorEmpleadosAgenda" aria-label="Seleccionar colaboradores" style="width: 250px; min-height: 38px; display: inline-block; vertical-align: middle;">
+                <option value="" disabled>Seleccione una sucursal primero</option>
+                {% for emp in empleados_para_selector %}
+                    <option value="{{ emp.id }}" data-sucursal-id="{{ emp.sucursal_id }}">{{ emp.nombres }} {{ emp.apellidos }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="ms-md-auto mt-2 mt-md-0">
+            <button id="btnActualizarAgenda" class="btn btn-primary btn-sm">
+                <i class="fas fa-sync-alt me-1"></i>Actualizar Agenda
+            </button>
+        </div>
+    </div>
+    <div id='calendar' class="mt-4"></div>
+
+    {% include 'reservas/_modal_nueva_reserva.html' %}
+    {% include 'reservas/_modal_gestionar_reserva.html' %}
+</div>
+{% endblock content %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- 1. SELECTORES DOM Y VARIABLES GLOBALES ---
+    const selectorSucursal = document.getElementById('selectorSucursalAgenda');
+    const selectorFecha = document.getElementById('selectorFechaAgenda');
+    const selectorEmpleados = document.getElementById('selectorEmpleadosAgenda');
+    const btnActualizar = document.getElementById('btnActualizarAgenda');
+    const agendaContainer = document.getElementById('calendar');
+    
+    // Instancias de Modales
+    const modalNuevaReservaElement = document.getElementById('modalNuevaReserva');
+    const modalNuevaReservaInstancia = modalNuevaReservaElement ? new bootstrap.Modal(modalNuevaReservaElement) : null;
+    const formModalNuevaReserva = document.getElementById('formNuevaReservaModal');
+
+    const modalGestionarElement = document.getElementById('modalGestionarReserva');
+    const modalGestionarInstancia = modalGestionarElement ? new bootstrap.Modal(modalGestionarElement) : null;
+    const formEditarReserva = document.getElementById('formEditarReservaModal');
+    
+    // Listas de Datos desde Flask (convertidas a JS)
+    const todosLosClientes = JSON.parse('{{ clientes_todos | tojson | safe }}');
+    const todosLosEmpleadosParaSelector = JSON.parse('{{ empleados_para_selector | tojson | safe }}');
+    const todosLosServiciosActivos = JSON.parse('{{ servicios_todos_activos | tojson | safe }}');
+
+    // Variable para guardar los datos de la reserva que se está gestionando
+    let datosApiAgenda = null; 
+    let datosReservaActualParaModal = null; 
+
+    // --- 2. FUNCIONES HELPER (AYUDANTES) ---
+    function dateToYYYYMMDD(d) { return d.toISOString().slice(0, 10); }
+    // --- 3. INICIALIZACIÓN DE FULLCALENDAR ---
+        
+    const calendar = new FullCalendar.Calendar(agendaContainer, {
+        // --- Configuración de la Vista ---
+        schedulerLicenseKey: 'GPL-My-Project-Is-Open-Source',
+        initialView: 'resourceTimeGridDay',
+        locale: 'es',
+        headerToolbar: false,
+        height: 'auto',
+        allDaySlot: false,
+        slotDuration: '00:15:00',
+        slotMinTime: '08:00:00',
+        slotMaxTime: '22:00:00',
+        slotLabelInterval: '01:00', // adicional
+        nowIndicator: true,
+        editable: true,
+        droppable: true,
+        
+        slotLabelFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short', omitZeroMinute: false },
+        eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short' },
+        
+        
+        // --- Fuentes de Datos (Recursos y Eventos) ---
+        resources: function(fetchInfo, successCallback, failureCallback) {
+            const sucursalId = selectorSucursal.value;
+            if (!sucursalId) { successCallback([]); return; }
+            fetch(`/api/agenda_dia_data?fecha=${selectorFecha.value}&sucursal_id=${sucursalId}`)
+                .then(res => res.json()).then(data => successCallback(data.recursos)).catch(err => failureCallback(err));
+        },
+        events: function(fetchInfo, successCallback, failureCallback) {
+            const sucursalId = selectorSucursal.value;
+            if (!sucursalId) { successCallback([]); return; }
+            fetch(`/api/agenda_dia_data?fecha=${selectorFecha.value}&sucursal_id=${sucursalId}`)
+                .then(res => res.json()).then(data => successCallback(data.eventos)).catch(err => failureCallback(err));
+        },
+
+        // --- Manejo de Interacciones ---
+        dateClick: function(info) {
+            if (!datosApiAgenda || !datosApiAgenda.eventos) return;
+
+            const slotDT = new Date(info.dateStr).getTime();
+            const colaboradorId = info.resource.id;
+
+            // Buscamos si existe un "evento de fondo" verde (turno de trabajo) en la celda clickeada
+            const esHorarioHabil = datosApiAgenda.eventos.some(evento => 
+                evento.resourceId == colaboradorId &&
+                evento.display === 'background' &&
+                evento.backgroundColor.includes('40, 167, 69') && // Color verde
+                new Date(evento.start).getTime() <= slotDT &&
+                new Date(evento.end).getTime() > slotDT
+            );
+
+            // Buscamos si existe un "evento de fondo" rojo (ausencia)
+            const enAusencia = datosApiAgenda.eventos.some(evento => 
+                evento.resourceId == colaboradorId &&
+                evento.display === 'background' &&
+                evento.backgroundColor.includes('220, 53, 69') && // Color rojo
+                new Date(evento.start).getTime() <= slotDT &&
+                new Date(evento.end).getTime() > slotDT
+            );
+            
+            // Solo si es horario hábil Y NO es una ausencia, abrimos el modal
+            if (esHorarioHabil && !enAusencia) {
+                const hora = info.dateStr.slice(11, 16);
+                abrirModalNuevaReserva(info.resource.id, info.resource.title, info.dateStr.slice(0, 10), hora);
+            }
+        },
+        eventClick: function(info) {
+            if (info.event.id) abrirModalGestionarReserva(info.event.id);
+        },
+        // Lógica COMPLETA para arrastrar y soltar (Drag & Drop)
+        eventDrop: function(info) {
+            const reservaId = info.event.id;
+            const nuevoInicio = info.event.start;
+            // Esta línea se asegura de obtener el ID del colaborador correcto en ambos casos
+            const nuevoColaboradorId = info.event.getResources()[0].id;
+
+            if (nuevoInicio < new Date()) {
+                alert("No se puede mover una reserva a una fecha u hora pasada.");
+                info.revert();
+                return;
+            }
+            if (!confirm("¿Seguro que deseas mover esta reserva?")) {
+                info.revert();
+                return;
+            }
+            
+            // Creamos el paquete de datos que enviaremos
+            const payload = {
+                reserva_id: reservaId,
+                nuevo_inicio: nuevoInicio.toISOString(),
+                nuevo_colaborador_id: nuevoColaboradorId
+            };
+
+            // --- LÍNEA DE DEPURACIÓN ---
+            // Esto imprimirá en la consola los datos exactos que estamos a punto de enviar
+            console.log("Datos enviados al servidor para reagendar:", payload);
+            
+            fetch('/reservas/reagendar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json().then(d => ({ok: res.ok, data: d})))
+            .then(result => {
+                if (!result.ok) {
+                    alert(`No se pudo mover la reserva: ${result.data.message}`);
+                    info.revert();
+                } else {
+                    actualizarAgenda();
+                }
+            }).catch(err => {
+                alert("Error de red al intentar reagendar. El movimiento ha sido revertido.");
+                info.revert();
+            });
+        },
+    });
+
+    // --- 3. RENDERIZADO Y LÓGICA DE FILTROS ---
+    calendar.render();
+    
+    // --- 4. FUNCIONES COMPLETAS PARA MANEJAR LOS MODALES ---
+    function abrirModalNuevaReserva(empleadoId, empleadoNombre, fecha, hora) {
+        formModalNuevaReserva.reset(); 
+        const sucursalId = selectorSucursal.value;
+        document.getElementById('modalSucursalId').value = sucursalId;
+        document.getElementById('modalEmpleadoNombre').textContent = empleadoNombre;
+        document.getElementById('modalFecha').textContent = new Date(fecha + 'T00:00:00').toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        document.getElementById('modalHoraInicio').textContent = hora;
+        document.getElementById('modalEmpleadoId').value = empleadoId;
+        document.getElementById('modalFechaHoraInicioFull').value = `${fecha}T${hora}`;
+        document.getElementById('modalErrores').style.display = 'none';
+        if (modalNuevaReservaInstancia) modalNuevaReservaInstancia.show();
+    }
+
+    function abrirModalGestionarReserva(reservaId) {
+        const modalTitle = document.getElementById('modalGestionarReservaLabel');
+        const vistaDiv = document.getElementById('detalleReservaVista');
+        const formEditar = document.getElementById('formEditarReservaModal');
+        const erroresEditarDiv = document.getElementById('modalEditarErrores');
+        const btnEditar = document.getElementById('btnModalEditarReserva');
+        const btnCancelarReserva = document.getElementById('btnModalCancelarReserva');
+        const btnCompletarReserva = document.getElementById('btnModalCompletarReserva');
+        const btnCancelarEdicion = document.getElementById('btnModalCancelarEdicion');
+        const btnGuardarCambios = document.getElementById('btnModalGuardarCambios');
+
+        function cambiarModo(modoVista, data = null) {
+            vistaDiv.style.display = modoVista ? 'block' : 'none';
+            formEditar.style.display = modoVista ? 'none' : 'block';
+            if (erroresEditarDiv) erroresEditarDiv.style.display = 'none';
+            const esFinal = data ? ['Completada', 'Cancelada', 'No Asistio'].some(s => data.estado?.includes(s)) : true;
+            btnEditar.style.display = modoVista && !esFinal ? 'inline-block' : 'none';
+            btnCancelarReserva.style.display = modoVista && !esFinal ? 'inline-block' : 'none';
+            btnCompletarReserva.style.display = modoVista && !esFinal ? 'inline-block' : 'none';
+            btnCancelarEdicion.style.display = modoVista ? 'none' : 'inline-block';
+            btnGuardarCambios.style.display = modoVista ? 'none' : 'inline-block';
+            if (!modoVista && data) {
+                modalTitle.innerHTML = `<i class="fas fa-edit me-2"></i>Editando Reserva #${data.id}`;
+                document.getElementById('editReservaId').value = data.id;
+                const poblarSelect = (selId, items, valActual, txtCallback) => {
+                    const sel = document.getElementById(selId);
+                    sel.innerHTML = `<option value="">Seleccione...</option>`;
+                    items.forEach(item => { sel.add(new Option(txtCallback(item), item.id)); });
+                    sel.value = valActual;
+                };
+                poblarSelect('editClienteId', todosLosClientes, data.cliente_id, item => `${item.razon_social_nombres} ${item.apellidos || ''}`);
+                poblarSelect('editEmpleadoId', todosLosEmpleadosParaSelector, data.empleado_id, item => `${item.nombres} ${item.apellidos}`);
+                poblarSelect('editServicioId', todosLosServiciosActivos, data.servicio_id, item => `${item.nombre} (${item.duracion_minutos} min)`);
+                if (data.fecha_hora_inicio) document.getElementById('editFechaHoraInicio').value = data.fecha_hora_inicio.slice(0, 16);
+                document.getElementById('editPrecioCobrado').value = data.precio_cobrado ? parseFloat(data.precio_cobrado).toFixed(2) : '';
+                document.getElementById('editNotasCliente').value = data.notas_cliente || '';
+                document.getElementById('editNotasInternas').value = data.notas_internas || '';
+            }
+        }
+        
+        cambiarModo(true);
+        modalTitle.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>Cargando...`;
+        if(modalGestionarInstancia) modalGestionarInstancia.show();
+
+        fetch(`/api/reservas/${reservaId}`)
+            .then(r => r.ok ? r.json() : Promise.reject('No se pudieron cargar los datos.'))
+            .then(data => {
+                datosReservaActualParaModal = data; 
+                modalTitle.innerHTML = `<i class="fas fa-calendar-check me-2"></i>Detalles de Reserva #${data.id}`;
+                const inicioDT = new Date(data.fecha_hora_inicio);
+                vistaDiv.innerHTML = `<dl class="row"><dt class="col-sm-4">Cliente:</dt><dd class="col-sm-8">${data.cliente_nombre_completo||'-'}</dd><dt class="col-sm-4">Colaborador:</dt><dd class="col-sm-8">${data.empleado_nombre_completo||'-'}</dd><dt class="col-sm-4">Servicio:</dt><dd class="col-sm-8">${data.servicio_nombre||'-'}</dd><dt class="col-sm-4">Inicio:</dt><dd class="col-sm-8">${inicioDT.toLocaleString('es-PE')}</dd></dl>`;
+                
+                if (data.estado === 'Completada') {
+                    btnRegistrarVenta.href = `{{ url_for('main.nueva_venta') }}?reserva_id=${reservaId}`;
+                }
+                
+                cambiarModo(true, data);
+            })
+            .catch(error => { vistaDiv.innerHTML = `<p class="text-danger">${error}</p>`; });
+        
+        btnEditar.onclick = () => { if(datosReservaActualParaModal) cambiarModo(false, datosReservaActualParaModal); };
+        btnCancelarEdicion.onclick = () => { if(datosReservaActualParaModal) cambiarModo(true, datosReservaActualParaModal); };
+        btnCancelarReserva.onclick = () => { if (confirm(`¿Seguro que quieres CANCELAR la reserva #${reservaId}?`)) { fetch(`/reservas/cancelar/${reservaId}`, {method: 'POST'}).then(r=>r.json()).then(res=>{ if(res.success){ modalGestionarInstancia.hide(); actualizarAgenda(); } alert(res.message); }) }};
+        btnCompletarReserva.onclick = () => {
+            if (confirm(`¿Seguro que quieres marcar como COMPLETADA la reserva #${reservaId}?`)) {
+                fetch(`/api/reservas/${reservaId}/completar`, {method: 'POST'})
+                .then(r => r.json())
+                .then(res => {
+                    alert(res.message); // Muestra el mensaje del servidor
+                    if (res.success && res.redirect_url) {
+                        // CORRECCIÓN: Si el servidor envió una URL, redirigir a esa página.
+                        window.location.href = res.redirect_url;
+                    } else {
+                        // Si no hay URL, solo refrescar la agenda.
+                        modalGestionarInstancia.hide();
+                        actualizarAgenda();
+                    }
+                });
+            }
+        }; 
+    
+    }
+
+    // --- 5. LISTENERS DE EVENTOS Y LÓGICA DE CONTROLES ---
+    calendar.render();
+
+    function actualizarAgenda() {
+        const fechaSeleccionada = selectorFecha.value;
+        const fecha = selectorFecha.value;
+        const sucursalId = selectorSucursal.value;
+        if (!sucursalId) { return; }
+
+        fetch(`/api/agenda_dia_data?fecha=${fecha}&sucursal_id=${sucursalId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) { throw new Error(data.error); }
+                datosApiAgenda = data;
+                calendar.gotoDate(fechaSeleccionada); 
+                calendar.setOption('resources', data.recursos);
+                calendar.setOption('events', data.eventos);
+            })
+            .catch(err => {
+                console.error("Error al actualizar la agenda:", err);
+                alert("No se pudo cargar la información de la agenda.");
+            });
+    }
+
+    if (selectorFecha) { selectorFecha.value = new Date().toISOString().slice(0,10); }
+
+    document.getElementById('btnDiaAnterior')?.addEventListener('click', () => { 
+        const d = new Date(selectorFecha.value); d.setDate(d.getDate() - 1); 
+        selectorFecha.value = d.toISOString().slice(0,10); 
+        actualizarAgenda(); 
+    });
+    document.getElementById('btnDiaSiguiente')?.addEventListener('click', () => { 
+        const d = new Date(selectorFecha.value); d.setDate(d.getDate() + 1); 
+        selectorFecha.value = d.toISOString().slice(0,10); 
+        actualizarAgenda(); 
+    });
+    document.getElementById('btnHoy')?.addEventListener('click', () => { 
+        selectorFecha.value = new Date().toISOString().slice(0,10); 
+        actualizarAgenda(); 
+    });
+    
+    selectorSucursal?.addEventListener('change', actualizarAgenda);
+    btnActualizar?.addEventListener('click', actualizarAgenda);
+
+    // Carga inicial al entrar a la página
+    if (selectorSucursal.value) {
+        actualizarAgenda();
+    }
+    
+    formModalNuevaReserva?.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const btn = this.querySelector('button[type="submit"]');
+        const errDiv = document.getElementById('modalErrores');
+        btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+        errDiv.style.display = 'none';
+        
+        const payload = Object.fromEntries(new FormData(this));
+        
+        fetch("{{ url_for('main.nueva_reserva') }}", { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) })
+            .then(res => res.json().then(d => ({ok: res.ok, data: d})))
+            .then(res => {
+                if (res.ok && res.data.success) { modalNuevaReservaInstancia.hide(); actualizarAgenda(); }
+                else { errDiv.innerHTML = (res.data.errors || [res.data.message]).join('<br>'); errDiv.style.display = 'block'; }
+            })
+            .catch(err => { errDiv.innerHTML = `Error: ${err.message}`; errDiv.style.display = 'block'; })
+            .finally(() => { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save me-1"></i>Guardar Reserva'; });
+    });
+
+    formEditarReserva?.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btnModalGuardarCambios');
+        const errDiv = document.getElementById('modalEditarErrores');
+        btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+        errDiv.style.display = 'none';
+
+        const reservaId = datosReservaActualParaModal.id;
+        const payload = Object.fromEntries(new FormData(this));
+        
+        fetch(`/reservas/editar/${reservaId}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) })
+            .then(res => res.json().then(d => ({ok: res.ok, data: d})))
+            .then(res => {
+                if (res.ok && res.data.success) { modalGestionarInstancia.hide(); actualizarAgenda(); alert(res.data.message); }
+                else { errDiv.innerHTML = (res.data.errors || [res.data.message]).join('<br>'); errDiv.style.display = 'block'; }
+            })
+            .catch(err => { errDiv.innerHTML = `Error: ${err.message}`; errDiv.style.display = 'block'; })
+            .finally(() => { btn.disabled = false; btn.textContent = 'Guardar Cambios'; });
+    });
+
+    // --- 6. CARGA INICIAL DE LA AGENDA ---
+    if (selectorSucursal.value) {
+        actualizarAgenda();
+    }
+});
+</script>
+{% endblock scripts %}
+
+

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina }} - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-bullhorn me-2"></i>{{ titulo_pagina }}</h2>
+        <a href="{{ url_for('main.nueva_campana') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Nueva Campaña
+        </a>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {% if campanas %}
+    <div class="table-responsive">
+        <table class="table table-hover table-custom table-sm">
+            <thead><tr><th>Nombre</th><th>Vigencia</th><th>Tipo de Regla</th><th>Valor</th><th>Activa</th><th>Acciones</th></tr></thead>
+            <tbody>
+                {% for c in campanas %}
+                <tr>
+                    <td><strong>{{ c.nombre }}</strong><br><small class="text-muted">{{ c.descripcion }}</small></td>
+                    <td>{{ c.f_inicio }} - {{ c.f_fin }}</td>
+                    <td>{{ c.tipo_regla }}</td>
+                    <td>{{ c.valor_regla }}</td>
+                    <td>{% if c.activo %}<span class="badge bg-success">Sí</span>{% else %}<span class="badge bg-danger">No</span>{% endif %}</td>
+                    <td class="table-actions">
+                        <a href="#" class="btn btn-xs btn-warning disabled" title="Editar"><i class="fas fa-edit"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info-custom"><i class="fas fa-info-circle me-2"></i>No hay campañas registradas todavía.</div>
+    {% endif %}
+</div>
+{% endblock %}

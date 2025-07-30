@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titulo_pagina }} - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* ... (puedes reutilizar los estilos de reporte_produccion.html) ... */
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-hand-holding-usd me-2"></i>{{ titulo_pagina }}</h2>
+
+    <div class="card bg-dark text-light my-4">
+        <div class="card-header">Seleccionar Período y Colaborador</div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('main.reporte_liquidacion') }}" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="colaborador_id" class="form-label">Colaborador</label>
+                    <select name="colaborador_id" id="colaborador_id" class="form-select" required>
+                        <option value="">Seleccione...</option>
+                        {% for c in colaboradores %}<option value="{{ c.id }}" {% if filtros.get('colaborador_id')|int == c.id %}selected{% endif %}>{{ c.nombres }} {{c.apellidos }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="anio" class="form-label">Año</label>
+                    <input type="number" class="form-control" name="anio" id="anio" value="{{ anio_actual }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="mes" class="form-label">Mes</label>
+                    <select name="mes" id="mes" class="form-select" required>
+                        <option value="1" {% if mes_actual == 1 %}selected{% endif %}>Enero</option>
+                        <option value="2" {% if mes_actual == 2 %}selected{% endif %}>Febrero</option>
+                        <option value="3" {% if mes_actual == 3 %}selected{% endif %}>Marzo</option>
+                        <option value="4" {% if mes_actual == 4 %}selected{% endif %}>Abril</option>
+                        <option value="5" {% if mes_actual == 5 %}selected{% endif %}>Mayo</option>
+                        <option value="6" {% if mes_actual == 6 %}selected{% endif %}>Junio</option>
+                        <option value="7" {% if mes_actual == 7 %}selected{% endif %}>Julio</option>
+                        <option value="8" {% if mes_actual == 8 %}selected{% endif %}>Agosto</option>
+                        <option value="9" {% if mes_actual == 9 %}selected{% endif %}>Septiembre</option>
+                        <option value="10" {% if mes_actual == 10 %}selected{% endif %}>Octubre</option>
+                        <option value="11" {% if mes_actual == 11 %}selected{% endif %}>Noviembre</option>
+                        <option value="12" {% if mes_actual == 12 %}selected{% endif %}>Diciembre</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary w-100">Generar Pre-Liquidación</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% include 'partials/_flash_messages.html' %}
+
+    {% if resultados %}
+    <div class="report-section">
+        <h3>Pre-Liquidación para: <strong>{{ resultados.colaborador.nombres }} {{ resultados.colaborador.apellidos }}</strong></h3>
+        <h4>Período: <strong>{{ resultados.periodo }}</strong></h4>
+        <hr>
+        
+        <div class="row">
+            <div class="col-md-6 border-end" style="border-color: var(--color-secundario-gris) !important;">
+                <h4 class="text-success mb-3">(+) INGRESOS</h4>
+
+                <div class="d-flex justify-content-between"><span>Sueldo Base</span><span>S/ {{ "%.2f"|format(resultados.sueldo_base) }}</span></div>
+                <hr class="my-1">
+                
+                <p class="mb-1 mt-3"><strong>Bono por Producción:</strong></p>
+                <div class="ps-3">
+                    <div class="d-flex justify-content-between small"><span class="text-muted">Producción del Mes (para cuota)</span><span>S/ {{ "%.2f"|format(resultados.total_produccion) }}</span></div>
+                    <div class="d-flex justify-content-between small"><span class="text-muted">Cuota del Mes</span><span>- S/ {{ "%.2f"|format(resultados.monto_cuota) }}</span></div>
+                    <div class="d-flex justify-content-between small border-top mt-1 pt-1"><span class="text-muted">Excedente</span><span>S/ {{ "%.2f"|format(resultados.excedente_produccion) }}</span></div>
+                    <div class="d-flex justify-content-between fw-bold"><span class="text-success">Bono (50% del excedente)</span><span>S/ {{ "%.2f"|format(resultados.bono_produccion) }}</span></div>
+                </div>
+                <hr class="my-1">
+
+                <p class="mb-1 mt-3"><strong>Comisiones Pendientes:</strong></p>
+                <div class="ps-3">
+                    {% for comision in resultados.comisiones_pendientes %}
+                        <div class="d-flex justify-content-between small"><span class="text-muted" title="{{ comision.descripcion_item_venta }}">Comisión Venta #{{ comision.venta_id }}</span><span>S/ {{ "%.2f"|format(comision.monto_comision) }}</span></div>
+                    {% else %}
+                        <div class="d-flex justify-content-between small"><span class="text-muted">Sin comisiones pendientes</span><span>S/ 0.00</span></div>
+                    {% endfor %}
+                    <div class="d-flex justify-content-between fw-bold"><span class="text-success">Total Comisiones</span><span>S/ {{ "%.2f"|format(resultados.total_comisiones) }}</span></div>
+                </div>
+                <hr class="my-1">
+
+                <p class="mb-1 mt-3"><strong>Otros Ingresos (Bonos Extra):</strong></p>
+                <div class="ps-3">
+                    {% set hay_otros_bonos = resultados.total_otros_bonos > 0 %}
+                    {% if hay_otros_bonos %}{% for ajuste in resultados.ajustes_pago %}{% if ajuste.monto > 0 %}
+                        <div class="d-flex justify-content-between small"><span class="text-muted" title="{{ ajuste.descripcion }}">{{ ajuste.tipo }}</span><span>S/ {{ "%.2f"|format(ajuste.monto) }}</span></div>
+                    {% endif %}{% endfor %}{% else %}
+                        <div class="d-flex justify-content-between small"><span class="text-muted">Sin otros bonos pendientes</span><span>S/ 0.00</span></div>
+                    {% endif %}
+                     <div class="d-flex justify-content-between fw-bold"><span class="text-success">Total Otros Ingresos</span><span>S/ {{ "%.2f"|format(resultados.total_otros_bonos) }}</span></div>
+                </div>
+                {# --- NUEVA SECCIÓN PARA BONOS POR REGLAS --- #}
+                <p class="mb-1 mt-3"><strong>Bonos por Objetivos Cumplidos:</strong></p>
+                <div class="ps-3">
+                    {% for bono in resultados.bonos_ganados %}
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted" title="{{ bono.descripcion }}">{{ bono.nombre }}</span>
+                            <span>S/ {{ "%.2f"|format(bono.monto_bono) }}</span>
+                        </div>
+                    {% else %}
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted">Sin bonos adicionales este mes</span>
+                            <span>S/ 0.00</span>
+                        </div>
+                    {% endfor %}
+                    <div class="d-flex justify-content-between fw-bold">
+                        <span class="text-success">Total Bonos por Objetivos</span>
+                        <span>S/ {{ "%.2f"|format(resultados.total_bonos_reglas) }}</span>
+                    </div>
+                </div>
+                <hr class="my-1">
+                <div class="d-flex justify-content-between p-2 mt-3 rounded total" style="background-color: #2a3f34;">
+                    <strong>TOTAL INGRESOS</strong>
+                    <strong>S/ {{ "%.2f"|format(resultados.total_ingresos) }}</strong>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <h4 class="text-danger mb-3">(-) DESCUENTOS</h4>
+                <p class="mb-1"><strong>Adelantos, Penalidades y Otros:</strong></p>
+                <div class="ps-3">
+                    {% set hay_descuentos = resultados.total_descuentos > 0 %}
+                    {% if hay_descuentos %}{% for ajuste in resultados.ajustes_pago %}{% if ajuste.monto < 0 %}
+                        <div class="d-flex justify-content-between small"><span class="text-muted" title="{{ ajuste.descripcion }}">{{ ajuste.tipo }}</span><span>S/ {{ "%.2f"|format(ajuste.monto) }}</span></div>
+                    {% endif %}{% endfor %}{% else %}
+                         <div class="d-flex justify-content-between small"><span class="text-muted">Sin descuentos pendientes</span><span>S/ 0.00</span></div>
+                    {% endif %}
+                </div>
+
+                <div class="d-flex justify-content-between p-2 mt-3 rounded total" style="background-color: #4a2c30;">
+                    <strong>TOTAL DESCUENTOS</strong>
+                    <strong>S/ {{ "%.2f"|format(resultados.total_descuentos) }}</strong>
+                </div>
+            </div>
+        </div>
+
+        <hr class="my-4" style="border-color: var(--color-secundario-gris);">
+        <div class="text-end grand-total">
+            <h3>LÍQUIDO A PAGAR: 
+                <span class="p-2 rounded" style="background-color: var(--color-acento-dorado); color: var(--color-predominante);">
+                    S/ {{ "%.2f"|format(resultados.liquido_a_pagar) }}
+                </span>
+            </h3>
+        </div>
+        
+        <hr class="my-4" style="border-color: var(--color-acento-dorado);">
+        
+    </div>
+    
+    <form method="POST" action="{{ url_for('main.pagar_liquidacion') }}" onsubmit="return confirm('¿Estás seguro de que deseas marcar esta liquidación como PAGADA? Esta acción actualizará el estado de todas las comisiones y ajustes incluidos y registrará el gasto. No se puede deshacer fácilmente.');" class="mt-4">
+            
+            <input type="hidden" name="colaborador_id" value="{{ resultados.colaborador.id }}">
+            <input type="hidden" name="anio" value="{{ filtros.get('anio') }}">
+            <input type="hidden" name="mes" value="{{ filtros.get('mes') }}">
+            <input type="hidden" name="liquido_a_pagar" value="{{ resultados.liquido_a_pagar }}">
+            
+            {# Enviamos los IDs de las comisiones y ajustes que se están liquidando #}
+            {% for comision in resultados.comisiones_pendientes %}
+                <input type="hidden" name="comision_id" value="{{ comision.id }}">
+            {% endfor %}
+            
+            {% for ajuste in resultados.ajustes_pago %}
+                {% if ajuste.estado == 'Pendiente' %}
+                    <input type="hidden" name="ajuste_id" value="{{ ajuste.id }}">
+                {% endif %}
+            {% endfor %}
+
+            <div class="row justify-content-end align-items-center">
+                <div class="col-md-4">
+                    <label for="metodo_pago_liquidacion" class="form-label">Método de Pago de Liquidación:</label>
+                    <select name="metodo_pago_liquidacion" id="metodo_pago_liquidacion" class="form-select" required>
+                        <option value="Transferencia Bancaria">Transferencia Bancaria</option>
+                        <option value="Efectivo de Caja">Efectivo de Caja</option>
+                        <option value="Yape/Plin">Yape/Plin</option>
+                        <option value="Otro">Otro</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="fas fa-check-circle me-2"></i>Marcar como Pagado y Registrar Egreso
+                    </button>
+                </div>
+            </div>
+        </form>
+        {# --- FIN DEL NUEVO FORMULARIO --- #}
+
+    {% endif %}
+
+</div>
+{% endblock %}

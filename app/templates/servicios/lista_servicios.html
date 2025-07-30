@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Servicios - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-cut me-2"></i>Lista de Servicios</h2>
+        <a href="{{ url_for('main.nuevo_servicio') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Nuevo Servicio
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    {% if servicios %}
+    <div class="table-responsive">
+        <table class="table table-hover table-custom">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Categoría</th>
+                    <th>Duración (min)</th>
+                    <th>Precio (S/)</th>
+                    <th>Activo</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for srv in servicios %}
+                <tr>
+                    <td>{{ srv.id }}</td>
+                    <td>{{ srv.nombre }}</td>
+                    <td>{{ srv.categoria_nombre if srv.categoria_nombre else '-' }}</td>
+                    <td>{{ srv.duracion_minutos }}</td>
+                    <td>{{ "%.2f"|format(srv.precio) }}</td> {# Formato para dos decimales #}
+                    <td>
+                        {% if srv.activo %}
+                            <span class="badge bg-success">Sí</span>
+                        {% else %}
+                            <span class="badge bg-danger">No</span>
+                        {% endif %}
+                    </td>
+                    <td class="table-actions">
+                        <a href="#" class="btn btn-sm btn-info" title="Ver Detalles"><i class="fas fa-eye"></i></a> {# Aún no hemos hecho 'ver_servicio' individual #}
+                        <a href="{{ url_for('main.editar_servicio', servicio_id=srv.id) }}" class="btn btn-sm btn-warning" title="Editar"><i class="fas fa-edit"></i></a>
+                        
+                        {# Botón para Activar/Desactivar #}
+                        {% if srv.activo %}
+                            <a href="{{ url_for('main.toggle_activo_servicio', servicio_id=srv.id) }}" 
+                               class="btn btn-sm btn-outline-danger" title="Desactivar Servicio"
+                               onclick="return confirm('¿Estás seguro de que deseas DESACTIVAR el servicio \'{{ srv.nombre }}\'?');">
+                                <i class="fas fa-toggle-on"></i> Desactivar
+                            </a>
+                        {% else %}
+                            <a href="{{ url_for('main.toggle_activo_servicio', servicio_id=srv.id) }}" 
+                               class="btn btn-sm btn-outline-success" title="Activar Servicio"
+                               onclick="return confirm('¿Estás seguro de que deseas ACTIVAR el servicio \'{{ srv.nombre }}\'?');">
+                                <i class="fas fa-toggle-off"></i> Activar
+                            </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info" style="background-color: #3a3a3a; color: var(--color-secundario-gris); border-color: var(--color-acento-dorado);">
+        <i class="fas fa-info-circle me-2"></i>No hay servicios registrados todavía.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
