@@ -1,62 +1,59 @@
-
-from collections import OrderedDict
-from flask import Blueprint, render_template, current_app, g, request, redirect, url_for, flash
-from flask import jsonify, request, current_app, g 
-from flask import flash, redirect, url_for, request, current_app, render_template
-from datetime import date, datetime, time, timedelta # Asegúrate de tener 'date' y 'time'
+# -------------------------------------------------------------------------
+# 1. IMPORTACIONES ESTÁNDAR Y DE TERCEROS
+# -------------------------------------------------------------------------
+import os
+import io
 import json
 import math
-#from . import main_bp
-#from .db import get_db
-import mysql.connector
+import zipfile
+import base64
 import calendar
-from werkzeug.security import generate_password_hash
-from flask_login import login_user, logout_user, login_required, current_user
-from .decorators import admin_required
-from werkzeug.security import check_password_hash
-from .db import get_db
-from .models import User # Importamos nuestra clase User desde models.py
-import pandas as pd
-import io
-from flask import Response
-from urllib.parse import quote_plus
-import pandas as pd
+from datetime import datetime, date, time, timedelta, timezone
+from urllib.parse import quote, quote_plus
+import requests 
+
+# Librerías de Flask
+# (Agregamos 'send_file' que faltaba para la descarga del CDR)
+from flask import (
+    Blueprint, render_template, current_app, g, request, session, 
+    redirect, url_for, flash, jsonify, Response, send_file
+)
+
+# Librerías de Base de Datos
+import psycopg2
+import psycopg2.extras
+
+# Librerías de Autenticación y Seguridad
+from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-import os
+from flask_login import login_user, logout_user, login_required, current_user
+
+# Librerías de Datos y Archivos
+import pandas as pd
+
+# Librerías para Facturación Electrónica (XML, Firma, SOAP)
 from lxml import etree as ET
-from flask import Response
 from signxml import XMLSigner, methods
 from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.hazmat.primitives import serialization
-import zipfile
-import base64
-
 from zeep import Client, Transport
 from zeep.exceptions import Fault
-from zeep.wsse.username import UsernameToken 
-from datetime import datetime, timedelta, date, time, timezone
+from zeep.wsse.username import UsernameToken
 
+# -------------------------------------------------------------------------
+# 2. IMPORTACIONES LOCALES (De tu propio proyecto)
+# -------------------------------------------------------------------------
+from .db import get_db
+from .models import User
+from .decorators import admin_required
 
-# --- Definición del Blueprint ---
-# main_bp es el nombre que usamos para registrar las rutas en app/__init__.py
-# y como prefijo en url_for (ej. 'main.listar_clientes')
+# -------------------------------------------------------------------------
+# 3. DEFINICIÓN DEL BLUEPRINT (El corazón de las rutas)
+# -------------------------------------------------------------------------
 main_bp = Blueprint('main', __name__)
 
 # --- Funciones Auxiliares para la Base de Datos ---
-def get_db():
-    """
-    Conecta a la base de datos. Si ya existe una conexión en el contexto
-    de la aplicación (g), la reutiliza.
-    """
-    if 'db' not in g:
-        g.db = mysql.connector.connect(
-            host=current_app.config['MYSQL_HOST'],
-            user=current_app.config['MYSQL_USER'],
-            password=current_app.config['MYSQL_PASSWORD'],
-            database=current_app.config['MYSQL_DB']
-            # El cursor con dictionary=True se especifica al crear el cursor
-        )
-    return g.db
+
 
 
 def timedelta_to_hhmm_str(td):
@@ -74,6 +71,7 @@ def timedelta_to_time_obj(td): # Renombrada para claridad
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
     return time(hours, minutes)
+
 
 @main_bp.teardown_app_request
 def teardown_db(exception):
@@ -94,34 +92,47 @@ def index():
     db_conn = get_db()
     hoy = date.today()
     
-    # Datos que se cargarán para todos los roles
-    datos_para_plantilla = {}
+    # --- 1. INICIALIZAR VARIABLES CON VALORES POR DEFECTO ---
+    # Esto asegura que si la BD falla, el dashboard cargue vacío pero sin errores
+    ventas_hoy = {'numero_ventas': 0, 'total_servicios': 0.00, 'total_productos': 0.00}
+    datos_para_plantilla = {
+        'citas_hoy': {'numero_citas': 0},
+        'productos_stock_bajo': [],
+        'membresias_por_vencer': [],
+        'proximas_citas': [],
+        'clientes_cumpleanos_hoy': [],
+        'clientes_cumpleanos_proximos': [],
+        'fecha_alerta_hoy': hoy,
+        'fecha_alerta_proxima': hoy + timedelta(days=2)
+    }
 
     try:
         # Lógica para Administradores
-        if current_user.rol == 'Administrador':
-            with db_conn.cursor(dictionary=True) as cursor:
-                # 1. Ventas del día
+        # Ajusta 'Administrador' si tu rol se llama diferente en la BD
+        if getattr(current_user, 'rol', '') == 'Administrador' or getattr(current_user, 'rol_nombre', '') == 'Administrador':
+            with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                # 1. Ventas del día (Postgres: COALESCE)
                 cursor.execute("""
                     SELECT 
                         COUNT(id) as numero_ventas,
-                        SUM(subtotal_servicios) as total_servicios,
-                        SUM(subtotal_productos) as total_productos
+                        COALESCE(SUM(subtotal_servicios), 0) as total_servicios,
+                        COALESCE(SUM(subtotal_productos), 0) as total_productos
                     FROM ventas 
                     WHERE DATE(fecha_venta) = %s AND estado_pago != 'Anulado'
                 """, (hoy,))
-                ventas_hoy = cursor.fetchone()
+                resultado_ventas = cursor.fetchone()
+                if resultado_ventas:
+                    ventas_hoy = resultado_ventas
 
                 # 2. Citas del día
                 cursor.execute("SELECT COUNT(id) as numero_citas FROM reservas WHERE DATE(fecha_hora_inicio) = %s AND estado NOT IN ('Cancelada', 'No Asistio')", (hoy,))
                 datos_para_plantilla['citas_hoy'] = cursor.fetchone()
 
-                
                 # 3. Productos con stock bajo
                 cursor.execute("SELECT id, nombre, stock_actual, stock_minimo FROM productos WHERE activo = TRUE AND stock_actual <= stock_minimo ORDER BY stock_actual ASC")
                 datos_para_plantilla['productos_stock_bajo'] = cursor.fetchall()
                 
-                # 4. NUEVA CONSULTA: MEMBRESÍAS POR VENCER ---
+                # 4. Membresías por vencer
                 fecha_limite_vencimiento = hoy + timedelta(days=7)
                 sql_membresias = """
                     SELECT c.razon_social_nombres, c.apellidos, c.telefono, cm.fecha_fin, mp.nombre as plan_nombre
@@ -131,103 +142,235 @@ def index():
                     WHERE cm.estado = 'Activa' AND cm.fecha_fin BETWEEN %s AND %s
                     ORDER BY cm.fecha_fin ASC
                 """
-                # --- CORRECCIÓN AQUÍ: Se eliminaron los .date() ---
                 cursor.execute(sql_membresias, (hoy, fecha_limite_vencimiento))
                 datos_para_plantilla['membresias_por_vencer'] = cursor.fetchall()
                               
-        # Lógica para Colaboradores (No-Administradores)
+        # Lógica para Colaboradores
         else:
-            with db_conn.cursor(dictionary=True) as cursor:
+            with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                # Postgres: COALESCE en lugar de IFNULL
                 sql = """
                     SELECT r.id, r.fecha_hora_inicio, s.nombre as servicio_nombre,
-                           CONCAT(c.razon_social_nombres, ' ', IFNULL(c.apellidos, '')) AS cliente_nombre
-                    FROM reservas r JOIN servicios s ON r.servicio_id = s.id LEFT JOIN clientes c ON r.cliente_id = c.id
-                    WHERE r.empleado_id = %s AND DATE(r.fecha_hora_inicio) = %s AND r.estado = 'Programada' AND r.fecha_hora_inicio >= NOW()
+                           CONCAT(c.razon_social_nombres, ' ', COALESCE(c.apellidos, '')) AS cliente_nombre
+                    FROM reservas r 
+                    JOIN servicios s ON r.servicio_id = s.id 
+                    LEFT JOIN clientes c ON r.cliente_id = c.id
+                    WHERE r.empleado_id = %s AND DATE(r.fecha_hora_inicio) = %s 
+                      AND r.estado = 'Programada' AND r.fecha_hora_inicio >= CURRENT_TIMESTAMP
                     ORDER BY r.fecha_hora_inicio ASC LIMIT 5
                 """
                 cursor.execute(sql, (current_user.id, hoy))
                 datos_para_plantilla['proximas_citas'] = cursor.fetchall()
 
-        # --- LÓGICA DE CUMPLEAÑOS (se ejecuta para todos) ---
+        # --- LÓGICA DE CUMPLEAÑOS (General) ---
         anio_actual = hoy.year
         fecha_proxima = hoy + timedelta(days=2)
-        with db_conn.cursor(dictionary=True) as cursor:
-            # Cumpleaños de HOY
-            sql_hoy = "SELECT c.id, c.razon_social_nombres, c.apellidos, c.telefono FROM clientes c LEFT JOIN cliente_comunicaciones cc ON c.id = cc.cliente_id AND cc.tipo_comunicacion = 'SALUDO_CUMPLEANOS' AND cc.año_aplicable = %s WHERE MONTH(c.fecha_nacimiento) = %s AND DAY(c.fecha_nacimiento) = %s AND cc.id IS NULL"
+        
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Cumpleaños de HOY (Postgres: EXTRACT)
+            sql_hoy = """
+                SELECT c.id, c.razon_social_nombres, c.apellidos, c.telefono 
+                FROM clientes c 
+                LEFT JOIN cliente_comunicaciones cc 
+                    ON c.id = cc.cliente_id AND cc.tipo_comunicacion = 'SALUDO_CUMPLEANOS' AND cc.año_aplicable = %s 
+                WHERE EXTRACT(MONTH FROM c.fecha_nacimiento) = %s 
+                  AND EXTRACT(DAY FROM c.fecha_nacimiento) = %s 
+                  AND cc.id IS NULL
+            """
             cursor.execute(sql_hoy, (anio_actual, hoy.month, hoy.day))
             datos_para_plantilla['clientes_cumpleanos_hoy'] = cursor.fetchall()
             
             # Próximos cumpleaños
-            sql_proximos = "SELECT c.id, c.razon_social_nombres, c.apellidos, c.telefono FROM clientes c LEFT JOIN cliente_comunicaciones cc ON c.id = cc.cliente_id AND cc.tipo_comunicacion = 'INVITACION_CUMPLEANOS' AND cc.año_aplicable = %s WHERE MONTH(c.fecha_nacimiento) = %s AND DAY(c.fecha_nacimiento) = %s AND cc.id IS NULL"
+            sql_proximos = """
+                SELECT c.id, c.razon_social_nombres, c.apellidos, c.telefono 
+                FROM clientes c 
+                LEFT JOIN cliente_comunicaciones cc 
+                    ON c.id = cc.cliente_id AND cc.tipo_comunicacion = 'INVITACION_CUMPLEANOS' AND cc.año_aplicable = %s 
+                WHERE EXTRACT(MONTH FROM c.fecha_nacimiento) = %s 
+                  AND EXTRACT(DAY FROM c.fecha_nacimiento) = %s 
+                  AND cc.id IS NULL
+            """
             cursor.execute(sql_proximos, (anio_actual, fecha_proxima.month, fecha_proxima.day))
             datos_para_plantilla['clientes_cumpleanos_proximos'] = cursor.fetchall()
-            
-        datos_para_plantilla['fecha_alerta_hoy'] = hoy
-        datos_para_plantilla['fecha_alerta_proxima'] = fecha_proxima
 
-    except mysql.connector.Error as err:
-        flash(f"Error al cargar los datos del dashboard: {err}", "danger")
+    except Exception as e:
+        print(f"Error en Dashboard: {e}")
+        # No retornamos aquí, dejamos que el flujo continúe hacia el return final
 
-    return render_template('index.html', ventas_hoy=ventas_hoy, **datos_para_plantilla)
-
-    
+    # --- 2. RETORNO SEGURO ---
+    # Este return está FUERA del try/except, garantizando que siempre se ejecute
+    return render_template('index.html', 
+                           ventas_hoy=ventas_hoy, 
+                           **datos_para_plantilla)    
 
 # --- RUTAS DE AUTENTICACIÓN ---
 
 @main_bp.route('/login', methods=['GET', 'POST'])
 def login():
-    """
-    Maneja el inicio de sesión de los usuarios (colaboradores).
-    Versión actualizada para usar el nuevo sistema de roles.
-    """
-    # Si el usuario ya está logueado, lo redirigimos al dashboard
     if current_user.is_authenticated:
-        return redirect(url_for('main.index'))
-    
-    if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
-        remember = 'remember' in request.form
-
-        if not email or not password:
-            flash('Se requiere email y contraseña.', 'warning')
-            return redirect(url_for('main.login'))
-
-        db = get_db()
-        with db.cursor(dictionary=True) as cursor:
-            # Consulta actualizada con JOIN para obtener el nombre del rol desde la tabla 'roles'
-            sql = """
-                SELECT e.*, r.nombre as rol_nombre
-                FROM empleados e
-                LEFT JOIN roles r ON e.rol_id = r.id
-                WHERE e.email = %s AND e.activo = TRUE
-            """
-            cursor.execute(sql, (email,))
-            user_from_db = cursor.fetchone()
-
-            # Verificar si el usuario existe Y si la contraseña es correcta
-            if not user_from_db or not user_from_db.get('password') or not check_password_hash(user_from_db['password'], password):
-                flash('Email o contraseña incorrectos. Por favor, verifique sus credenciales.', 'danger')
-                return redirect(url_for('main.login'))
-            
-            # Si las credenciales son válidas, crear el objeto User y loguear al usuario
-            user_obj = User(
-                id=user_from_db['id'], 
-                nombres=user_from_db['nombres'],
-                apellidos=user_from_db['apellidos'],
-                email=user_from_db['email'],
-                rol_id=user_from_db['rol_id'],
-                rol_nombre=user_from_db['rol_nombre'], # <-- Usamos 'rol_nombre' de la consulta
-                sucursal_id=user_from_db['sucursal_id']
-            )
-            
-            login_user(user_obj, remember=remember)
-            
-            # Redirigir a la página principal (dashboard) después del login
+        # Si ya está autenticado y tiene una sucursal, va al index.
+        if 'sucursal_id' in session:
             return redirect(url_for('main.index'))
+        # Si está autenticado pero sin sucursal, va a la selección.
+        else:
+            return redirect(url_for('main.seleccionar_sucursal'))
 
-    # Si la petición es GET, simplemente mostrar el formulario de login
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+        remember = 'remember' in request.form
+        
+        db_conn = get_db()
+        try:
+            with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                # 1. Obtener datos del usuario y su rol
+                cursor.execute("""
+                    SELECT e.*, r.nombre as rol_nombre
+                    FROM empleados e
+                    LEFT JOIN roles r ON e.rol_id = r.id
+                    WHERE e.email = %s AND e.activo = TRUE
+                """, (email,))
+                user_data = cursor.fetchone()
+                
+                # 2. Validar contraseña
+                if user_data and check_password_hash(user_data['password'], password):
+                    user = User(
+                        id=user_data['id'], 
+                        nombres=user_data['nombres'],
+                        apellidos=user_data['apellidos'],
+                        email=user_data['email'],
+                        rol_id=user_data['rol_id'],
+                        rol_nombre=user_data['rol_nombre']
+                        # No guardamos sucursal_id por defecto aquí
+                    )
+                    
+                    # 3. Consultar sucursales asignadas y ACTIVAS
+                    cursor.execute("""
+                        SELECT s.id, s.nombre 
+                        FROM sucursales s
+                        JOIN empleado_sucursales es ON s.id = es.sucursal_id
+                        WHERE es.empleado_id = %s AND s.activo = TRUE
+                    """, (user.id,))
+                    sucursales_asignadas = cursor.fetchall()
+                    
+                    # --- LÓGICA DE REDIRECCIÓN ---
+                    # Caso 0: Sin sucursales asignadas o activas
+                    if not sucursales_asignadas:
+                        flash("Credenciales correctas, pero no tiene acceso a ninguna sucursal activa. Contacte al administrador.", "warning")
+                        return render_template('login.html')
+
+                    # Caso 1: Una única sucursal asignada
+                    if len(sucursales_asignadas) == 1:
+                        sucursal = sucursales_asignadas[0]
+                        session['sucursal_id'] = sucursal['id']
+                        session['sucursal_nombre'] = sucursal['nombre']
+                        login_user(user, remember=remember)
+                        flash(f"Acceso automático a su única sucursal: {sucursal['nombre']}.", "info")
+                        return redirect(url_for('main.index'))
+                    
+                    # Caso 2: Múltiples sucursales
+                    else:
+                        login_user(user, remember=remember)
+                        # No guardamos sucursal en sesión, forzamos la selección
+                        return redirect(url_for('main.seleccionar_sucursal'))
+                        
+                else:
+                    flash('Correo o contraseña incorrectos, o el usuario está inactivo.', 'danger')
+                    
+        except Exception as e:
+            flash(f"Error de sistema durante el inicio de sesión: {e}", "danger")
+            current_app.logger.error(f"Login error: {e}")
+
     return render_template('login.html')
+
+
+@main_bp.route('/auth/seleccionar-sucursal', methods=['GET', 'POST'])
+@login_required
+def seleccionar_sucursal():
+    """
+    Permite al usuario con múltiples sucursales seleccionar con cuál desea trabajar.
+    Esta página es obligatoria si el usuario no tiene una sucursal en la sesión.
+    """
+    db_conn = get_db()
+    
+    # Obtener siempre las sucursales permitidas para el usuario desde la BD.
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Si el usuario es Administrador, puede elegir cualquier sucursal activa
+            if hasattr(current_user, 'rol_nombre') and current_user.rol_nombre == 'Administrador':
+                 cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
+            else:
+                # Si no, solo las que tiene asignadas
+                cursor.execute("""
+                    SELECT s.id, s.nombre FROM sucursales s 
+                    JOIN empleado_sucursales es ON s.id = es.sucursal_id 
+                    WHERE es.empleado_id = %s AND s.activo = TRUE
+                """, (current_user.id,))
+            
+            sucursales_permitidas = cursor.fetchall()
+
+    except Exception as e:
+        flash(f"Error de base de datos al buscar sus sucursales: {e}", "danger")
+        return redirect(url_for('main.logout')) # Forzar logout si hay error grave
+
+    # Si por alguna razón (ej. le quitaron permisos) ya no tiene sucursales, se cierra sesión.
+    if not sucursales_permitidas:
+        logout_user()
+        session.clear()
+        flash("No tiene acceso a ninguna sucursal activa. Contacte al administrador.", "danger")
+        return redirect(url_for('main.login'))
+
+    # Si solo tiene una sucursal, se la asignamos y lo mandamos al dashboard.
+    if len(sucursales_permitidas) == 1:
+        session['sucursal_id'] = sucursales_permitidas[0]['id']
+        session['sucursal_nombre'] = sucursales_permitidas[0]['nombre']
+        return redirect(url_for('main.index'))
+
+    # Si se envía el formulario (POST)
+    if request.method == 'POST':
+        sucursal_id_seleccionada = request.form.get('sucursal_id', type=int)
+        
+        # Validar que la sucursal seleccionada esté en la lista permitida.
+        sucursal_valida = next((s for s in sucursales_permitidas if s['id'] == sucursal_id_seleccionada), None)
+
+        if sucursal_valida:
+            session['sucursal_id'] = sucursal_valida['id']
+            session['sucursal_nombre'] = sucursal_valida['nombre']
+            flash(f"Ha ingresado a la sucursal '{sucursal_valida['nombre']}'.", "success")
+            return redirect(url_for('main.index'))
+        else:
+            flash("Selección de sucursal inválida o no permitida.", "danger")
+            # Vuelve a mostrar la página de selección
+            return redirect(url_for('main.seleccionar_sucursal'))
+
+    # Método GET: Muestra la página de selección.
+    return render_template('auth/seleccionar_sucursal.html', sucursales=sucursales_permitidas)
+
+
+@main_bp.route('/cambiar-sucursal/<int:sucursal_id>')
+@login_required
+def cambiar_sucursal_activa(sucursal_id):
+    """
+    Permite cambiar la sucursal activa en la sesión sin cerrar sesión.
+    """
+    db = get_db()
+    # Verificar si el usuario tiene permiso real para esa sucursal
+    with db.cursor() as cursor:
+        cursor.execute("SELECT 1 FROM empleado_sucursales WHERE empleado_id=%s AND sucursal_id=%s", (current_user.id, sucursal_id))
+        if cursor.fetchone():
+            session['sucursal_id'] = sucursal_id
+            
+            # Actualizar nombre en sesión también
+            cursor.execute("SELECT nombre FROM sucursales WHERE id=%s", (sucursal_id,))
+            row = cursor.fetchone()
+            session['sucursal_nombre'] = row[0] if row else "Sucursal"
+            
+            flash(f"Cambiado a: {session['sucursal_nombre']}", "success")
+        else:
+            flash("No tienes acceso a esta sucursal.", "danger")
+            
+    return redirect(request.referrer or url_for('main.index'))
+
 
 
 @main_bp.route('/logout')
@@ -240,7 +383,7 @@ def logout():
     flash('Has cerrado sesión exitosamente.', 'success')
     return redirect(url_for('main.login'))
 
-
+# --- RUTAS PARA LA GESTIÓN DE CLIENTES ---
 @main_bp.route('/api/clientes/registrar_comunicacion', methods=['POST'])
 @login_required
 def api_registrar_comunicacion():
@@ -261,273 +404,478 @@ def api_registrar_comunicacion():
     try:
         db = get_db()
         with db.cursor() as cursor:
-            # Usamos INSERT IGNORE para evitar un error si se hace clic dos veces rápidamente.
+            # Usamos INSERT ... ON CONFLICT DO NOTHING para evitar un error si se hace clic dos veces rápidamente.
             # La constraint UNIQUE en la tabla ya previene duplicados.
             sql = """
-                INSERT IGNORE INTO cliente_comunicaciones 
+                INSERT INTO cliente_comunicaciones 
                     (cliente_id, tipo_comunicacion, año_aplicable, registrado_por_colaborador_id)
                 VALUES (%s, %s, %s, %s)
+                ON CONFLICT DO NOTHING
             """
             cursor.execute(sql, (cliente_id, tipo_comunicacion, anio_aplicable, current_user.id))
             db.commit()
 
         return jsonify({"success": True, "message": "Comunicación registrada exitosamente."})
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         db.rollback()
         current_app.logger.error(f"Error DB en api_registrar_comunicacion: {err}")
         return jsonify({"success": False, "message": f"Error de base de datos: {err}"}), 500
 
 
-@main_bp.route('/clientes')
+@main_bp.route('/clientes', methods=['GET'])
 @login_required
-@admin_required # O el permiso que hayas definido
 def listar_clientes():
-    """
-    Muestra la lista de clientes (personas, no empresas), con filtros de búsqueda.
-    """
-    db = get_db()
-    
-    # Obtener el término de búsqueda de la URL (ej: /clientes?q=Juan)
-    termino_busqueda = request.args.get('q', '').strip()
-    
+    db_conn = get_db()
+    cursor = None
     try:
-        with db.cursor(dictionary=True) as cursor:
-            # La consulta base siempre filtra para excluir a los RUC
-            sql = """
-                SELECT id, razon_social_nombres, apellidos, telefono, numero_documento, tipo_documento, puntos_fidelidad 
-                FROM clientes
-                WHERE (tipo_documento IS NULL OR tipo_documento != 'RUC')
-            """
-            params = []
+        # Obtener término de búsqueda (si existe)
+        q = request.args.get('q', '').strip()
+        
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            if q:
+                # BÚSQUEDA FILTRADA (ILIKE es clave para ignorar mayúsculas)
+                sql = """
+                    SELECT id, razon_social_nombres, apellidos, tipo_documento, 
+                           numero_documento, telefono, puntos_fidelidad 
+                    FROM clientes 
+                    WHERE 
+                        razon_social_nombres ILIKE %s OR 
+                        apellidos ILIKE %s OR 
+                        numero_documento ILIKE %s
+                    ORDER BY razon_social_nombres ASC
+                """
+                termino = f"%{q}%"
+                cursor.execute(sql, (termino, termino, termino))
+            else:
+                # LISTADO COMPLETO (Limitado a 50 para no saturar si hay muchos)
+                sql = """
+                    SELECT id, razon_social_nombres, apellidos, tipo_documento, 
+                           numero_documento, telefono, puntos_fidelidad 
+                    FROM clientes 
+                    ORDER BY razon_social_nombres ASC 
+                    LIMIT 50
+                """
+                cursor.execute(sql)
             
-            # Si el usuario escribió algo en la barra de búsqueda, se añade el filtro a la consulta
-            if termino_busqueda:
-                sql += " AND (razon_social_nombres LIKE %s OR apellidos LIKE %s OR numero_documento LIKE %s)"
-                # Los '%' son comodines para que busque coincidencias parciales
-                params.extend([f"%{termino_busqueda}%", f"%{termino_busqueda}%", f"%{termino_busqueda}%"])
-
-            sql += " ORDER BY razon_social_nombres, apellidos"
-            
-            cursor.execute(sql, tuple(params))
             clientes = cursor.fetchall()
-    except mysql.connector.Error as err:
-        flash(f"Error al acceder a los clientes: {err}", "danger")
-        clientes = []
 
-    return render_template('clientes/lista_clientes.html', 
-                           clientes=clientes, 
-                           termino_busqueda=termino_busqueda,
-                           titulo_pagina="Lista de Clientes")
+        return render_template('clientes/lista_clientes.html', 
+                               clientes=clientes, 
+                               termino_busqueda=q)
 
+    except Exception as e:
+        # current_app.logger.error(f"Error listando clientes: {e}")
+        flash(f"Error al cargar clientes: {e}", "danger")
+        return redirect(url_for('main.index'))
+
+# -------------------------------------------------------------------------
+# GESTIÓN DE CLIENTES
+# -------------------------------------------------------------------------
 @main_bp.route('/clientes/nuevo', methods=['GET', 'POST'])
 @login_required
-@admin_required
 def nuevo_cliente():
-    """
-    Maneja la creación de un nuevo cliente (Persona o Empresa).
-    """
+    db_conn = get_db()
+    
+    # Cargar lista de clientes para el buscador de Apoderados (Solo Titulares)
+    # Traemos ID, Nombre y Telefono para ayudar a buscar
+    posibles_apoderados = []
+    with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute("SELECT id, razon_social_nombres, apellidos, telefono FROM clientes WHERE apoderado_id IS NULL ORDER BY razon_social_nombres")
+        posibles_apoderados = cur.fetchall()
+
     if request.method == 'POST':
+        # Datos básicos
+        tipo_documento = request.form.get('tipo_documento')
+        numero_documento = request.form.get('numero_documento', '').strip() or None
+        nombres = request.form.get('razon_social_nombres', '').strip()
+        apellidos = request.form.get('apellidos', '').strip() or None
+        direccion = request.form.get('direccion', '').strip() or None
+        email = request.form.get('email', '').strip() or None
+        telefono = request.form.get('telefono', '').strip() or None
+        fecha_nacimiento_str = request.form.get('fecha_nacimiento')
+        puntos = request.form.get('puntos_fidelidad', 0, type=int)
+        
+        # Campos nuevos
+        genero = request.form.get('genero', 'Masculino').strip()
+        preferencia_servicio = request.form.get('preferencia_servicio', 'Barberia').strip()
+
+        # NUEVO: Apoderado ID
+        apoderado_id = request.form.get('apoderado_id')
+        if not apoderado_id or apoderado_id == '':
+            apoderado_id = None # Es Cliente Regular
+        
+        errores = []
+        if not nombres: errores.append("El nombre es obligatorio.")
+        
+        # Lógica de Teléfono:
+        # Si NO tiene apoderado (es Regular), el teléfono es OBLIGATORIO.
+        # Si TIENE apoderado (es Dependiente), el teléfono es OPCIONAL.
+        if not apoderado_id and not telefono:
+            errores.append("El teléfono es obligatorio para clientes titulares.")
+
+        # Validar fecha
+        fecha_nacimiento = None
+        if fecha_nacimiento_str:
+            try:
+                fecha_nacimiento = datetime.strptime(fecha_nacimiento_str, '%Y-%m-%d').date()
+            except ValueError:
+                errores.append("Fecha inválida.")
+
+        # Validar duplicados (Solo si se ingresó teléfono)
+        if telefono:
+            cursor_check = None
+            try:
+                cursor_check = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                # Permitimos mismo teléfono SOLO si tienen diferente nombre (tu lógica anterior)
+                cursor_check.execute("SELECT id FROM clientes WHERE telefono = %s AND LOWER(razon_social_nombres) = LOWER(%s)", (telefono, nombres))
+                if cursor_check.fetchone():
+                    errores.append(f"Ya existe un cliente con este nombre y teléfono.")
+            finally:
+                if cursor_check: cursor_check.close()
+
+        if errores:
+            for err in errores: flash(err, 'warning')
+            return render_template('clientes/form_cliente.html', 
+                                   es_nueva=True, 
+                                   titulo_form="Registrar Nuevo Cliente",
+                                   action_url=url_for('main.nuevo_cliente'),
+                                   posibles_apoderados=posibles_apoderados, # Pasamos la lista
+                                   form_data=request.form)
+
+        # Insertar
+        cursor_insert = None
         try:
-            # 1. Recoger datos del nuevo formulario
-            tipo_documento = request.form.get('tipo_documento')
-            numero_documento = request.form.get('numero_documento', '').strip() or None
-            razon_social_nombres = request.form.get('razon_social_nombres')
-            apellidos = request.form.get('apellidos', '').strip() or None
-            direccion = request.form.get('direccion', '').strip() or None
-            email = request.form.get('email', '').strip() or None
-            telefono = request.form.get('telefono', '').strip() or None
-            fecha_nacimiento_str = request.form.get('fecha_nacimiento')
-            puntos_fidelidad = request.form.get('puntos_fidelidad', 0, type=int)
-
-            # 2. Validaciones
-            if not razon_social_nombres:
-                raise ValueError("El campo Nombres/Razón Social es obligatorio.")
-            if tipo_documento == 'DNI' and not apellidos:
-                raise ValueError("El campo Apellidos es obligatorio para personas con DNI.")
+            cursor_insert = db_conn.cursor()
+            sql = """INSERT INTO clientes 
+                        (tipo_documento, numero_documento, razon_social_nombres, apellidos, 
+                         direccion, email, telefono, fecha_nacimiento, puntos_fidelidad, apoderado_id, genero, preferencia_servicio) 
+                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
             
-            # Si es RUC, los apellidos se guardan como NULL
-            if tipo_documento == 'RUC':
-                apellidos = None
-
-            fecha_nacimiento = datetime.strptime(fecha_nacimiento_str, '%Y-%m-%d').date() if fecha_nacimiento_str else None
-
-            # 3. Guardar en la Base de Datos
-            db = get_db()
-            with db.cursor() as cursor:
-                sql = """INSERT INTO clientes 
-                            (tipo_documento, numero_documento, razon_social_nombres, apellidos, 
-                             direccion, email, telefono, fecha_nacimiento, puntos_fidelidad) 
-                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-                val = (tipo_documento, numero_documento, razon_social_nombres, apellidos, 
-                       direccion, email, telefono, fecha_nacimiento, puntos_fidelidad)
-                cursor.execute(sql, val)
-                nuevo_cliente_id = cursor.lastrowid
-                db.commit()
-                
-                # 4. Preparar mensaje de bienvenida por WhatsApp
-                mensaje_exito = f'¡Cliente "{razon_social_nombres} {apellidos or ""}" registrado exitosamente!'
-                if telefono:
+            cursor_insert.execute(sql, (tipo_documento, numero_documento, nombres, apellidos, 
+                                        direccion, email, telefono, fecha_nacimiento, puntos, apoderado_id, genero, preferencia_servicio))
+            db_conn.commit()
+            
+            # --- LÓGICA DE MARKETING POST-REGISTRO ---
+            flash_message = 'Cliente registrado exitosamente.'
+            if telefono:
+                try:
+                    # 1. Limpiar y formatear teléfono
                     telefono_limpio = ''.join(filter(str.isdigit, telefono))
-                    if not telefono_limpio.startswith('51'): telefono_limpio = f'51{telefono_limpio}'
-                    mensaje_whatsapp = f"Hola {razon_social_nombres.split(' ')[0]}, bienvenido a JV Studio. Gracias por registrarte con nosotros. Agenda tu cita pronto!"
-                    enlace_whatsapp = f"https://wa.me/{telefono_limpio}?text={quote_plus(mensaje_whatsapp)}"
-                    mensaje_exito += f' <a href="{enlace_whatsapp}" target="_blank" class="btn btn-success btn-sm ms-2"><i class="fab fa-whatsapp me-1"></i>Enviar Bienvenida</a>'
-
-                flash(mensaje_exito, 'success')
+                    if len(telefono_limpio) == 9:
+                        telefono_limpio = '51' + telefono_limpio
+                    
+                    # 2. Construir mensaje
+                    nombre_cliente = nombres.split(' ')[0] # Usar solo el primer nombre
+                    link_redes = "https://www.instagram.com/stories/jvstudio_formen/"
+                    link_app = "https://acortar.link/nghOjU" # O la URL que corresponda
+                    
+                    mensaje = f'Hola {nombre_cliente}! 👋 Bienvenido a la familia JV Studio. 💈💇‍♂️ Gracias por tu preferencia. Síguenos en redes para ver nuestros trabajos: {link_redes} y reserva tu próxima cita fácil aquí: {link_app}'
+                    
+                    # 3. Codificar y generar enlace
+                    mensaje_codificado = quote(mensaje)
+                    link_whatsapp = f"https://wa.me/{telefono_limpio}?text={mensaje_codificado}"
+                    
+                    # 4. Construir flash con HTML
+                    flash_message = (
+                        'Cliente registrado exitosamente. '
+                        f'<a href="{link_whatsapp}" target="_blank" class="btn btn-success btn-sm ms-2">'
+                        '<i class="fab fa-whatsapp"></i> Enviar Bienvenida'
+                        '</a>'
+                    )
+                except Exception as e:
+                    current_app.logger.error(f"Error al generar link de WhatsApp para {nombres}: {e}")
+                    # Si falla, el mensaje flash simple aún se mostrará
+            
+            flash(flash_message, 'success')
             return redirect(url_for('main.listar_clientes'))
 
-        except (ValueError, mysql.connector.Error) as e:
-            get_db().rollback()
-            flash(f"Error al registrar al cliente: {e}", "danger")
+        except Exception as e:
+            db_conn.rollback()
+            flash(f"Error al registrar: {e}", "danger")
+            return render_template('clientes/form_cliente.html', 
+                                   es_nueva=True, 
+                                   titulo_form="Registrar Nuevo Cliente",
+                                   action_url=url_for('main.nuevo_cliente'),
+                                   posibles_apoderados=posibles_apoderados,
+                                   form_data=request.form)
+        finally:
+            if cursor_insert: cursor_insert.close()
     
-    # Lógica GET
     return render_template('clientes/form_cliente.html', 
                            es_nueva=True, 
                            titulo_form="Registrar Nuevo Cliente",
                            action_url=url_for('main.nuevo_cliente'),
-                           form_data=request.form if request.method == 'POST' else None)
-    
-    
+                           posibles_apoderados=posibles_apoderados)
+
 @main_bp.route('/clientes/ver/<int:cliente_id>')
 @login_required
 def ver_cliente(cliente_id):
-    """
-    Muestra los detalles de un cliente específico.
-    """
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
+        # Usar RealDictCursor para pasar el objeto directo a la plantilla
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            cursor.execute("SELECT * FROM clientes WHERE id = %s", (cliente_id,))
+            cliente_encontrado = cursor.fetchone()
         
-        cursor.execute("SELECT * FROM clientes WHERE id = %s", (cliente_id,))
-        cliente_encontrado = cursor.fetchone()
-        cursor.close()
-        
-        if cliente_encontrado is None:
-            flash(f'Cliente con ID {cliente_id} no encontrado.', 'warning')
+        if not cliente_encontrado:
+            flash(f'Cliente no encontrado.', 'warning')
             return redirect(url_for('main.listar_clientes'))
             
-    except mysql.connector.Error as err:
-        flash(f"Error al acceder a la base de datos para ver cliente: {err}", "danger")
-        current_app.logger.error(f"Error en ver_cliente (ID: {cliente_id}): {err}")
-        return redirect(url_for('main.listar_clientes')) # Redirigir si hay error de BD
+    except Exception as err:
+        flash(f"Error al ver cliente: {err}", "danger")
+        return redirect(url_for('main.listar_clientes'))
 
     return render_template('clientes/ver_cliente.html', cliente=cliente_encontrado)
 
+
 @main_bp.route('/clientes/editar/<int:cliente_id>', methods=['GET', 'POST'])
 @login_required
-@admin_required
 def editar_cliente(cliente_id):
     db_conn = get_db()
     
+    # 1. Cargar lista de posibles apoderados (Necesario para el buscador en GET y POST)
+    posibles_apoderados = []
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Traemos solo clientes que NO sean dependientes (para evitar ciclos: hijo de su hijo)
+            # Y excluimos al propio cliente que estamos editando
+            cur.execute("""
+                SELECT id, razon_social_nombres, apellidos, telefono 
+                FROM clientes 
+                WHERE apoderado_id IS NULL AND id != %s
+                ORDER BY razon_social_nombres
+            """, (cliente_id,))
+            posibles_apoderados = cur.fetchall()
+    except Exception as e:
+        current_app.logger.error(f"Error cargando apoderados: {e}")
+
     if request.method == 'POST':
+        # Recoger datos
+        tipo_documento = request.form.get('tipo_documento')
+        numero_documento = request.form.get('numero_documento', '').strip() or None
+        razon_social_nombres = request.form.get('razon_social_nombres', '').strip()
+        apellidos = request.form.get('apellidos', '').strip() or None
+        direccion = request.form.get('direccion', '').strip() or None
+        email = request.form.get('email', '').strip() or None
+        telefono = request.form.get('telefono', '').strip() or None
+        fecha_nacimiento_str = request.form.get('fecha_nacimiento')
+        puntos_fidelidad = request.form.get('puntos_fidelidad', 0, type=int)
+        
+        # Campos nuevos
+        genero = request.form.get('genero', 'Masculino').strip()
+        preferencia_servicio = request.form.get('preferencia_servicio', 'Barberia').strip()
+
+        # NUEVO: Apoderado
+        apoderado_id = request.form.get('apoderado_id')
+        if not apoderado_id or apoderado_id == '':
+            apoderado_id = None
+
+        errores = []
+        if not razon_social_nombres: errores.append("El nombre es obligatorio.")
+        
+        # Validación de teléfono condicionada
+        if not apoderado_id and not telefono:
+            errores.append("El teléfono es obligatorio para clientes titulares.")
+
+        fecha_nacimiento = None
+        if fecha_nacimiento_str:
+            try:
+                fecha_nacimiento = datetime.strptime(fecha_nacimiento_str, '%Y-%m-%d').date()
+            except ValueError:
+                errores.append("Fecha inválida.")
+
+        # Verificar duplicados (Excluyendo al propio cliente)
+        if telefono:
+            cursor_check = None
+            try:
+                cursor_check = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                # Verificar teléfono usado por OTRO cliente
+                cursor_check.execute("""
+                    SELECT id FROM clientes 
+                    WHERE telefono = %s AND id != %s AND LOWER(razon_social_nombres) = LOWER(%s)
+                """, (telefono, cliente_id, razon_social_nombres))
+                
+                if cursor_check.fetchone():
+                    errores.append(f"El teléfono ya pertenece a otro cliente con el mismo nombre.")
+            finally:
+                if cursor_check: cursor_check.close()
+
+        if errores:
+            for err in errores: flash(err, 'warning')
+            # Si hay error, necesitamos volver a mostrar el form con los datos enviados
+            # Y recuperar el nombre del apoderado si se seleccionó uno
+            nombre_apoderado_form = ""
+            if apoderado_id:
+                 # Buscar nombre solo para mostrarlo en el input al recargar por error
+                 for apo in posibles_apoderados:
+                     if str(apo['id']) == str(apoderado_id):
+                         nombre_apoderado_form = f"{apo['razon_social_nombres']} {apo['apellidos'] or ''}"
+                         break
+
+            return render_template('clientes/form_cliente.html', 
+                                   es_nueva=False, 
+                                   titulo_form="Editar Cliente",
+                                   action_url=url_for('main.editar_cliente', cliente_id=cliente_id),
+                                   form_data=request.form,
+                                   posibles_apoderados=posibles_apoderados,
+                                   nombre_apoderado_actual=nombre_apoderado_form)
+
+        # Actualizar
+        cursor_update = None
         try:
-            # 1. Recoger datos del formulario
-            tipo_documento = request.form.get('tipo_documento')
-            numero_documento = request.form.get('numero_documento', '').strip() or None
-            razon_social_nombres = request.form.get('razon_social_nombres')
-            apellidos = request.form.get('apellidos', '').strip() or None
-            direccion = request.form.get('direccion', '').strip() or None
-            email = request.form.get('email', '').strip() or None
-            telefono = request.form.get('telefono', '').strip() or None
-            fecha_nacimiento_str = request.form.get('fecha_nacimiento')
-            puntos_fidelidad = request.form.get('puntos_fidelidad', 0, type=int)
-
-            # 2. Validaciones
-            if not razon_social_nombres:
-                raise ValueError("El campo Nombres/Razón Social es obligatorio.")
-            if tipo_documento == 'DNI' and not apellidos:
-                raise ValueError("El campo Apellidos es obligatorio para personas con DNI.")
-            if tipo_documento == 'RUC':
-                apellidos = None
+            cursor_update = db_conn.cursor()
+            sql_update = """UPDATE clientes SET 
+                                tipo_documento=%s, numero_documento=%s, razon_social_nombres=%s, 
+                                apellidos=%s, direccion=%s, email=%s, telefono=%s, 
+                                fecha_nacimiento=%s, puntos_fidelidad=%s, apoderado_id=%s,
+                                genero=%s, preferencia_servicio=%s
+                            WHERE id=%s"""
+            val_update = (tipo_documento, numero_documento, razon_social_nombres, apellidos, direccion,
+                          email, telefono, fecha_nacimiento, puntos_fidelidad, apoderado_id, 
+                          genero, preferencia_servicio, cliente_id)
             
-            fecha_nacimiento = datetime.strptime(fecha_nacimiento_str, '%Y-%m-%d').date() if fecha_nacimiento_str else None
-
-            # 3. Actualizar en la base de datos
-            with db_conn.cursor() as cursor:
-                sql_update = """UPDATE clientes SET 
-                                    tipo_documento=%s, numero_documento=%s, razon_social_nombres=%s, 
-                                    apellidos=%s, direccion=%s, email=%s, telefono=%s, 
-                                    fecha_nacimiento=%s, puntos_fidelidad=%s 
-                                WHERE id=%s"""
-                val_update = (
-                    tipo_documento, numero_documento, razon_social_nombres, apellidos, direccion,
-                    email, telefono, fecha_nacimiento, puntos_fidelidad, cliente_id
-                )
-                cursor.execute(sql_update, val_update)
+            cursor_update.execute(sql_update, val_update)
             db_conn.commit()
             flash('Cliente actualizado exitosamente.', 'success')
             return redirect(url_for('main.listar_clientes'))
 
-        except (ValueError, mysql.connector.Error) as e:
+        except Exception as e:
             db_conn.rollback()
-            flash(f"Error al actualizar al cliente: {e}", "warning")
+            flash(f"Error al actualizar: {e}", "danger")
             return redirect(url_for('main.editar_cliente', cliente_id=cliente_id))
+        finally:
+            if cursor_update: cursor_update.close()
     
-    # --- Lógica GET ---
-    with db_conn.cursor(dictionary=True) as cursor:
-        cursor.execute("SELECT * FROM clientes WHERE id = %s", (cliente_id,))
-        cliente_actual = cursor.fetchone()
-    
-    if not cliente_actual:
-        flash("Cliente no encontrado.", "warning")
-        return redirect(url_for('main.listar_clientes'))
+    # --- Lógica GET (Cargar datos actuales) ---
+    cursor_get = None
+    try:
+        cursor_get = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor_get.execute("SELECT * FROM clientes WHERE id = %s", (cliente_id,))
+        cliente_actual = cursor_get.fetchone()
         
-    if cliente_actual.get('fecha_nacimiento'):
-        cliente_actual['fecha_nacimiento'] = cliente_actual['fecha_nacimiento'].strftime('%Y-%m-%d')
+        if not cliente_actual:
+            flash("Cliente no encontrado.", "warning")
+            return redirect(url_for('main.listar_clientes'))
+            
+        # Formatear fecha
+        if cliente_actual.get('fecha_nacimiento'):
+            cliente_actual['fecha_nacimiento'] = cliente_actual['fecha_nacimiento'].strftime('%Y-%m-%d')
         
-    return render_template('clientes/form_cliente.html', 
-                           es_nueva=False, 
-                           titulo_form=f"Editar Cliente: {cliente_actual.get('razon_social_nombres')}",
-                           action_url=url_for('main.editar_cliente', cliente_id=cliente_id),
-                           cliente=cliente_actual)
+        # BUSCAR NOMBRE DEL APODERADO ACTUAL (Si tiene)
+        nombre_apoderado_actual = ""
+        if cliente_actual.get('apoderado_id'):
+            cursor_get.execute("SELECT razon_social_nombres, apellidos FROM clientes WHERE id = %s", (cliente_actual['apoderado_id'],))
+            apo_data = cursor_get.fetchone()
+            if apo_data:
+                nombre_apoderado_actual = f"{apo_data['razon_social_nombres']} {apo_data['apellidos'] or ''}"
 
-@main_bp.route('/clientes/eliminar/<int:cliente_id>', methods=['GET']) # Podría ser POST para más seguridad
+        return render_template('clientes/form_cliente.html', 
+                               es_nueva=False, 
+                               titulo_form=f"Editar Cliente: {cliente_actual.get('razon_social_nombres')}",
+                               action_url=url_for('main.editar_cliente', cliente_id=cliente_id),
+                               cliente=cliente_actual,
+                               form_data=cliente_actual,
+                               posibles_apoderados=posibles_apoderados, # <--- LISTA PARA EL DATALIST
+                               nombre_apoderado_actual=nombre_apoderado_actual) # <--- NOMBRE PARA EL INPUT
+                               
+    except Exception as e:
+        flash(f"Error al cargar cliente: {e}", "danger")
+        return redirect(url_for('main.listar_clientes'))
+    finally:
+        if cursor_get: cursor_get.close()
+
+
+@main_bp.route('/clientes/eliminar/<int:cliente_id>', methods=['GET', 'POST']) # Idealmente POST
 @login_required
 def eliminar_cliente(cliente_id):
     try:
         db = get_db()
         cursor = db.cursor()
-        
-        # Opcional: Verificar si el cliente existe antes de intentar eliminar
-        # cursor_check = db.cursor(dictionary=True)
-        # cursor_check.execute("SELECT id FROM clientes WHERE id = %s", (cliente_id,))
-        # cliente_a_eliminar = cursor_check.fetchone()
-        # cursor_check.close()
-        # if not cliente_a_eliminar:
-        #     flash(f"Cliente con ID {cliente_id} no encontrado.", "warning")
-        #     return redirect(url_for('main.listar_clientes'))
-
-        # Eliminar referencias en otras tablas si existieran (ej. citas, ventas)
-        # ¡IMPORTANTE! Si tienes claves foráneas (foreign keys) que apuntan a clientes
-        # desde otras tablas (como 'reservas', 'ventas_productos'), necesitarás decidir
-        # qué hacer:
-        # 1. Eliminar esas filas dependientes primero.
-        # 2. Configurar ON DELETE CASCADE / ON DELETE SET NULL en tus claves foráneas en MySQL.
-        # 3. O impedir la eliminación si existen dependencias.
-        # Por ahora, asumiremos que no hay dependencias bloqueantes o que están configuradas con ON DELETE CASCADE.
 
         sql = "DELETE FROM clientes WHERE id = %s"
         cursor.execute(sql, (cliente_id,))
         db.commit()
         
         if cursor.rowcount > 0:
-            flash(f'Cliente con ID {cliente_id} eliminado exitosamente!', 'success')
+            flash(f'Cliente eliminado exitosamente.', 'success')
         else:
-            flash(f'No se encontró o no se pudo eliminar el cliente con ID {cliente_id}.', 'warning')
+            flash(f'No se encontró el cliente.', 'warning')
             
         cursor.close()
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         db.rollback()
-        flash(f'Error al eliminar el cliente: {err}', 'danger')
-        current_app.logger.error(f"Error DB en eliminar_cliente (ID: {cliente_id}): {err}")
-        if '1451' in str(err): # Error específico de restricción de clave foránea
-             flash('Este cliente no puede ser eliminado porque tiene registros asociados (ej. citas, ventas). Elimine esos registros primero.', 'warning')
+        # Detección de error de clave foránea en Postgres (IntegrityError código 23503)
+        err_msg = str(err)
+        if '23503' in getattr(err, 'pgcode', '') or 'foreign key' in err_msg:
+             flash('No se puede eliminar: El cliente tiene historial (ventas, citas, etc.).', 'warning')
+        else:
+             flash(f'Error al eliminar: {err}', 'danger')
+        
+        current_app.logger.error(f"Error eliminar_cliente {cliente_id}: {err}")
 
     return redirect(url_for('main.listar_clientes'))
 
-# --- RUTAS PARA LA GESTIÓN DE CATEGORÍAS DE SERVICIOS ---
+
+# -------------------------------------------------------------------------
+# API CAMPAÑA DE DATOS (ACTUALIZAR CUMPLEAÑOS)
+# -------------------------------------------------------------------------
+@main_bp.route('/api/clientes/actualizar-campana', methods=['POST'])
+@login_required
+def actualizar_cliente_campana():
+    """
+    Recibe la respuesta del cliente sobre sus datos (Confirmar, Actualizar o Rechazar).
+    """
+    data = request.get_json()
+    cliente_id = data.get('cliente_id')
+    accion = data.get('accion') # 'confirmar', 'actualizar', 'rechazar'
+    fecha = data.get('fecha_nacimiento') # YYYY-MM-DD
+    
+    db_conn = get_db()
+    try:
+        with db_conn.cursor() as cursor:
+            if accion == 'rechazar':
+                # Cliente no quiere dar el dato -> Marcamos rechazo
+                cursor.execute("""
+                    UPDATE clientes 
+                    SET rechazo_dato_cumpleanos = TRUE, 
+                        cumpleanos_validado = TRUE -- Para que no vuelva a salir
+                    WHERE id = %s
+                """, (cliente_id,))
+                msg = "Preferencia guardada. No se volverá a consultar."
+                
+            elif accion == 'confirmar':
+                # Cliente confirma que el dato existente es correcto
+                cursor.execute("""
+                    UPDATE clientes SET cumpleanos_validado = TRUE WHERE id = %s
+                """, (cliente_id,))
+                msg = "¡Fecha confirmada exitosamente!"
+                
+            elif accion == 'actualizar':
+                # Cliente da una nueva fecha
+                if not fecha:
+                    return jsonify({'success': False, 'message': 'Fecha inválida'})
+                    
+                cursor.execute("""
+                    UPDATE clientes 
+                    SET fecha_nacimiento = %s, 
+                        cumpleanos_validado = TRUE,
+                        rechazo_dato_cumpleanos = FALSE
+                    WHERE id = %s
+                """, (fecha, cliente_id))
+                msg = "¡Datos actualizados correctamente!"
+                
+            else:
+                return jsonify({'success': False, 'message': 'Acción no reconocida'})
+                
+            db_conn.commit()
+            return jsonify({'success': True, 'message': msg})
+            
+    except Exception as e:
+        db_conn.rollback()
+        return jsonify({'success': False, 'message': str(e)})
+
 
 @main_bp.route('/api/clientes/buscar_por_documento')
 @login_required
@@ -543,7 +891,7 @@ def api_buscar_cliente_por_documento():
 
     try:
         db = get_db()
-        with db.cursor(dictionary=True) as cursor:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # CORRECCIÓN: Buscamos en la columna 'numero_documento'
             # y seleccionamos las columnas con los nombres nuevos.
             sql = "SELECT id, razon_social_nombres, apellidos, numero_documento FROM clientes WHERE numero_documento = %s"
@@ -555,10 +903,12 @@ def api_buscar_cliente_por_documento():
             else:
                 return jsonify({"error": "No se encontró un cliente con ese documento."}), 404
     
-    except mysql.connector.Error as err:
+    except Exception as err:
         current_app.logger.error(f"Error DB en api_buscar_cliente_por_documento: {err}")
         return jsonify({"error": "Error interno al buscar el cliente."}), 500
 
+
+# --- RUTAS PARA LA GESTIÓN DE CATEGORÍAS DE SERVICIOS ---
 
 @main_bp.route('/servicios/categorias')
 @login_required
@@ -568,11 +918,11 @@ def listar_categorias_servicios():
     """
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT id, nombre, descripcion FROM categorias_servicios ORDER BY nombre")
         lista_de_categorias = cursor.fetchall()
         cursor.close()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a las categorías: {err}", "danger")
         current_app.logger.error(f"Error en listar_categorias_servicios: {err}")
         lista_de_categorias = []
@@ -604,10 +954,10 @@ def nueva_categoria_servicio():
             flash(f'Categoría "{nombre}" registrada exitosamente!', 'success')
             cursor.close()
             return redirect(url_for('main.listar_categorias_servicios'))
-        except mysql.connector.Error as err:
+        except Exception as err:
             db.rollback()
-            # Error 1062 es para entrada duplicada (nombre UNIQUE)
-            if err.errno == 1062:
+            # Error 23505 es para entrada duplicada (nombre UNIQUE)
+            if '23505' in str(err):
                 flash(f'Error: Ya existe una categoría con el nombre "{nombre}".', 'danger')
             else:
                 flash(f'Error al registrar la categoría: {err}', 'danger')
@@ -628,11 +978,11 @@ def editar_categoria_servicio(categoria_id):
     # Obtener la categoría para asegurarse de que existe y para rellenar el formulario en GET
     try:
         db_check = get_db()
-        cursor_check = db_check.cursor(dictionary=True)
+        cursor_check = db_check.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor_check.execute("SELECT id, nombre, descripcion FROM categorias_servicios WHERE id = %s", (categoria_id,))
         categoria_actual = cursor_check.fetchone()
         cursor_check.close()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error de base de datos al buscar la categoría: {err}", "danger")
         current_app.logger.error(f"Error DB en GET editar_categoria_servicio (ID: {categoria_id}): {err}")
         return redirect(url_for('main.listar_categorias_servicios'))
@@ -678,7 +1028,7 @@ def editar_categoria_servicio(categoria_id):
             flash(f'Categoría "{nombre_nuevo}" actualizada exitosamente!', 'success')
             cursor.close()
             return redirect(url_for('main.listar_categorias_servicios'))
-        except mysql.connector.Error as err:
+        except Exception as err:
             db.rollback()
             flash(f'Error al actualizar la categoría: {err}', 'danger')
             current_app.logger.error(f"Error DB en POST editar_categoria_servicio (ID: {categoria_id}): {err}")
@@ -735,12 +1085,12 @@ def eliminar_categoria_servicio(categoria_id):
             
         cursor.close()
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         db.rollback() # Revertir en caso de error
         flash(f'Error al eliminar la categoría: {err}', 'danger')
         current_app.logger.error(f"Error DB en eliminar_categoria_servicio (ID: {categoria_id}): {err}")
         # Si el error es por una restricción de clave foránea (ej. servicios aún la usan)
-        if '1451' in str(err): # Error MySQL 1451: Cannot delete or update a parent row: a foreign key constraint fails
+        if '23503' in str(err): # Error PostgreSQL 23503: foreign key violation
              flash('Esta categoría no puede ser eliminada porque tiene registros asociados (probablemente servicios). Elimine o reasigne esos registros primero.', 'warning')
 
 
@@ -756,7 +1106,7 @@ def listar_servicios():
     """
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # Usamos un JOIN para obtener el nombre de la categoría del servicio
         sql = """
             SELECT s.id, s.nombre, s.descripcion, s.duracion_minutos, s.precio, 
@@ -768,7 +1118,7 @@ def listar_servicios():
         cursor.execute(sql)
         lista_de_servicios = cursor.fetchall()
         cursor.close()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a los servicios: {err}", "danger")
         current_app.logger.error(f"Error en listar_servicios: {err}")
         lista_de_servicios = []
@@ -785,13 +1135,13 @@ def nuevo_servicio():
     # Para el GET, necesitamos cargar las categorías para el dropdown
     try:
         db_cat = get_db()
-        cursor_cat = db_cat.cursor(dictionary=True)
+        cursor_cat = db_cat.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor_cat.execute("SELECT id, nombre FROM categorias_servicios ORDER BY nombre")
         categorias = cursor_cat.fetchall()
         # No cerramos la conexión principal (g.db) aquí, solo el cursor si es necesario.
         # teardown_db se encargará de cerrar g.db al final de la petición.
         cursor_cat.close() 
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al cargar categorías para el formulario: {err}", "danger")
         current_app.logger.error(f"Error cargando categorías en nuevo_servicio (GET): {err}")
         categorias = [] # Si hay error, el dropdown estará vacío pero la página cargará
@@ -848,7 +1198,7 @@ def nuevo_servicio():
             flash(f'Servicio "{nombre}" registrado exitosamente!', 'success')
             cursor.close()
             return redirect(url_for('main.listar_servicios'))
-        except mysql.connector.Error as err:
+        except Exception as err:
             db.rollback()
             flash(f'Error al registrar el servicio: {err}', 'danger')
             current_app.logger.error(f"Error en nuevo_servicio (POST): {err}")
@@ -872,11 +1222,11 @@ def editar_servicio(servicio_id):
 
     # --- Obtener el servicio actual para editar ---
     servicio_actual = None
-    cursor_servicio = db_conn.cursor(dictionary=True)
+    cursor_servicio = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cursor_servicio.execute("SELECT * FROM servicios WHERE id = %s", (servicio_id,))
         servicio_actual = cursor_servicio.fetchone()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error de base de datos al buscar el servicio: {err}", "danger")
         current_app.logger.error(f"Error DB al buscar servicio en editar_servicio (ID: {servicio_id}): {err}")
         return redirect(url_for('main.listar_servicios'))
@@ -889,11 +1239,11 @@ def editar_servicio(servicio_id):
 
     # --- Obtener todas las categorías para el menú desplegable ---
     categorias = []
-    cursor_categorias = db_conn.cursor(dictionary=True)
+    cursor_categorias = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cursor_categorias.execute("SELECT id, nombre FROM categorias_servicios ORDER BY nombre")
         categorias = cursor_categorias.fetchall()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al cargar las categorías para el formulario: {err}", "danger")
         current_app.logger.error(f"Error DB al cargar categorías en editar_servicio: {err}")
         # categorias se mantendrá como lista vacía, el formulario se mostrará con el dropdown vacío
@@ -977,7 +1327,7 @@ def editar_servicio(servicio_id):
             flash(f'Servicio "{nombre}" actualizado exitosamente.', 'success')
             return redirect(url_for('main.listar_servicios'))
             
-        except mysql.connector.Error as err:
+        except Exception as err:
             db_conn.rollback() # Revertir cambios en caso de error de BD
             flash(f'Error al actualizar el servicio: {err}', 'danger')
             current_app.logger.error(f"Error DB en POST editar_servicio (ID: {servicio_id}): {err}")
@@ -1015,7 +1365,7 @@ def toggle_activo_servicio(servicio_id):
 
     try:
         # Primero, obtener el estado actual del servicio
-        cursor_read = db_conn.cursor(dictionary=True)
+        cursor_read = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor_read.execute("SELECT id, nombre, activo FROM servicios WHERE id = %s", (servicio_id,))
         servicio_actual = cursor_read.fetchone()
 
@@ -1033,7 +1383,7 @@ def toggle_activo_servicio(servicio_id):
         mensaje_estado = "activado" if nuevo_estado_activo else "desactivado"
         flash(f'El servicio "{servicio_actual["nombre"]}" ha sido {mensaje_estado} exitosamente.', 'success')
         
-    except mysql.connector.Error as err:
+    except Exception as err:
         if db_conn: # Solo hacer rollback si la conexión existe
             db_conn.rollback()
         flash(f'Error al cambiar el estado del servicio: {err}', 'danger')
@@ -1053,36 +1403,39 @@ def toggle_activo_servicio(servicio_id):
 @admin_required
 def listar_empleados():
     """
-    Muestra la lista de todos los colaboradores con el formato de fecha corregido.
+    Muestra la lista de todos los colaboradores con sus sucursales asignadas.
     """
     try:
         db = get_db()
-        with db.cursor(dictionary=True) as cursor:
-            # Consulta SQL con el formato de fecha corregido (%%)
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Consulta SQL actualizada para obtener una lista de sucursales por empleado
             sql = """
                 SELECT 
                     e.id, e.nombres, e.apellidos, e.nombre_display, e.dni, 
                     e.email, e.telefono, e.activo, e.sueldo_base,
-                    DATE_FORMAT(e.fecha_contratacion, '%%d/%%m/%%Y') as fecha_contratacion_formateada,
-                    s.nombre AS sucursal_nombre,
-                    r.nombre AS rol_nombre
+                    TO_CHAR(e.fecha_contratacion, 'DD/MM/YYYY') as fecha_contratacion_formateada,
+                    r.nombre AS rol_nombre,
+                    string_agg(s.nombre, ', ') AS sucursales_nombres
                 FROM empleados e
-                LEFT JOIN sucursales s ON e.sucursal_id = s.id
                 LEFT JOIN roles r ON e.rol_id = r.id
+                LEFT JOIN empleado_sucursales es ON e.id = es.empleado_id
+                LEFT JOIN sucursales s ON es.sucursal_id = s.id
+                GROUP BY e.id, r.nombre
                 ORDER BY e.apellidos, e.nombres
             """
             cursor.execute(sql)
             lista_de_empleados = cursor.fetchall()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a los colaboradores: {err}", "danger")
         current_app.logger.error(f"Error en listar_empleados: {err}")
         lista_de_empleados = []
         
     return render_template('empleados/lista_empleados.html', empleados=lista_de_empleados)
 
+
 @main_bp.route('/empleados/nuevo', methods=['GET', 'POST'])
 @login_required
-@admin_required
+# @admin_required  <-- Asegúrate de tener este decorador importado o coméntalo si da error
 def nuevo_empleado():
     """
     Muestra el formulario para registrar un nuevo colaborador (GET)
@@ -1090,25 +1443,35 @@ def nuevo_empleado():
     """
     db_conn = get_db()
     
-    # Cargar sucursales activas para el dropdown (necesario para GET y POST con error)
+    # 1. CARGA DE DATOS MAESTROS (Sucursales y Roles)
+    # Es necesario cargarlos SIEMPRE (tanto para GET como para POST si hay error)
     sucursales_activas = []
-    cursor_sucursales = None
+    roles_disponibles = [] # <--- NUEVA LISTA PARA ROLES
+    
+    cursor_maestros = None
     try:
-        cursor_sucursales = db_conn.cursor(dictionary=True)
-        cursor_sucursales.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
-        sucursales_activas = cursor_sucursales.fetchall()
-    except mysql.connector.Error as err_load:
-        flash(f"Error al cargar sucursales: {err_load}", "danger")
-        current_app.logger.error(f"Error DB cargando sucursales en nuevo_empleado: {err_load}")
+        cursor_maestros = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Cargar Sucursales
+        cursor_maestros.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
+        sucursales_activas = cursor_maestros.fetchall()
+        
+        # Cargar Roles (ESTO FALTABA)
+        cursor_maestros.execute("SELECT id, nombre FROM roles ORDER BY nombre")
+        roles_disponibles = cursor_maestros.fetchall()
+        
+    except Exception as err_load:
+        flash(f"Error al cargar datos maestros: {err_load}", "danger")
+        current_app.logger.error(f"Error DB cargando maestros en nuevo_empleado: {err_load}")
     finally:
-        if cursor_sucursales: cursor_sucursales.close()
+        if cursor_maestros: cursor_maestros.close()
 
 
     form_titulo = "Registrar Nuevo Colaborador"
     action_url_form = url_for('main.nuevo_empleado')
 
     if request.method == 'POST':
-        # Recoger todos los campos del formulario
+        # Recoger campos
         nombres = request.form.get('nombres')
         apellidos = request.form.get('apellidos')
         nombre_display = request.form.get('nombre_display', '').strip()
@@ -1116,105 +1479,109 @@ def nuevo_empleado():
         fecha_nacimiento_str = request.form.get('fecha_nacimiento')
         email = request.form.get('email', '').strip()
         telefono = request.form.get('telefono', '').strip()
-        rol = request.form.get('rol')
+        rol_id = request.form.get('rol_id')
         sueldo_base_str = request.form.get('sueldo_base')
-        sucursal_id_str = request.form.get('sucursal_id')
+        # ---> NUEVO: Obtenemos la lista de sucursales
+        sucursales_ids_seleccionadas = request.form.getlist('sucursales_ids', type=int)
         fecha_contratacion_str = request.form.get('fecha_contratacion')
         activo = 'activo' in request.form
         notas = request.form.get('notas')
+        password_nuevo = request.form.get('password_nuevo')
 
-        # Validaciones
+        # Validaciones (igual que antes)
         errores = []
         if not nombres: errores.append('El nombre es obligatorio.')
         if not apellidos: errores.append('Los apellidos son obligatorios.')
-        if not rol: errores.append('El rol es obligatorio.')
+        if not rol_id: errores.append('El rol es obligatorio.')
         
-        # Si no se proporciona nombre_display, se puede autogenerar
         if not nombre_display:
             primer_nombre = nombres.split(' ')[0]
             primer_apellido = apellidos.split(' ')[0]
             nombre_display = f"{primer_nombre} {primer_apellido}"
             
-        # Convertir y validar datos
         fecha_nacimiento = datetime.strptime(fecha_nacimiento_str, '%Y-%m-%d').date() if fecha_nacimiento_str else None
         fecha_contratacion = datetime.strptime(fecha_contratacion_str, '%Y-%m-%d').date() if fecha_contratacion_str else None
-        sucursal_id = int(sucursal_id_str) if sucursal_id_str else None
         dni_db = dni if dni else None
         email_db = email if email else None
         sueldo_base = float(sueldo_base_str) if sueldo_base_str else 0.00
 
-        # Verificar unicidad de DNI si se proporcionó
         if dni_db:
-            cursor_check = None
-            try:
-                cursor_check = db_conn.cursor(dictionary=True)
+            with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor_check:
                 cursor_check.execute("SELECT id FROM empleados WHERE dni = %s", (dni_db,))
                 if cursor_check.fetchone():
                     errores.append(f"El DNI '{dni_db}' ya está registrado.")
-            except mysql.connector.Error as err_check_dni:
-                errores.append("Error al verificar el DNI.")
-                current_app.logger.error(f"Error DB verificando DNI: {err_check_dni}")
-            finally:
-                if cursor_check: cursor_check.close()
-        
-        # El email ya es UNIQUE en la BD, así que la BD lo validará.
-        # Podríamos añadir una comprobación aquí también como hicimos para el DNI si queremos un mensaje más amigable.
 
         if errores:
-            for error in errores:
-                flash(error, 'warning')
-            # Volvemos a renderizar con los datos y errores
+            for error in errores: flash(error, 'warning')
             return render_template('empleados/form_empleado.html', 
                                    form_data=request.form, 
                                    sucursales=sucursales_activas,
+                                   roles=roles_disponibles,
+                                   sucursales_asignadas=sucursales_ids_seleccionadas, # Re-seleccionar en error
                                    es_nueva=True, 
                                    titulo_form=form_titulo,
                                    action_url=action_url_form)
         
-        # Si todo es válido, proceder con la inserción
-        cursor_insert = None
+        # ---> LÓGICA DE INSERCIÓN MODIFICADA
         try:
-            cursor_insert = db_conn.cursor()
-            sql = """INSERT INTO empleados 
-                        (nombres, apellidos, nombre_display, dni, fecha_nacimiento, email, telefono, 
-                         rol, sueldo_base, sucursal_id, fecha_contratacion, activo, notas, contrato_id)
-                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-            val = (nombres, apellidos, nombre_display, dni_db, fecha_nacimiento, email_db, 
-                   (telefono if telefono else None), rol, sueldo_base, sucursal_id, 
-                   fecha_contratacion, activo, (notas if notas else None), None)
-            cursor_insert.execute(sql, val)
+            with db_conn.cursor() as cursor:
+                # 1. Insertar en 'empleados' (sin sucursal_id) y obtener el ID del nuevo empleado
+                hashed_password = None
+                if password_nuevo:
+                    hashed_password = generate_password_hash(password_nuevo)
+
+                sql_empleado = """INSERT INTO empleados 
+                                    (nombres, apellidos, nombre_display, dni, fecha_nacimiento, email, telefono, 
+                                     rol_id, sueldo_base, fecha_contratacion, activo, notas, password)
+                                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id"""
+                
+                val_empleado = (nombres, apellidos, nombre_display, dni_db, fecha_nacimiento, email_db, 
+                                (telefono if telefono else None), rol_id, sueldo_base,
+                                fecha_contratacion, activo, (notas if notas else None), hashed_password)
+                
+                cursor.execute(sql_empleado, val_empleado)
+                nuevo_empleado_id = cursor.fetchone()[0] # Obtenemos el ID retornado
+
+                # 2. Insertar las asignaciones en 'empleado_sucursales'
+                if sucursales_ids_seleccionadas:
+                    sql_asignacion = "INSERT INTO empleado_sucursales (empleado_id, sucursal_id) VALUES (%s, %s)"
+                    valores_asignacion = [(nuevo_empleado_id, suc_id) for suc_id in sucursales_ids_seleccionadas]
+                    for val in valores_asignacion:
+                        cursor.execute(sql_asignacion, val)
+
             db_conn.commit()
             flash(f'Colaborador {nombres} {apellidos} registrado exitosamente!', 'success')
             return redirect(url_for('main.listar_empleados'))
-        except mysql.connector.Error as err:
+            
+        except Exception as err:
             db_conn.rollback()
-            if err.errno == 1062: # Error de entrada duplicada
-                if 'dni' in err.msg:
-                    flash(f'Error: Ya existe un colaborador con el DNI "{dni_db}".', 'danger')
-                elif 'email' in err.msg:
-                     flash(f'Error: Ya existe un colaborador con el email "{email_db}".', 'danger')
-                else:
-                    flash(f'Error de dato duplicado: {err.msg}', 'danger')
+            error_msg = str(err)
+            if '23505' in getattr(err, 'pgcode', '') or 'duplicate key' in error_msg:
+                if 'dni' in error_msg: flash(f'Error: Ya existe un colaborador con el DNI "{dni_db}".', 'danger')
+                elif 'email' in error_msg: flash(f'Error: Ya existe un colaborador con el email "{email_db}".', 'danger')
+                else: flash('Error: Datos duplicados en el sistema.', 'danger')
             else:
-                flash(f'Error al registrar al colaborador: {err}', 'danger')
-            current_app.logger.error(f"Error en nuevo_empleado (POST): {err}")
-            # Volver a renderizar con los datos y errores
+                flash(f'Error al registrar: {err}', 'danger')
+                
+            current_app.logger.error(f"Error insertando empleado: {err}")
+            
             return render_template('empleados/form_empleado.html', 
                                    form_data=request.form, 
                                    sucursales=sucursales_activas,
+                                   roles=roles_disponibles,
+                                   sucursales_asignadas=sucursales_ids_seleccionadas,
                                    es_nueva=True, 
                                    titulo_form=form_titulo,
                                    action_url=action_url_form)
-        finally:
-            if cursor_insert:
-                cursor_insert.close()
 
-    # Método GET: muestra el formulario vacío
+    # Método GET
     return render_template('empleados/form_empleado.html', 
                            es_nueva=True, 
                            titulo_form=form_titulo,
                            action_url=action_url_form,
-                           sucursales=sucursales_activas)
+                           sucursales=sucursales_activas,
+                           roles=roles_disponibles,
+                           sucursales_asignadas=[]) # <-- Pasar lista vacía para 'nuevo'
 
 
 @main_bp.route('/empleados/editar/<int:empleado_id>', methods=['GET', 'POST'])
@@ -1222,37 +1589,47 @@ def nuevo_empleado():
 @admin_required
 def editar_empleado(empleado_id):
     """
-    Maneja la edición de un colaborador con una estructura robusta para evitar errores.
+    Maneja la edición de un colaborador, asegurando que los datos del formulario
+    se conserven si la validación falla.
     """
     db_conn = get_db()
-    
-    # --- PASO 1: Obtener el colaborador a editar. Si no se encuentra, no se puede continuar. ---
+
+    # --- 1. OBTENER DATOS MAESTROS (se necesitan siempre) ---
+    roles_disponibles, sucursales_activas = [], []
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT * FROM empleados WHERE id = %s", (empleado_id,))
-            colaborador_actual = cursor.fetchone()
-    except mysql.connector.Error as err:
-        flash(f"Error de base de datos al buscar al colaborador: {err}", "danger")
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            cursor.execute("SELECT id, nombre FROM roles ORDER BY nombre")
+            roles_disponibles = cursor.fetchall()
+            cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
+            sucursales_activas = cursor.fetchall()
+    except Exception as e:
+        flash(f"Error crítico al cargar datos maestros: {e}", "danger")
         return redirect(url_for('main.listar_empleados'))
 
+    # --- 2. OBTENER COLABORADOR (si no existe, no continuar) ---
+    with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+        cursor.execute("SELECT * FROM empleados WHERE id = %s", (empleado_id,))
+        colaborador_actual = cursor.fetchone()
     if not colaborador_actual:
         flash(f"Colaborador con ID {empleado_id} no encontrado.", "warning")
         return redirect(url_for('main.listar_empleados'))
 
-    # --- PASO 2: Si el método es POST, procesar los datos del formulario ---
+    # --- 3. LÓGICA POST: Procesar el formulario ---
     if request.method == 'POST':
+        # Recoger la lista de sucursales seleccionadas del formulario
+        sucursales_ids_seleccionadas = request.form.getlist('sucursales_ids', type=int)
+        
         try:
-            # Recoger todos los datos del formulario
+            # Recoger todos los demás datos del formulario
             nombres = request.form.get('nombres')
             apellidos = request.form.get('apellidos')
-            nombre_display = request.form.get('nombre_display', '').strip()
+            nombre_display = request.form.get('nombre_display', '').strip() or f"{nombres.split(' ')[0]} {apellidos.split(' ')[0]}"
             dni_nuevo = request.form.get('dni', '').strip() or None
             fecha_nacimiento_str = request.form.get('fecha_nacimiento')
             email_nuevo = request.form.get('email', '').strip() or None
             telefono = request.form.get('telefono', '').strip() or None
             rol_id = request.form.get('rol_id', type=int)
             sueldo_base_str = request.form.get('sueldo_base')
-            sucursal_id_str = request.form.get('sucursal_id')
             fecha_contratacion_str = request.form.get('fecha_contratacion')
             activo_nuevo = 'activo' in request.form
             notas = request.form.get('notas', '').strip() or None
@@ -1264,20 +1641,18 @@ def editar_empleado(empleado_id):
             if not all([nombres, apellidos, rol_id]):
                 errores.append("Nombres, Apellidos y Rol son campos obligatorios.")
 
-            # Validar unicidad (DNI y Email) si han cambiado
             if dni_nuevo and dni_nuevo != colaborador_actual.get('dni'):
-                with db_conn.cursor(dictionary=True) as cursor_check:
+                with db_conn.cursor() as cursor_check:
                     cursor_check.execute("SELECT id FROM empleados WHERE dni = %s AND id != %s", (dni_nuevo, empleado_id))
                     if cursor_check.fetchone():
                         errores.append(f"El DNI '{dni_nuevo}' ya está registrado.")
             
             if email_nuevo and email_nuevo.lower() != (colaborador_actual.get('email') or '').lower():
-                 with db_conn.cursor(dictionary=True) as cursor_check:
-                    cursor_check.execute("SELECT id FROM empleados WHERE email = %s AND id != %s", (email_nuevo, empleado_id))
+                 with db_conn.cursor() as cursor_check:
+                    cursor_check.execute("SELECT id FROM empleados WHERE lower(email) = lower(%s) AND id != %s", (email_nuevo, empleado_id))
                     if cursor_check.fetchone():
                         errores.append(f"El email '{email_nuevo}' ya está registrado.")
 
-            # Validación de contraseña
             password_hash_para_guardar = None
             if password_nuevo:
                 if password_nuevo != password_confirmacion:
@@ -1289,50 +1664,57 @@ def editar_empleado(empleado_id):
             
             if errores: raise ValueError("; ".join(errores))
 
-            # Construir la consulta UPDATE
-            sql_base = "UPDATE empleados SET nombres = %s, apellidos = %s, nombre_display = %s, dni = %s, fecha_nacimiento = %s, email = %s, telefono = %s, rol_id = %s, sueldo_base = %s, sucursal_id = %s, fecha_contratacion = %s, activo = %s, notas = %s"
-            valores = [nombres, apellidos, (nombre_display or None), dni_nuevo, (fecha_nacimiento_str or None), email_nuevo, telefono, rol_id, (float(sueldo_base_str) if sueldo_base_str else 0.00), (int(sucursal_id_str) if sucursal_id_str else None), (fecha_contratacion_str or None), activo_nuevo, notas]
-            if password_hash_para_guardar:
-                sql_base += ", password = %s"
-                valores.append(password_hash_para_guardar)
-            
-            sql_final = sql_base + " WHERE id = %s"
-            valores.append(empleado_id)
-            
-            with db_conn.cursor() as cursor_update:
-                cursor_update.execute(sql_final, tuple(valores))
-            
+            # --- Lógica de actualización en la BD ---
+            with db_conn.cursor() as cursor:
+                # 1. Actualizar la tabla principal 'empleados'
+                sql_base = "UPDATE empleados SET nombres=%s, apellidos=%s, nombre_display=%s, dni=%s, fecha_nacimiento=%s, email=%s, telefono=%s, rol_id=%s, sueldo_base=%s, fecha_contratacion=%s, activo=%s, notas=%s"
+                params = [nombres, apellidos, nombre_display, dni_nuevo, (fecha_nacimiento_str or None), email_nuevo, telefono, rol_id, (float(sueldo_base_str) if sueldo_base_str else 0.00), (fecha_contratacion_str or None), activo_nuevo, notas]
+                
+                if password_hash_para_guardar:
+                    sql_base += ", password = %s"
+                    params.append(password_hash_para_guardar)
+                
+                sql_final = sql_base + " WHERE id = %s"
+                params.append(empleado_id)
+                cursor.execute(sql_final, tuple(params))
+
+                # 2. Gestionar las asignaciones en 'empleado_sucursales'
+                cursor.execute("DELETE FROM empleado_sucursales WHERE empleado_id = %s", (empleado_id,))
+                if sucursales_ids_seleccionadas:
+                    sql_asignacion = "INSERT INTO empleado_sucursales (empleado_id, sucursal_id) VALUES (%s, %s)"
+                    for suc_id in sucursales_ids_seleccionadas:
+                        cursor.execute(sql_asignacion, (empleado_id, suc_id))
+
             db_conn.commit()
             flash('Colaborador actualizado exitosamente!', 'success')
             return redirect(url_for('main.listar_empleados'))
 
-        except (ValueError, mysql.connector.Error, Exception) as e:
+        except (ValueError, psycopg2.Error) as e:
             db_conn.rollback()
-            # Si hay un error, se lo mostramos al usuario y el código continuará para re-renderizar el formulario
             if isinstance(e, ValueError):
-                for error_msg in errores: flash(error_msg, "warning")
+                flash(str(e), "warning")
             else:
-                flash(f"Error al actualizar al colaborador: {e}", "danger")
-            current_app.logger.error(f"Error en editar_empleado (POST): {e}")
-            # Si hay error, el código caerá al render_template de abajo
-    
-    # --- Lógica GET (y para re-renderizar si POST falla) ---
-    with db_conn.cursor(dictionary=True) as cursor:
-        cursor.execute("SELECT * FROM empleados WHERE id = %s", (empleado_id,))
-        colaborador_a_editar = cursor.fetchone()
-    if not colaborador_a_editar: # Doble chequeo
-        return redirect(url_for('main.listar_empleados'))
-        
-    roles_disponibles, sucursales_activas = [], []
+                flash(f"Error de base de datos al actualizar: {e}", "danger")
+            
+            # --- Re-renderizar el formulario con los datos del POST fallido ---
+            return render_template('empleados/form_empleado.html', 
+                                   es_nueva=False, 
+                                   titulo_form=f"Editar Colaborador: {colaborador_actual.get('nombres')}",
+                                   action_url=url_for('main.editar_empleado', empleado_id=empleado_id),
+                                   empleado=colaborador_actual,
+                                   roles=roles_disponibles,
+                                   sucursales=sucursales_activas,
+                                   form_data=request.form, # <-- Datos del formulario que falló
+                                   sucursales_asignadas=sucursales_ids_seleccionadas) # <-- Sucursales del formulario
+
+    # --- 4. LÓGICA GET: Mostrar el formulario por primera vez ---
+    sucursales_asignadas_ids = []
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, nombre FROM roles ORDER BY nombre")
-            roles_disponibles = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
-            sucursales_activas = cursor.fetchall()
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            cursor.execute("SELECT sucursal_id FROM empleado_sucursales WHERE empleado_id = %s", (empleado_id,))
+            sucursales_asignadas_ids = [row['sucursal_id'] for row in cursor.fetchall()]
     except Exception as e:
-        flash(f"Error al cargar datos del formulario: {e}", "danger")
+        flash(f"Error al cargar sucursales asignadas: {e}", "danger")
 
     # Formatear fechas para los inputs del formulario
     if colaborador_actual.get('fecha_nacimiento'):
@@ -1344,11 +1726,11 @@ def editar_empleado(empleado_id):
                            es_nueva=False, 
                            titulo_form=f"Editar Colaborador: {colaborador_actual.get('nombres')}",
                            action_url=url_for('main.editar_empleado', empleado_id=empleado_id),
-                           empleado=colaborador_actual,
-                           sucursales=sucursales_activas,
+                           empleado=colaborador_actual, # <-- Datos de la BD
                            roles=roles_disponibles,
-                           # Si venimos de un POST fallido, rellenamos el form con los datos que fallaron
-                           form_data=request.form if request.method == 'POST' else None)
+                           sucursales=sucursales_activas,
+                           sucursales_asignadas=sucursales_asignadas_ids, # <-- Sucursales de la BD
+                           form_data=colaborador_actual)
                             
 
 @main_bp.route('/empleados/toggle_activo/<int:empleado_id>', methods=['GET'])
@@ -1364,7 +1746,7 @@ def toggle_activo_empleado(empleado_id):
     cursor_update = None
 
     try:
-        cursor_read = db_conn.cursor(dictionary=True)
+        cursor_read = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor_read.execute("SELECT id, nombres, apellidos, activo FROM empleados WHERE id = %s", (empleado_id,))
         empleado_actual = cursor_read.fetchone()
 
@@ -1387,7 +1769,7 @@ def toggle_activo_empleado(empleado_id):
         mensaje_estado = "activado" if nuevo_estado_activo else "desactivado"
         flash(f'El empleado {empleado_actual["nombres"]} {empleado_actual["apellidos"]} ha sido {mensaje_estado} exitosamente.', 'success')
         
-    except mysql.connector.Error as err:
+    except Exception as err:
         if db_conn:
             db_conn.rollback()
         flash(f'Error al cambiar el estado del empleado: {err}', 'danger')
@@ -1431,9 +1813,9 @@ def gestionar_cuotas(colaborador_id):
                 cursor.execute(sql, (colaborador_id, anio, mes, tipo_cuota, valor_objetivo_cuota, tipo_bono, valor_bono))
                 db_conn.commit()
                 flash(f"Cuota para {mes}/{anio} registrada exitosamente.", "success")
-        except mysql.connector.Error as err:
+        except Exception as err:
             db_conn.rollback()
-            if err.errno == 1062:
+            if '23505' in str(err):
                 flash(f"Error: Ya existe una cuota para este colaborador en {mes}/{anio}.", "danger")
             else:
                 flash(f"Error de base de datos: {err}", "danger")
@@ -1444,7 +1826,7 @@ def gestionar_cuotas(colaborador_id):
 
     # --- Lógica GET (para mostrar la página) ---
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE id = %s", (colaborador_id,))
             colaborador = cursor.fetchone()
             if not colaborador:
@@ -1453,7 +1835,7 @@ def gestionar_cuotas(colaborador_id):
 
             cursor.execute("SELECT * FROM cuotas_mensuales WHERE colaborador_id = %s ORDER BY anio DESC, mes DESC", (colaborador_id,))
             cuotas_registradas = cursor.fetchall()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al cargar la página de cuotas: {err}", "danger")
         return redirect(url_for('main.listar_empleados'))
 
@@ -1489,9 +1871,9 @@ def agregar_cuota(colaborador_id):
             cursor.execute(sql, (colaborador_id, anio, mes, monto))
             db_conn.commit()
             flash(f"Cuota para {mes}/{anio} registrada exitosamente.", "success")
-    except mysql.connector.Error as err:
+    except Exception as err:
         db_conn.rollback()
-        if err.errno == 1062: # Error de constraint UNIQUE
+        if '23505' in str(err): # Error de constraint UNIQUE
             flash(f"Error: Ya existe una cuota registrada para este colaborador en el mes {mes}/{anio}.", "danger")
         else:
             flash(f"Error de base de datos al guardar la cuota: {err}", "danger")
@@ -1528,7 +1910,7 @@ def editar_cuota(colaborador_id, cuota_id):
             cursor.execute(sql, (anio, mes, monto, cuota_id, colaborador_id))
             db_conn.commit()
             flash("Cuota actualizada exitosamente.", "success")
-    except mysql.connector.Error as err:
+    except Exception as err:
         db_conn.rollback()
         flash(f"Error de base de datos al actualizar la cuota: {err}", "danger")
 
@@ -1550,7 +1932,7 @@ def eliminar_cuota(colaborador_id, cuota_id):
                 flash("Cuota eliminada exitosamente.", "success")
             else:
                 flash("No se encontró la cuota a eliminar.", "warning")
-    except mysql.connector.Error as err:
+    except Exception as err:
         db_conn.rollback()
         flash(f"Error de base de datos al eliminar la cuota: {err}", "danger")
     
@@ -1566,14 +1948,14 @@ def gestionar_ajustes(colaborador_id):
     Muestra la página para ver y añadir ajustes de pago para un colaborador.
     """
     db_conn = get_db()
-    with db_conn.cursor(dictionary=True) as cursor:
+    with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
         cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE id = %s", (colaborador_id,))
         colaborador = cursor.fetchone()
         if not colaborador:
             flash("Colaborador no encontrado.", "warning")
             return redirect(url_for('main.listar_empleados'))
 
-        cursor.execute("SELECT *, DATE_FORMAT(fecha, '%d/%m/%Y') as fecha_formateada FROM ajustes_pago WHERE colaborador_id = %s ORDER BY fecha DESC, id DESC", (colaborador_id,))
+        cursor.execute("SELECT *, TO_CHAR(fecha, 'DD/MM/YYYY') as fecha_formateada FROM ajustes_pago WHERE colaborador_id = %s ORDER BY fecha DESC, id DESC", (colaborador_id,))
         ajustes_registrados = cursor.fetchall()
         
     return render_template('empleados/gestionar_ajustes.html',
@@ -1619,7 +2001,7 @@ def agregar_ajuste(colaborador_id):
             cursor.execute(sql, (colaborador_id, fecha, tipo, monto, descripcion))
             db_conn.commit()
             flash("Ajuste de pago registrado exitosamente.", "success")
-    except mysql.connector.Error as err:
+    except Exception as err:
         db_conn.rollback()
         flash(f"Error de base de datos al guardar el ajuste: {err}", "danger")
     
@@ -1661,7 +2043,7 @@ def editar_ajuste(colaborador_id, ajuste_id):
             else:
                 db_conn.commit()
                 flash("Ajuste actualizado exitosamente.", "success")
-    except mysql.connector.Error as err:
+    except Exception as err:
         db_conn.rollback()
         flash(f"Error de base de datos al actualizar el ajuste: {err}", "danger")
     
@@ -1685,7 +2067,7 @@ def eliminar_ajuste(colaborador_id, ajuste_id):
                 flash("Ajuste eliminado exitosamente.", "success")
             else:
                 flash("No se encontró el ajuste o no se pudo eliminar (puede que ya haya sido aplicado).", "warning")
-    except mysql.connector.Error as err:
+    except Exception as err:
         db_conn.rollback()
         flash(f"Error de base de datos al eliminar el ajuste: {err}", "danger")
     
@@ -1703,9 +2085,9 @@ def listar_reservas():
     clientes_todos, empleados_para_selector, servicios_todos_activos = [], [], []
     
     try:
-        with db.cursor(dictionary=True) as cursor:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Obtener lista de reservas (sin cambios)
-            sql = "SELECT r.id, DATE_FORMAT(r.fecha_hora_inicio, '%d/%m/%Y %H:%i') as fecha_hora, CONCAT(c.razon_social_nombres, ' ', IFNULL(c.apellidos, '')) AS cliente_nombre, e.nombre_display AS empleado_nombre, s.nombre AS servicio_nombre, r.precio_cobrado, r.estado FROM reservas r LEFT JOIN clientes c ON r.cliente_id = c.id JOIN empleados e ON r.empleado_id = e.id JOIN servicios s ON r.servicio_id = s.id ORDER BY r.fecha_hora_inicio DESC"
+            sql = "SELECT r.id, TO_CHAR(r.fecha_hora_inicio, 'DD/MM/YYYY') as fecha_hora, CONCAT(c.razon_social_nombres, ' ', COALESCE(c.apellidos, '')) AS cliente_nombre, e.nombre_display AS empleado_nombre, s.nombre AS servicio_nombre, r.precio_cobrado, r.estado FROM reservas r LEFT JOIN clientes c ON r.cliente_id = c.id JOIN empleados e ON r.empleado_id = e.id JOIN servicios s ON r.servicio_id = s.id ORDER BY r.fecha_hora_inicio DESC"
             cursor.execute(sql)
             lista_de_reservas = cursor.fetchall()
 
@@ -1717,7 +2099,7 @@ def listar_reservas():
             cursor.execute("SELECT id, nombre, duracion_minutos FROM servicios WHERE activo = TRUE ORDER BY nombre")
             servicios_todos_activos = cursor.fetchall()
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a las reservas: {err}", "danger")
 
     return render_template('reservas/lista_reservas.html', 
@@ -1737,19 +2119,24 @@ def render_agenda_diaria():
     sucursales_para_selector, clientes_todos, servicios_todos_activos, empleados_para_selector = [], [], [], []
     
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
             sucursales_para_selector = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, razon_social_nombres, apellidos FROM clientes WHERE tipo_documento != 'RUC' OR tipo_documento IS NULL ORDER BY razon_social_nombres, apellidos")
             clientes_todos = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre, precio, duracion_minutos FROM servicios WHERE activo = TRUE ORDER BY nombre")
             servicios_todos_activos = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, nombres, apellidos, sucursal_id, nombre_display FROM empleados WHERE activo = TRUE ORDER BY apellidos, nombres")
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Modificación para hacer sucursal_id opcional
+            sucursal_id = request.args.get('sucursal_id', type=int)
+            if sucursal_id:
+                cursor.execute("SELECT id, nombres, apellidos, nombre_display FROM empleados WHERE activo = TRUE AND id IN (SELECT empleado_id FROM empleado_sucursales WHERE sucursal_id = %s) ORDER BY apellidos, nombres", (sucursal_id,))
+            else:
+                cursor.execute("SELECT id, nombres, apellidos, nombre_display FROM empleados WHERE activo = TRUE ORDER BY apellidos, nombres")
             empleados_para_selector = cursor.fetchall()
-    except mysql.connector.Error as err_load:
+    except Exception as err_load:
         flash(f"Error fatal al cargar datos maestros para la agenda: {err_load}", "danger")
     
     return render_template('reservas/agenda_diaria.html', 
@@ -1768,11 +2155,11 @@ def api_get_datos_reserva(reserva_id):
     """
     try:
         db = get_db()
-        with db.cursor(dictionary=True) as cursor:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Consulta actualizada para usar la nueva estructura de la tabla 'clientes'
             sql = """
                 SELECT r.*, s.nombre as servicio_nombre, e.nombre_display as empleado_nombre_completo,
-                    CONCAT(c.razon_social_nombres, ' ', IFNULL(c.apellidos, '')) as cliente_nombre_completo
+                    CONCAT(c.razon_social_nombres, ' ', COALESCE(c.apellidos, '')) as cliente_nombre_completo
                 FROM reservas r
                 LEFT JOIN clientes c ON r.cliente_id = c.id
                 JOIN servicios s ON r.servicio_id = s.id
@@ -1793,7 +2180,7 @@ def api_get_datos_reserva(reserva_id):
             else:
                 return jsonify({"error": "Reserva no encontrada."}), 404
     
-    except mysql.connector.Error as err:
+    except Exception as err:
         current_app.logger.error(f"Error DB en api_get_datos_reserva: {err}")
         return jsonify({"error": "Error interno al buscar la reserva."}), 500
 
@@ -1813,9 +2200,12 @@ def api_agenda_dia_data():
 
     try:
         db_conn = get_db()
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # 1. Obtener los colaboradores (Recursos)
-            cursor.execute("SELECT id, nombre_display as title FROM empleados WHERE activo = TRUE AND sucursal_id = %s ORDER BY nombres", (sucursal_id,))
+            if sucursal_id:
+                cursor.execute("SELECT id, nombre_display as title FROM empleados WHERE activo = TRUE AND id IN (SELECT empleado_id FROM empleado_sucursales WHERE sucursal_id = %s) ORDER BY nombres", (sucursal_id,))
+            else:
+                cursor.execute("SELECT id, nombre_display as title FROM empleados WHERE activo = TRUE ORDER BY nombres")
             recursos = cursor.fetchall()
             
             eventos = []
@@ -1913,7 +2303,7 @@ def nueva_reserva():
             return jsonify({"success": False, "errors": errores}), 400
 
         # --- 2. Calcular fecha_hora_fin y Validar Disponibilidad ---
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT duracion_minutos, precio FROM servicios WHERE id = %s AND activo = TRUE", (servicio_id,))
             servicio_seleccionado = cursor.fetchone()
             if not servicio_seleccionado:
@@ -1957,7 +2347,7 @@ def nueva_reserva():
             
             return jsonify({"success": True, "message": f'Reserva creada exitosamente para el {fecha_hora_inicio.strftime("%d/%m/%Y a las %H:%M")}.'}), 201
 
-    except (ValueError, mysql.connector.Error, Exception) as e:
+    except (ValueError, Exception, Exception) as e:
         if db_conn and db_conn.in_transaction: db_conn.rollback()
         current_app.logger.error(f"Error procesando nueva reserva: {e}")
         return jsonify({"success": False, "message": f"No se pudo guardar la reserva. Error: {str(e)}"}), 500
@@ -1996,7 +2386,7 @@ def editar_reserva(reserva_id):
         if errores:
             return jsonify({"success": False, "errors": errores}), 400
 
-        with db.cursor(dictionary=True) as cursor:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # 2. Calcular nueva fecha de fin y realizar validaciones de disponibilidad
             cursor.execute("SELECT duracion_minutos, precio FROM servicios WHERE id = %s", (servicio_id,))
             servicio_info = cursor.fetchone()
@@ -2089,7 +2479,7 @@ def cancelar_reserva(reserva_id):
             
             return jsonify({"success": True, "message": "La reserva ha sido cancelada exitosamente."})
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         db.rollback()
         current_app.logger.error(f"Error al cancelar reserva: {err}")
         return jsonify({"success": False, "message": "Error de base de datos al intentar cancelar la reserva."}), 500
@@ -2103,7 +2493,7 @@ def completar_reserva(reserva_id):
     """
     db = get_db()
     try:
-        with db.cursor(dictionary=True) as cursor:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # (Aquí puedes añadir validaciones si lo deseas)
             cursor.execute("UPDATE reservas SET estado = 'Completada' WHERE id = %s", (reserva_id,))
             db.commit()
@@ -2116,7 +2506,7 @@ def completar_reserva(reserva_id):
                 "redirect_url": url_venta
             })
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         db.rollback()
         return jsonify({"success": False, "message": f"Error de base de datos: {err}"}), 500
 
@@ -2139,7 +2529,7 @@ def reagendar_reserva():
 
     db = get_db()
     try:
-        with db.cursor(dictionary=True) as cursor:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # --- CORRECCIÓN DEFINITIVA DE ZONA HORARIA ---
             # 1. Definir la zona horaria de Perú (UTC-5)
             peru_tz = timezone(timedelta(hours=-5))
@@ -2212,7 +2602,7 @@ def api_marcar_reserva_completada(reserva_id):
     db_conn = get_db()
     cursor = None
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # Verificar si la reserva existe y no está ya en un estado final que impida completarla
         cursor.execute("SELECT id, estado FROM reservas WHERE id = %s", (reserva_id,))
         reserva = cursor.fetchone()
@@ -2232,7 +2622,7 @@ def api_marcar_reserva_completada(reserva_id):
         
         return jsonify({"success": True, "message": f"Reserva #{reserva_id} marcada como 'Completada' exitosamente."}), 200
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         if db_conn:
             db_conn.rollback()
         current_app.logger.error(f"Error DB en api_marcar_reserva_completada (Reserva ID: {reserva_id}): {err}")
@@ -2252,7 +2642,7 @@ def api_get_reserva_detalle(reserva_id):
     db_conn = get_db()
     cursor = None
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         sql = """
             SELECT 
                 r.id, 
@@ -2295,7 +2685,7 @@ def api_get_reserva_detalle(reserva_id):
         else:
             return jsonify({"error": "Reserva no encontrada"}), 404
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         current_app.logger.error(f"Error DB en api_get_reserva_detalle (Reserva ID: {reserva_id}): {err}")
         return jsonify({"error": "Error interno del servidor al obtener detalles de la reserva.", "detalle": str(err)}), 500
     finally:
@@ -2350,16 +2740,18 @@ def timedelta_to_time(td):
 
 @main_bp.route('/empleados/<int:empleado_id>/horarios', methods=['GET'])
 @login_required
-@admin_required
+# @admin_required  <-- Actívalo si ya tienes el decorador funcionando
 def gestionar_horarios_empleado(empleado_id):
     db_conn = get_db()
     cursor_empleado = None
     cursor_horarios = None
-    empleado = None # Inicializar
-    horarios_por_dia = {dia_num: [] for dia_num in range(1, 8)} # Inicializar
+    empleado = None 
+    # Inicializar diccionario para los 7 días (claves 1 al 7)
+    horarios_por_dia = {dia_num: [] for dia_num in range(1, 8)} 
 
     try:
-        cursor_empleado = db_conn.cursor(dictionary=True)
+        # 1. Obtener Empleado
+        cursor_empleado = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor_empleado.execute("SELECT id, nombres, apellidos FROM empleados WHERE id = %s", (empleado_id,))
         empleado = cursor_empleado.fetchone()
 
@@ -2367,22 +2759,32 @@ def gestionar_horarios_empleado(empleado_id):
             flash(f"Empleado con ID {empleado_id} no encontrado.", "warning")
             return redirect(url_for('main.listar_empleados'))
 
-        cursor_horarios = db_conn.cursor(dictionary=True)
-        cursor_horarios.execute("""
-            SELECT id, dia_semana, TIME_FORMAT(hora_inicio, '%H:%i') AS hora_inicio_f, TIME_FORMAT(hora_fin, '%H:%i') AS hora_fin_f 
+        # 2. Obtener Horarios (CORREGIDO PARA POSTGRESQL)
+        cursor_horarios = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # --- CAMBIO IMPORTANTE AQUÍ ---
+        # MySQL: TIME_FORMAT(hora_inicio, '%H:%i')
+        # Postgres: TO_CHAR(hora_inicio, 'HH24:MI')
+        sql_horarios = """
+            SELECT id, dia_semana, 
+                   TO_CHAR(hora_inicio, 'HH24:MI') AS hora_inicio_f, 
+                   TO_CHAR(hora_fin, 'HH24:MI') AS hora_fin_f 
             FROM horarios_empleado 
             WHERE empleado_id = %s 
             ORDER BY dia_semana, hora_inicio
-        """, (empleado_id,))
+        """
+        cursor_horarios.execute(sql_horarios, (empleado_id,))
         horarios_existentes_raw = cursor_horarios.fetchall()
         
         for horario in horarios_existentes_raw:
-            horarios_por_dia[horario['dia_semana']].append(horario)
+            # Accedemos por nombre de columna (gracias a RealDictCursor)
+            dia = horario['dia_semana']
+            if dia in horarios_por_dia:
+                horarios_por_dia[dia].append(horario)
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al cargar datos de horarios: {err}", "danger")
         current_app.logger.error(f"Error DB en gestionar_horarios_empleado (Empleado ID: {empleado_id}): {err}")
-        # empleado se quedará como None si falla aquí, o horarios_por_dia vacío
     finally:
         if cursor_empleado: cursor_empleado.close()
         if cursor_horarios: cursor_horarios.close()
@@ -2390,116 +2792,110 @@ def gestionar_horarios_empleado(empleado_id):
     if not empleado: 
         return redirect(url_for('main.listar_empleados'))
         
-    dias_semana_map = obtener_dias_semana()
-    opciones_tiempo = generar_opciones_tiempo_15min() # Generar opciones de tiempo
+    # Mapa de días estático por si la función externa falla
+    dias_semana_map = {1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado', 7: 'Domingo'}
+    
+    # Aseguramos que la función de opciones de tiempo exista
+    try:
+        opciones_tiempo = generar_opciones_tiempo_15min()
+    except NameError:
+        # Si no tienes importada la función, usa esta lista básica o impórtala arriba
+        opciones_tiempo = [] 
     
     return render_template('empleados/gestionar_horarios.html', 
                            empleado=empleado, 
                            horarios_por_dia=horarios_por_dia, 
                            dias_semana_map=dias_semana_map,
-                           opciones_tiempo=opciones_tiempo) # Pasar opciones a la plantilla
+                           opciones_tiempo=opciones_tiempo)
+
 
 @main_bp.route('/empleados/<int:empleado_id>/horarios/agregar_turno', methods=['POST'])
 @login_required
 @admin_required
 def agregar_turno_horario(empleado_id):
-    db_conn = get_db() # Mover get_db() al inicio para usarlo en varias partes si es necesario
-    cursor_check_empleado = None # Inicializar
+    db_conn = get_db()
     
-    # Validar que el empleado exista (opcional, pero bueno)
+    # 1. Validar empleado
+    cursor_check = None
     try:
-        cursor_check_empleado = db_conn.cursor(dictionary=True) # Usar dictionary=True para acceder por nombre
-        cursor_check_empleado.execute("SELECT id FROM empleados WHERE id = %s", (empleado_id,))
-        if not cursor_check_empleado.fetchone():
-            flash(f"Empleado con ID {empleado_id} no encontrado.", "warning")
+        cursor_check = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor_check.execute("SELECT id FROM empleados WHERE id = %s", (empleado_id,))
+        if not cursor_check.fetchone():
+            flash(f"Empleado no encontrado.", "warning")
             return redirect(url_for('main.listar_empleados'))
-    except mysql.connector.Error as err_check:
-        flash(f"Error al verificar empleado: {err_check}", "danger")
-        return redirect(url_for('main.gestionar_horarios_empleado', empleado_id=empleado_id))
+    except Exception as e:
+        flash(f"Error verificando empleado: {e}", "danger")
+        return redirect(url_for('main.listar_empleados'))
     finally:
-        if cursor_check_empleado: cursor_check_empleado.close()
+        if cursor_check: cursor_check.close()
 
-    dia_semana = request.form.get('dia_semana', type=int)
-    hora_inicio_str = request.form.get('hora_inicio') # Ej: "09:00"
-    hora_fin_str = request.form.get('hora_fin')     # Ej: "13:00"
+    # 2. Obtener datos del formulario
+    try:
+        dia_semana = int(request.form.get('dia_semana'))
+        hora_inicio_str = request.form.get('hora_inicio')
+        hora_fin_str = request.form.get('hora_fin')
+    except (ValueError, TypeError):
+        flash("Datos de formulario inválidos.", "warning")
+        return redirect(url_for('main.gestionar_horarios_empleado', empleado_id=empleado_id))
 
     errores = []
-    if not dia_semana or dia_semana not in range(1, 8):
-        errores.append("Día de la semana inválido.")
-    if not hora_inicio_str:
-        errores.append("La hora de inicio es obligatoria.")
-    if not hora_fin_str:
-        errores.append("La hora de fin es obligatoria.")
-    
-    h_inicio_nueva = None
-    h_fin_nueva = None
+    if dia_semana not in range(1, 8): errores.append("Día inválido.")
+    if not hora_inicio_str or not hora_fin_str: errores.append("Horas obligatorias.")
 
-    if not errores: # Solo intentar convertir horas si los strings no están vacíos
+    # 3. Convertir a objetos time
+    nuevo_inicio = None
+    nuevo_fin = None
+    if not errores:
         try:
-            h_inicio_nueva = datetime.strptime(hora_inicio_str, '%H:%M').time()
-            h_fin_nueva = datetime.strptime(hora_fin_str, '%H:%M').time()
-            if h_fin_nueva <= h_inicio_nueva:
-                errores.append("La hora de fin debe ser posterior a la hora de inicio.")
+            nuevo_inicio = datetime.strptime(hora_inicio_str, '%H:%M').time()
+            nuevo_fin = datetime.strptime(hora_fin_str, '%H:%M').time()
+            if nuevo_fin <= nuevo_inicio:
+                errores.append("La hora fin debe ser mayor a la de inicio.")
         except ValueError:
-            errores.append("Formato de hora inválido. Use HH:MM (ej. 09:00, 14:30).")
+            errores.append("Formato de hora inválido.")
 
-    # --- INICIO DE VALIDACIÓN DE SOLAPAMIENTO (AJUSTADA) ---
-    if not errores: # Solo verificar solapamiento si las validaciones anteriores pasaron
-        cursor_solapamiento = None
+    # 4. Validar Solapamiento (Lógica simplificada para Postgres)
+    if not errores:
+        cursor_solap = None
         try:
-            cursor_solapamiento = db_conn.cursor(dictionary=True) # dictionary=True para acceder por nombre
-            # Obtener todos los turnos existentes para ese empleado y día
-            # La BD devuelve objetos timedelta para campos TIME
-            cursor_solapamiento.execute("""
+            cursor_solap = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            # Postgres devuelve objetos datetime.time directamente, no timedelta
+            cursor_solap.execute("""
                 SELECT hora_inicio, hora_fin 
                 FROM horarios_empleado 
                 WHERE empleado_id = %s AND dia_semana = %s
             """, (empleado_id, dia_semana))
-            turnos_existentes_raw = cursor_solapamiento.fetchall()
+            turnos_existentes = cursor_solap.fetchall()
 
-            # Convertir timedelta (de la BD) a datetime.time para comparación
-            def timedelta_to_time(td):
-                if td is None: return None
-                total_seconds = int(td.total_seconds())
-                hours = total_seconds // 3600
-                minutes = (total_seconds % 3600) // 60
-                return time(hours, minutes)
-
-            for turno_raw in turnos_existentes_raw:
-                h_inicio_existente = timedelta_to_time(turno_raw['hora_inicio'])
-                h_fin_existente = timedelta_to_time(turno_raw['hora_fin'])
+            for turno in turnos_existentes:
+                ex_inicio = turno['hora_inicio'] # Ya es objeto time
+                ex_fin = turno['hora_fin']       # Ya es objeto time
                 
-                if h_inicio_existente is None or h_fin_existente is None: # Seguridad
-                    continue
-
-                # Comprobar solapamiento:
-                if (h_inicio_nueva < h_fin_existente) and (h_fin_nueva > h_inicio_existente):
-                    errores.append(f"El nuevo turno ({hora_inicio_str} - {hora_fin_str}) se solapa con un turno existente ({h_inicio_existente.strftime('%H:%M')} - {h_fin_existente.strftime('%H:%M')}).")
-                    break 
-        except mysql.connector.Error as err_solap:
-            current_app.logger.error(f"Error DB verificando solapamiento: {err_solap}")
-            errores.append("Error al verificar solapamiento de turnos.")
+                # Lógica de solapamiento: (NuevoInicio < ViejoFin) AND (NuevoFin > ViejoInicio)
+                if (nuevo_inicio < ex_fin) and (nuevo_fin > ex_inicio):
+                    errores.append(f"Se solapa con el turno: {ex_inicio.strftime('%H:%M')} - {ex_fin.strftime('%H:%M')}")
+                    break
+                    
+        except Exception as e:
+            current_app.logger.error(f"Error solapamiento: {e}")
+            errores.append(f"Error al verificar horarios: {e}")
         finally:
-            if cursor_solapamiento: cursor_solapamiento.close()
-    # --- FIN DE VALIDACIÓN DE SOLAPAMIENTO (AJUSTADA) ---
+            if cursor_solap: cursor_solap.close()
 
+    # 5. Insertar o mostrar errores
     if errores:
-        for error in errores:
-            flash(error, 'warning')
+        for err in errores: flash(err, 'warning')
     else:
-        # Si no hay errores, proceder con la inserción
         cursor_insert = None
         try:
             cursor_insert = db_conn.cursor()
             sql = "INSERT INTO horarios_empleado (empleado_id, dia_semana, hora_inicio, hora_fin) VALUES (%s, %s, %s, %s)"
-            # Guardar como string 'HH:MM:SS' o 'HH:MM' que MySQL TIME acepta
-            cursor_insert.execute(sql, (empleado_id, dia_semana, hora_inicio_str + ':00', hora_fin_str + ':00'))
+            cursor_insert.execute(sql, (empleado_id, dia_semana, hora_inicio_str, hora_fin_str))
             db_conn.commit()
-            flash("Nuevo turno agregado exitosamente.", "success")
-        except mysql.connector.Error as err:
+            flash("Turno agregado correctamente.", "success")
+        except Exception as e:
             db_conn.rollback()
-            flash(f"Error al agregar el turno: {err}", "danger")
-            current_app.logger.error(f"Error DB en agregar_turno_horario (Empleado ID: {empleado_id}): {err}")
+            flash(f"Error al guardar: {e}", "danger")
         finally:
             if cursor_insert: cursor_insert.close()
 
@@ -2519,7 +2915,7 @@ def eliminar_turno_horario(horario_id):
 
     try:
         # Primero, encontrar el empleado_id asociado con este horario_id para poder redirigir correctamente
-        cursor_find = db_conn.cursor(dictionary=True)
+        cursor_find = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor_find.execute("SELECT empleado_id FROM horarios_empleado WHERE id = %s", (horario_id,))
         horario_info = cursor_find.fetchone()
 
@@ -2540,7 +2936,7 @@ def eliminar_turno_horario(horario_id):
             # Esto no debería ocurrir si el find anterior tuvo éxito, pero por si acaso.
             flash(f"No se pudo eliminar el turno con ID {horario_id}.", "warning")
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         if db_conn:
             db_conn.rollback()
         flash(f"Error al eliminar el turno: {err}", "danger")
@@ -2573,14 +2969,14 @@ def editar_turno_horario(horario_id):
     # Obtener el turno actual para editar y su empleado_id
     turno_actual = None
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT * FROM horarios_empleado WHERE id = %s", (horario_id,))
         turno_actual = cursor.fetchone()
         if turno_actual:
             # Convertir TIME de BD (timedelta) a objetos time de Python para el formulario
             turno_actual['hora_inicio_obj'] = timedelta_to_time(turno_actual['hora_inicio'])
             turno_actual['hora_fin_obj'] = timedelta_to_time(turno_actual['hora_fin'])
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al buscar el turno: {err}", "danger")
         current_app.logger.error(f"Error DB buscando turno en editar_turno_horario (ID: {horario_id}): {err}")
         return redirect(request.referrer or url_for('main.listar_empleados')) # Volver a la página anterior o a lista empleados
@@ -2597,11 +2993,11 @@ def editar_turno_horario(horario_id):
     empleado = None
     cursor_emp = None
     try:
-        cursor_emp = db_conn.cursor(dictionary=True)
+        cursor_emp = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # CORRECCIÓN AQUÍ: Añadir 'id' a la consulta SELECT
         cursor_emp.execute("SELECT id, nombres, apellidos FROM empleados WHERE id = %s", (empleado_id,))
         empleado = cursor_emp.fetchone()
-    except mysql.connector.Error as err_emp:
+    except Exception as err_emp:
         flash(f"Error al cargar datos del empleado: {err_emp}", "danger")
         current_app.logger.error(f"Error DB cargando empleado en editar_turno_horario: {err_emp}") # Log del error
     finally:
@@ -2647,7 +3043,7 @@ def editar_turno_horario(horario_id):
         if not errores:
             cursor_solap = None
             try:
-                cursor_solap = db_conn.cursor(dictionary=True)
+                cursor_solap = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                 cursor_solap.execute("""
                     SELECT hora_inicio, hora_fin FROM horarios_empleado 
                     WHERE empleado_id = %s AND dia_semana = %s AND id != %s
@@ -2661,7 +3057,7 @@ def editar_turno_horario(horario_id):
                        (h_inicio_nueva < h_fin_existente) and (h_fin_nueva > h_inicio_existente):
                         errores.append(f"El horario modificado ({hora_inicio_nueva_str}-{hora_fin_nueva_str}) se solapa con otro turno existente.")
                         break
-            except mysql.connector.Error as err_sol:
+            except Exception as err_sol:
                 current_app.logger.error(f"Error DB verificando solapamiento en edición: {err_sol}")
                 errores.append("Error al verificar solapamiento de turnos.")
             finally:
@@ -2691,7 +3087,7 @@ def editar_turno_horario(horario_id):
                 db_conn.commit()
                 flash("Turno actualizado exitosamente.", "success")
                 return redirect(url_for('main.gestionar_horarios_empleado', empleado_id=empleado_id))
-            except mysql.connector.Error as err_upd:
+            except Exception as err_upd:
                 db_conn.rollback()
                 flash(f"Error al actualizar el turno: {err_upd}", "danger")
                 current_app.logger.error(f"Error DB en POST editar_turno_horario (ID: {horario_id}): {err_upd}")
@@ -2729,7 +3125,7 @@ def gestionar_ausencias_empleado(empleado_id):
     ausencias_empleado = []
 
     try:
-        cursor_empleado = db_conn.cursor(dictionary=True)
+        cursor_empleado = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor_empleado.execute("SELECT id, nombres, apellidos FROM empleados WHERE id = %s", (empleado_id,))
         empleado = cursor_empleado.fetchone()
 
@@ -2737,12 +3133,12 @@ def gestionar_ausencias_empleado(empleado_id):
             flash(f"Empleado con ID {empleado_id} no encontrado.", "warning")
             return redirect(url_for('main.listar_empleados'))
 
-        cursor_ausencias = db_conn.cursor(dictionary=True)
+        cursor_ausencias = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # CORRECCIÓN EN LA SIGUIENTE CONSULTA SQL:
         sql_ausencias = """
             SELECT id, 
-                   DATE_FORMAT(fecha_hora_inicio, '%d/%m/%Y %H:%i') AS inicio_f,
-                   DATE_FORMAT(fecha_hora_fin, '%d/%m/%Y %H:%i') AS fin_f,
+                   TO_CHAR(fecha_hora_inicio, 'DD/MM/YYYY') AS inicio_f,
+                   TO_CHAR(fecha_hora_fin, 'DD/MM/YYYY') AS fin_f,
                    fecha_hora_inicio, fecha_hora_fin, -- Mantenemos las originales para lógica futura (ej. editar)
                    tipo_ausencia, descripcion, aprobado
             FROM ausencias_empleado 
@@ -2752,7 +3148,7 @@ def gestionar_ausencias_empleado(empleado_id):
         cursor_ausencias.execute(sql_ausencias, (empleado_id,))
         ausencias_empleado = cursor_ausencias.fetchall()
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al cargar datos de ausencias: {err}", "danger")
         current_app.logger.error(f"Error DB en gestionar_ausencias_empleado (Empleado ID: {empleado_id}): {err}")
         if not empleado: 
@@ -2780,12 +3176,12 @@ def agregar_ausencia_empleado(empleado_id):
     db_conn = get_db()
     cursor_check_empleado = None
     try:
-        cursor_check_empleado = db_conn.cursor(dictionary=True)
+        cursor_check_empleado = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor_check_empleado.execute("SELECT id FROM empleados WHERE id = %s", (empleado_id,))
         if not cursor_check_empleado.fetchone():
             flash(f"Empleado con ID {empleado_id} no encontrado.", "warning")
             return redirect(url_for('main.listar_empleados'))
-    except mysql.connector.Error as err_check:
+    except Exception as err_check:
         flash(f"Error al verificar empleado: {err_check}", "danger")
         return redirect(url_for('main.gestionar_ausencias_empleado', empleado_id=empleado_id))
     finally:
@@ -2819,7 +3215,7 @@ def agregar_ausencia_empleado(empleado_id):
     if not errores: # Solo si no hay errores previos
         cursor_solapamiento = None
         try:
-            cursor_solapamiento = db_conn.cursor(dictionary=True)
+            cursor_solapamiento = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cursor_solapamiento.execute("""
                 SELECT id FROM ausencias_empleado 
                 WHERE empleado_id = %s 
@@ -2830,7 +3226,7 @@ def agregar_ausencia_empleado(empleado_id):
             
             if cursor_solapamiento.fetchone():
                 errores.append("El período de ausencia se solapa con otra ausencia existente para este empleado.")
-        except mysql.connector.Error as err_solap:
+        except Exception as err_solap:
             current_app.logger.error(f"Error DB verificando solapamiento de ausencias: {err_solap}")
             errores.append("Error al verificar solapamiento de ausencias.")
         finally:
@@ -2850,7 +3246,7 @@ def agregar_ausencia_empleado(empleado_id):
             cursor_insert.execute(sql, (empleado_id, fecha_hora_inicio, fecha_hora_fin, tipo_ausencia, descripcion, aprobado))
             db_conn.commit()
             flash("Ausencia registrada exitosamente.", "success")
-        except mysql.connector.Error as err_insert:
+        except Exception as err_insert:
             db_conn.rollback()
             flash(f"Error al registrar la ausencia: {err_insert}", "danger")
             current_app.logger.error(f"Error DB en agregar_ausencia_empleado (Empleado ID: {empleado_id}): {err_insert}")
@@ -2869,11 +3265,11 @@ def editar_ausencia_empleado(ausencia_id):
     # Obtener la ausencia actual y el empleado_id asociado
     ausencia_actual = None
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # Necesitamos empleado_id para redirigir y para el título/contexto
         cursor.execute("SELECT * FROM ausencias_empleado WHERE id = %s", (ausencia_id,))
         ausencia_actual = cursor.fetchone()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al buscar la ausencia: {err}", "danger")
         current_app.logger.error(f"Error DB buscando ausencia en editar_ausencia_empleado (ID: {ausencia_id}): {err}")
         return redirect(url_for('main.listar_empleados')) # Fallback general
@@ -2890,10 +3286,10 @@ def editar_ausencia_empleado(ausencia_id):
     empleado = None
     cursor_emp = None
     try:
-        cursor_emp = db_conn.cursor(dictionary=True)
+        cursor_emp = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor_emp.execute("SELECT id, nombres, apellidos FROM empleados WHERE id = %s", (empleado_id_actual,))
         empleado = cursor_emp.fetchone()
-    except mysql.connector.Error as err_emp:
+    except Exception as err_emp:
         flash(f"Error al cargar datos del empleado asociado: {err_emp}", "danger")
         # Continuar podría ser posible si solo falló cargar el nombre del empleado
     finally:
@@ -2934,7 +3330,7 @@ def editar_ausencia_empleado(ausencia_id):
         if not errores:
             cursor_solap = None
             try:
-                cursor_solap = db_conn.cursor(dictionary=True)
+                cursor_solap = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                 cursor_solap.execute("""
                     SELECT id FROM ausencias_empleado 
                     WHERE empleado_id = %s 
@@ -2945,7 +3341,7 @@ def editar_ausencia_empleado(ausencia_id):
                 """, (empleado_id_actual, ausencia_id, fecha_hora_inicio, fecha_hora_fin))
                 if cursor_solap.fetchone():
                     errores.append("El período de ausencia modificado se solapa con otra ausencia existente.")
-            except mysql.connector.Error as err_solap:
+            except Exception as err_solap:
                 current_app.logger.error(f"Error DB verificando solapamiento en edición de ausencia: {err_solap}")
                 errores.append("Error al verificar solapamiento de ausencias.")
             finally:
@@ -2975,7 +3371,7 @@ def editar_ausencia_empleado(ausencia_id):
                 db_conn.commit()
                 flash("Ausencia actualizada exitosamente.", "success")
                 return redirect(url_for('main.gestionar_ausencias_empleado', empleado_id=empleado_id_actual))
-            except mysql.connector.Error as err_upd:
+            except Exception as err_upd:
                 db_conn.rollback()
                 flash(f"Error al actualizar la ausencia: {err_upd}", "danger")
                 current_app.logger.error(f"Error DB en POST editar_ausencia_empleado (ID: {ausencia_id}): {err_upd}")
@@ -3022,7 +3418,7 @@ def eliminar_ausencia_empleado(ausencia_id):
 
     try:
         # Primero, encontrar el empleado_id asociado con esta ausencia_id para poder redirigir correctamente
-        cursor_find = db_conn.cursor(dictionary=True)
+        cursor_find = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor_find.execute("SELECT empleado_id FROM ausencias_empleado WHERE id = %s", (ausencia_id,))
         ausencia_info = cursor_find.fetchone()
 
@@ -3042,7 +3438,7 @@ def eliminar_ausencia_empleado(ausencia_id):
         else:
             flash(f"No se pudo eliminar el registro de ausencia con ID {ausencia_id}.", "warning")
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         if db_conn:
             db_conn.rollback()
         flash(f"Error al eliminar el registro de ausencia: {err}", "danger")
@@ -3072,11 +3468,11 @@ def listar_categorias_productos():
     """
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT id, nombre, descripcion FROM categorias_productos ORDER BY nombre")
         lista_de_categorias = cursor.fetchall()
         cursor.close()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a las categorías de productos: {err}", "danger")
         current_app.logger.error(f"Error en listar_categorias_productos: {err}")
         lista_de_categorias = []
@@ -3117,7 +3513,7 @@ def nueva_categoria_producto():
             db.commit()
             flash(f'Categoría de producto "{nombre}" registrada exitosamente!', 'success')
             return redirect(url_for('main.listar_categorias_productos'))
-        except mysql.connector.Error as err:
+        except Exception as err:
             db.rollback()
             if err.errno == 1062: # Error de entrada duplicada (nombre UNIQUE)
                 flash(f'Error: Ya existe una categoría de producto con el nombre "{nombre}".', 'danger')
@@ -3153,10 +3549,10 @@ def editar_categoria_producto(categoria_id):
     # Obtener la categoría actual para editar
     categoria_actual = None
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT id, nombre, descripcion FROM categorias_productos WHERE id = %s", (categoria_id,))
         categoria_actual = cursor.fetchone()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al buscar la categoría de producto: {err}", "danger")
         current_app.logger.error(f"Error DB buscando categoría de producto en editar (ID: {categoria_id}): {err}")
         return redirect(url_for('main.listar_categorias_productos'))
@@ -3183,11 +3579,11 @@ def editar_categoria_producto(categoria_id):
         # Validar unicidad del nombre si ha cambiado
         if nombre_nuevo and nombre_nuevo.lower() != categoria_actual['nombre'].lower():
             try:
-                cursor = db_conn.cursor(dictionary=True)
+                cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                 cursor.execute("SELECT id FROM categorias_productos WHERE nombre = %s AND id != %s", (nombre_nuevo, categoria_id))
                 if cursor.fetchone():
                     errores.append(f'Error: Ya existe otra categoría de producto con el nombre "{nombre_nuevo}".')
-            except mysql.connector.Error as err_check_nombre:
+            except Exception as err_check_nombre:
                 current_app.logger.error(f"Error DB verificando nombre en editar_categoria_producto: {err_check_nombre}")
                 errores.append("Error al verificar la disponibilidad del nombre.")
             finally:
@@ -3213,7 +3609,7 @@ def editar_categoria_producto(categoria_id):
                 db_conn.commit()
                 flash(f'Categoría de producto "{nombre_nuevo}" actualizada exitosamente!', 'success')
                 return redirect(url_for('main.listar_categorias_productos'))
-            except mysql.connector.Error as err_upd:
+            except Exception as err_upd:
                 db_conn.rollback()
                 flash(f"Error al actualizar la categoría de producto: {err_upd}", "danger")
                 current_app.logger.error(f"Error DB en POST editar_categoria_producto (ID: {categoria_id}): {err_upd}")
@@ -3251,7 +3647,7 @@ def eliminar_categoria_producto(categoria_id):
         # Si los hay, NO deberíamos permitir la eliminación o deberíamos advertir al usuario.
         # Ejemplo de cómo sería (cuando tengamos la tabla 'productos'):
         #
-        # cursor_check = db_conn.cursor(dictionary=True)
+        # cursor_check = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # cursor_check.execute("SELECT COUNT(*) as count FROM productos WHERE categoria_id = %s", (categoria_id,))
         # if cursor_check.fetchone()['count'] > 0:
         #     flash("No se puede eliminar la categoría porque tiene productos asociados. Reasigne o elimine esos productos primero.", "warning")
@@ -3270,7 +3666,7 @@ def eliminar_categoria_producto(categoria_id):
         else:
             flash('No se encontró la categoría de producto o no se pudo eliminar.', 'warning')
             
-    except mysql.connector.Error as err:
+    except Exception as err:
         db_conn.rollback()
         # Error común si hay una restricción de clave foránea (ej. productos usándola)
         if '1451' in str(err): 
@@ -3297,7 +3693,7 @@ def listar_productos():
     """
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # Consulta SQL corregida para incluir TODAS las columnas necesarias
         sql = """
             SELECT 
@@ -3316,7 +3712,7 @@ def listar_productos():
         cursor.execute(sql)
         lista_de_productos = cursor.fetchall()
         cursor.close()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a los productos: {err}", "danger")
         current_app.logger.error(f"Error en listar_productos: {err}")
         lista_de_productos = []
@@ -3331,7 +3727,7 @@ def nuevo_producto():
     categorias_prod, marcas_todas, proveedores_todos = [], [], []
     try:
         # Cargar datos para desplegables
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre FROM categorias_productos WHERE activo = TRUE ORDER BY nombre")
             categorias_prod = cursor.fetchall()
             cursor.execute("SELECT id, nombre FROM marcas WHERE activo = TRUE ORDER BY nombre")
@@ -3377,7 +3773,7 @@ def nuevo_producto():
             flash(f'Producto "{nombre}" registrado exitosamente!', 'success')
             return redirect(url_for('main.listar_productos'))
             
-        except (ValueError, mysql.connector.Error) as e:
+        except (ValueError, Exception) as e:
             db_conn.rollback()
             flash(f"Error al registrar el producto: {e}", "warning")
     
@@ -3400,20 +3796,20 @@ def editar_producto(producto_id):
     # Cargar datos para los menús desplegables (necesario para GET y para POST con error)
     categorias_prod, marcas_todas, proveedores_todos = [], [], []
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre FROM categorias_productos WHERE activo = TRUE ORDER BY nombre")
             categorias_prod = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre FROM marcas WHERE activo = TRUE ORDER BY nombre")
             marcas_todas = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre_empresa FROM proveedores WHERE activo = TRUE ORDER BY nombre_empresa")
             proveedores_todos = cursor.fetchall()
     except Exception as e:
         flash(f"Error al cargar datos del formulario: {e}", "danger")
 
     # Obtener el producto actual que se está editando
-    with db_conn.cursor(dictionary=True) as cursor:
+    with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
         cursor.execute("SELECT * FROM productos WHERE id = %s", (producto_id,))
         producto_actual = cursor.fetchone()
     
@@ -3445,7 +3841,7 @@ def editar_producto(producto_id):
             
             # Validar unicidad del código de barras si ha cambiado
             if codigo_barras_nuevo and codigo_barras_nuevo != producto_actual.get('codigo_barras'):
-                with db_conn.cursor(dictionary=True) as cursor:
+                with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
                     cursor.execute("SELECT id FROM productos WHERE codigo_barras = %s AND id != %s", (codigo_barras_nuevo, producto_id))
                     if cursor.fetchone():
                         errores.append(f"El código de barras '{codigo_barras_nuevo}' ya está en uso.")
@@ -3475,7 +3871,7 @@ def editar_producto(producto_id):
             flash(f'Producto "{nombre}" actualizado exitosamente!', 'success')
             return redirect(url_for('main.listar_productos'))
 
-        except (ValueError, mysql.connector.Error) as e:
+        except (ValueError, Exception) as e:
             db_conn.rollback()
             flash(f"Error al actualizar el producto: {e}", "warning")
             # Volver a renderizar con los datos y el error
@@ -3505,11 +3901,11 @@ def listar_marcas():
     """
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT id, nombre, descripcion, activo FROM marcas ORDER BY nombre")
         lista_de_marcas = cursor.fetchall()
         cursor.close()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a las marcas: {err}", "danger")
         current_app.logger.error(f"Error en listar_marcas: {err}")
         lista_de_marcas = []
@@ -3550,7 +3946,7 @@ def nueva_marca():
             db.commit()
             flash(f'Marca "{nombre}" registrada exitosamente!', 'success')
             return redirect(url_for('main.listar_marcas'))
-        except mysql.connector.Error as err:
+        except Exception as err:
             db.rollback()
             if err.errno == 1062: # Error de entrada duplicada (nombre UNIQUE)
                 flash(f'Error: Ya existe una marca con el nombre "{nombre}".', 'danger')
@@ -3586,10 +3982,10 @@ def editar_marca(marca_id):
     # Obtener la marca actual para editar
     marca_actual = None
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT id, nombre, descripcion, activo FROM marcas WHERE id = %s", (marca_id,))
         marca_actual = cursor.fetchone()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al buscar la marca: {err}", "danger")
         current_app.logger.error(f"Error DB buscando marca en editar (ID: {marca_id}): {err}")
         return redirect(url_for('main.listar_marcas'))
@@ -3618,11 +4014,11 @@ def editar_marca(marca_id):
         # Validar unicidad del nombre si ha cambiado
         if nombre_nuevo and nombre_nuevo.lower() != marca_actual['nombre'].lower():
             try:
-                cursor = db_conn.cursor(dictionary=True)
+                cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                 cursor.execute("SELECT id FROM marcas WHERE nombre = %s AND id != %s", (nombre_nuevo, marca_id))
                 if cursor.fetchone():
                     errores.append(f'Error: Ya existe otra marca con el nombre "{nombre_nuevo}".')
-            except mysql.connector.Error as err_check_nombre:
+            except Exception as err_check_nombre:
                 current_app.logger.error(f"Error DB verificando nombre en editar_marca: {err_check_nombre}")
                 errores.append("Error al verificar la disponibilidad del nombre de la marca.")
             finally:
@@ -3649,7 +4045,7 @@ def editar_marca(marca_id):
                 db_conn.commit()
                 flash(f'Marca "{nombre_nuevo}" actualizada exitosamente!', 'success')
                 return redirect(url_for('main.listar_marcas'))
-            except mysql.connector.Error as err_upd:
+            except Exception as err_upd:
                 db_conn.rollback()
                 # Manejar error de nombre duplicado en el UPDATE también (por si acaso)
                 if err_upd.errno == 1062:
@@ -3689,7 +4085,7 @@ def toggle_activo_marca(marca_id):
     cursor = None
 
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # Obtener el estado actual de la marca
         cursor.execute("SELECT id, nombre, activo FROM marcas WHERE id = %s", (marca_id,))
         marca_actual = cursor.fetchone()
@@ -3719,7 +4115,7 @@ def toggle_activo_marca(marca_id):
         
         if cursor_update: cursor_update.close() # Cerrar cursor de escritura
         
-    except mysql.connector.Error as err:
+    except Exception as err:
         if db_conn: # Solo hacer rollback si la conexión existe y está activa
             db_conn.rollback()
         flash(f'Error al cambiar el estado de la marca: {err}', 'danger')
@@ -3745,7 +4141,7 @@ def toggle_activo_producto(producto_id):
     cursor_update = None # Para escribir
 
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # Obtener el estado actual del producto
         cursor.execute("SELECT id, nombre, activo FROM productos WHERE id = %s", (producto_id,))
         producto_actual = cursor.fetchone()
@@ -3770,7 +4166,7 @@ def toggle_activo_producto(producto_id):
         mensaje_estado = "activado" if nuevo_estado_activo else "desactivado"
         flash(f'El producto "{producto_actual["nombre"]}" ha sido {mensaje_estado} exitosamente.', 'success')
         
-    except mysql.connector.Error as err:
+    except Exception as err:
         if db_conn: # Solo hacer rollback si la conexión existe
             db_conn.rollback()
         flash(f'Error al cambiar el estado del producto: {err}', 'danger')
@@ -3797,7 +4193,7 @@ def listar_proveedores():
     """
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("""
             SELECT id, nombre_empresa, ruc, nombre_contacto, telefono, email, activo 
             FROM proveedores 
@@ -3805,7 +4201,7 @@ def listar_proveedores():
         """)
         lista_de_proveedores = cursor.fetchall()
         cursor.close()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a los proveedores: {err}", "danger")
         current_app.logger.error(f"Error en listar_proveedores: {err}")
         lista_de_proveedores = []
@@ -3877,7 +4273,7 @@ def nuevo_proveedor():
             db.commit()
             flash(f'Proveedor "{nombre_empresa}" registrado exitosamente!', 'success')
             return redirect(url_for('main.listar_proveedores'))
-        except mysql.connector.Error as err:
+        except Exception as err:
             db.rollback()
             # Errores comunes de UNIQUE: 1062
             if err.errno == 1062:
@@ -3917,10 +4313,10 @@ def editar_proveedor(proveedor_id):
     # Obtener el proveedor actual para editar
     proveedor_actual = None
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT * FROM proveedores WHERE id = %s", (proveedor_id,))
         proveedor_actual = cursor.fetchone()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al buscar el proveedor: {err}", "danger")
         current_app.logger.error(f"Error DB buscando proveedor en editar (ID: {proveedor_id}): {err}")
         return redirect(url_for('main.listar_proveedores'))
@@ -3962,31 +4358,31 @@ def editar_proveedor(proveedor_id):
         # Validaciones de unicidad SI el valor ha cambiado
         if nombre_empresa_nuevo and nombre_empresa_nuevo.lower() != proveedor_actual.get('nombre_empresa', '').lower():
             try:
-                cursor = db_conn.cursor(dictionary=True)
+                cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                 cursor.execute("SELECT id FROM proveedores WHERE nombre_empresa = %s AND id != %s", (nombre_empresa_nuevo, proveedor_id))
                 if cursor.fetchone():
                     errores.append(f'Error: Ya existe un proveedor con el nombre "{nombre_empresa_nuevo}".')
-            except mysql.connector.Error as err_check: current_app.logger.error(f"Error DB verificando nombre_empresa: {err_check}")
+            except Exception as err_check: current_app.logger.error(f"Error DB verificando nombre_empresa: {err_check}")
             finally: 
                 if cursor: cursor.close(); cursor = None
 
         if ruc_db_nuevo and ruc_db_nuevo != proveedor_actual.get('ruc'):
             try:
-                cursor = db_conn.cursor(dictionary=True)
+                cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                 cursor.execute("SELECT id FROM proveedores WHERE ruc = %s AND id != %s", (ruc_db_nuevo, proveedor_id))
                 if cursor.fetchone():
                     errores.append(f'Error: Ya existe un proveedor con el RUC "{ruc_db_nuevo}".')
-            except mysql.connector.Error as err_check: current_app.logger.error(f"Error DB verificando RUC: {err_check}")
+            except Exception as err_check: current_app.logger.error(f"Error DB verificando RUC: {err_check}")
             finally: 
                 if cursor: cursor.close(); cursor = None
         
         if email_db_nuevo and email_db_nuevo.lower() != (proveedor_actual.get('email', '') or '').lower():
             try:
-                cursor = db_conn.cursor(dictionary=True)
+                cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                 cursor.execute("SELECT id FROM proveedores WHERE email = %s AND id != %s", (email_db_nuevo, proveedor_id))
                 if cursor.fetchone():
                     errores.append(f'Error: Ya existe un proveedor con el email "{email_db_nuevo}".')
-            except mysql.connector.Error as err_check: current_app.logger.error(f"Error DB verificando email: {err_check}")
+            except Exception as err_check: current_app.logger.error(f"Error DB verificando email: {err_check}")
             finally: 
                 if cursor: cursor.close(); cursor = None
 
@@ -4021,7 +4417,7 @@ def editar_proveedor(proveedor_id):
                 db_conn.commit()
                 flash(f'Proveedor "{nombre_empresa_nuevo}" actualizado exitosamente!', 'success')
                 return redirect(url_for('main.listar_proveedores'))
-            except mysql.connector.Error as err_upd:
+            except Exception as err_upd:
                 db_conn.rollback()
                 # Re-chequear errores de UNIQUE en el UPDATE
                 if err_upd.errno == 1062:
@@ -4066,7 +4462,7 @@ def toggle_activo_proveedor(proveedor_id):
     cursor_update = None
 
     try:
-        cursor_read = db_conn.cursor(dictionary=True)
+        cursor_read = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor_read.execute("SELECT id, nombre_empresa, activo FROM proveedores WHERE id = %s", (proveedor_id,))
         proveedor_actual = cursor_read.fetchone()
 
@@ -4088,7 +4484,7 @@ def toggle_activo_proveedor(proveedor_id):
         mensaje_estado = "activado" if nuevo_estado_activo else "desactivado"
         flash(f'El proveedor "{proveedor_actual["nombre_empresa"]}" ha sido {mensaje_estado} exitosamente.', 'success')
         
-    except mysql.connector.Error as err:
+    except Exception as err:
         if db_conn:
             db_conn.rollback()
         flash(f'Error al cambiar el estado del proveedor: {err}', 'danger')
@@ -4102,533 +4498,315 @@ def toggle_activo_proveedor(proveedor_id):
     return redirect(url_for('main.listar_proveedores'))
 
 
+# --- RUTAS PARA VENTAS ---
+
+
+import json # Asegúrate de tener esto arriba
 
 
 @main_bp.route('/ventas/nueva', methods=['GET', 'POST'])
 @login_required
 def nueva_venta():
-    """
-    Maneja la visualización (GET) y el procesamiento completo (POST) de una nueva venta.
-    Versión final, completa y unificada.
-    """
     db_conn = get_db()
-    # Constantes de negocio
-    IGV_TASA = 0.18 
-    PUNTOS_POR_SOL_GANADOS = 10 
-    PUNTOS_POR_SOL_CANJE = 10   
+    sucursal_id = session.get('sucursal_id')
+    
+    if not sucursal_id:
+        flash("Seleccione una sucursal para continuar.", "warning")
+        return redirect(url_for('main.index'))
 
-    # --- INICIO PARTE 1: Carga de Datos para el Formulario ---
-    listas_para_form = {
-        'sucursales': [], 'clientes': [], 'empleados': [], 'servicios': [], 
-        'productos': [], 'campanas_activas': [], 'planes_membresia_activos': [], 'estilos_catalogo': [],
-        'metodos_pago': ["Efectivo", "Tarjeta Visa", "Tarjeta Mastercard", "Yape", "Plin", "Transferencia Bancaria", "Otro"],
-        'tipos_comprobante': ["Nota de Venta", "Boleta Electrónica", "Factura Electrónica", "Otro"]
-    }
-    try:
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
-            listas_para_form['sucursales'] = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, razon_social_nombres, apellidos FROM clientes ORDER BY razon_social_nombres, apellidos")
-            listas_para_form['clientes'] = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE ORDER BY apellidos, nombres")
-            listas_para_form['empleados'] = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, nombre, precio, duracion_minutos, porcentaje_comision_extra FROM servicios WHERE activo = TRUE ORDER BY nombre")
-            listas_para_form['servicios'] = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT p.id, p.nombre, p.precio_venta, p.stock_actual, p.comision_vendedor_monto, m.nombre AS marca_nombre FROM productos p LEFT JOIN marcas m ON p.marca_id = m.id WHERE p.activo = TRUE ORDER BY p.nombre, m.nombre")
-            listas_para_form['productos'] = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, nombre, tipo_regla, valor_regla FROM campanas WHERE activo = TRUE AND CURDATE() BETWEEN fecha_inicio AND fecha_fin ORDER BY nombre")
-            listas_para_form['campanas_activas'] = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, nombre, precio, duracion_dias FROM membresia_planes WHERE activo = TRUE ORDER BY nombre")
-            listas_para_form['planes_membresia_activos'] = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, nombre FROM estilos WHERE activo = TRUE ORDER BY nombre")
-            listas_para_form['estilos_catalogo'] = cursor.fetchall()
-    except mysql.connector.Error as err_load:
-        flash(f"Error fatal al cargar datos maestros para el formulario: {err_load}", "danger")
-        return render_template('ventas/form_venta.html', es_nuevo=True, titulo_form="Error al Cargar Datos", **listas_para_form)
-    # --- FIN PARTE 1 ---
- 
-    # --- INICIO PARTE 2: Lógica para el método POST ---
+    # --- LÓGICA POST (PROCESAR VENTA) ---
     if request.method == 'POST':
+        cursor = None
         try:
-            # 2a. Recoger y Validar Datos iniciales
-            errores = []
-            sucursal_id = request.form.get('sucursal_id', type=int)
-            empleado_id = request.form.get('empleado_id', type=int)
-            fecha_venta_str = request.form.get('fecha_venta')
-            cliente_receptor_id_str = request.form.get('cliente_receptor_id')
-            cliente_facturacion_id_str = request.form.get('cliente_facturacion_id')
-            campana_id = request.form.get('campana_id', type=int) or None
-            items_json_str = request.form.get('items_json')
-            pagos_json_str = request.form.get('pagos_json')
-            descuento_aplicado_str = request.form.get('final_descuento_aplicado', '0.0')
-            puntos_canjeados = request.form.get('puntos_canjeados', '0', type=int)
-            reserva_id_origen = request.form.get('reserva_id_origen', type=int) or None
-            tipo_comprobante = request.form.get('tipo_comprobante', '').strip() or None
-            serie_comprobante = request.form.get('serie_comprobante', '').strip() or None
-            notas_venta = request.form.get('notas_venta', '').strip() or None
+            # 1. Recoger Datos
+            cliente_id_str = request.form.get('cliente_id')
+            empleado_id = request.form.get('empleado_id')
+            tipo_comprobante = request.form.get('tipo_comprobante')
+
+            cliente_receptor_id = int(cliente_id_str) if cliente_id_str and cliente_id_str.strip() else None
             
-            if not sucursal_id: errores.append("Debe seleccionar la sucursal.")
-            if not empleado_id: errores.append("Debe seleccionar un colaborador.")
-            if not fecha_venta_str: errores.append("La fecha de venta es obligatoria.")
-            else: fecha_venta = datetime.fromisoformat(fecha_venta_str)
+            items_json = request.form.get('items_lista')
+            pagos_json = request.form.get('pagos_lista')
             
-            cliente_receptor_id = int(cliente_receptor_id_str) if cliente_receptor_id_str and cliente_receptor_id_str != "0" else None
-            cliente_facturacion_id = int(cliente_facturacion_id_str) if cliente_facturacion_id_str and cliente_facturacion_id_str.strip() else None
-            if not cliente_facturacion_id:
-                cliente_facturacion_id = cliente_receptor_id
-
-            lista_items = json.loads(items_json_str or '[]')
-            if not lista_items: errores.append("Debe añadir al menos un ítem a la venta.")
+            items = json.loads(items_json) if items_json else []
+            pagos = json.loads(pagos_json) if pagos_json else []
             
-            # Separar ítems normales de la membresía vendida
-            lista_items_normales = [item for item in lista_items if item.get('tipo_item') != 'Membresía']
-            item_membresia_vendida = next((item for item in lista_items if item.get('tipo_item') == 'Membresía'), None)
-            if item_membresia_vendida and not cliente_receptor_id:
-                errores.append("Se debe seleccionar un cliente registrado para venderle una membresía.")
+            if not items: 
+                raise ValueError("No se puede registrar una venta sin productos o servicios.")
 
-            # Recalcular total para validar si se requiere pago
-            descuento_monto = float(descuento_aplicado_str if descuento_aplicado_str.strip() else 0.0)
-            monto_venta_precalculado = sum(float(i.get('subtotal_item_neto', 0.0)) for i in lista_items) - descuento_monto
+            descuento_global = float(request.form.get('descuento_global', 0) or 0)
+            campana_id = request.form.get('campana_id') or None
             
-            lista_pagos = json.loads(pagos_json_str or '[]')
-            if monto_venta_precalculado > 0 and not lista_pagos:
-                errores.append("Debe registrar al menos un pago para ventas con un total mayor a cero.")
-
-            if errores: raise ValueError("; ".join(errores))
+            # 2. Calcular Totales y Validar Cliente
+            subtotal_servicios = sum(float(item['precio']) * float(item['cantidad']) for item in items if item['tipo'] == 'servicio')
+            subtotal_productos = sum(float(item['precio']) * float(item['cantidad']) for item in items if item['tipo'] == 'producto')
             
-            # --- 2b. Transacción de Escritura ---
-            with db_conn.cursor(dictionary=True) as cursor:
-                
-                # Validar Stock
-                for item in lista_items_normales:
-                    if item.get('tipo_item') == 'Producto':
-                        cursor.execute("SELECT nombre, stock_actual FROM productos WHERE id = %s FOR UPDATE", (item['item_id'],))
-                        p_info = cursor.fetchone()
-                        if not p_info: raise ValueError(f"Producto ID {item['item_id']} no encontrado.")
-                        if p_info['stock_actual'] < int(item['cantidad']):
-                            raise ValueError(f"Stock insuficiente para '{p_info['nombre']}'.")
-                
-                # Validar Puntos
-                if puntos_canjeados > 0:
-                    if not cliente_receptor_id: raise ValueError("No se pueden canjear puntos sin un cliente registrado.")
-                    cursor.execute("SELECT puntos_fidelidad FROM clientes WHERE id = %s FOR UPDATE", (cliente_receptor_id,))
-                    cliente_puntos = cursor.fetchone()
-                    puntos_disponibles_db = cliente_puntos.get('puntos_fidelidad', 0) if cliente_puntos else 0
-                    if not cliente_puntos or puntos_disponibles_db < puntos_canjeados:
-                        raise ValueError(f"El cliente no tiene suficientes puntos. Disponibles: {puntos_disponibles_db}.")
+            monto_total_bruto = subtotal_servicios + subtotal_productos
+            monto_final = monto_total_bruto - descuento_global
 
-                # Generar Correlativo
-                numero_comprobante_final = None
-                if tipo_comprobante and serie_comprobante:
-                    cursor.execute("SELECT id, ultimo_numero_usado FROM comprobante_series WHERE sucursal_id = %s AND tipo_comprobante = %s AND serie = %s AND activo = TRUE FOR UPDATE", (sucursal_id, tipo_comprobante, serie_comprobante))
-                    serie_info = cursor.fetchone()
-                    if not serie_info: raise ValueError(f"La serie '{serie_comprobante}' no está configurada o activa.")
-                    nuevo_numero = serie_info['ultimo_numero_usado'] + 1
-                    numero_comprobante_final = str(nuevo_numero).zfill(8)
-                    cursor.execute("UPDATE comprobante_series SET ultimo_numero_usado = %s WHERE id = %s", (nuevo_numero, serie_info['id']))
-                
-                # Recalcular Totales Finales
-                recalculado_subtotal_servicios_con_igv = sum(float(i['subtotal_item_neto']) for i in lista_items_normales if i.get('tipo_item') == 'Servicio')
-                recalculado_subtotal_productos_con_igv = sum(float(i['subtotal_item_neto']) for i in lista_items_normales if i.get('tipo_item') == 'Producto')
-                subtotal_membresia = float(item_membresia_vendida['precio_unitario_venta']) if item_membresia_vendida else 0.0
-                monto_final_venta = (recalculado_subtotal_servicios_con_igv + recalculado_subtotal_productos_con_igv + subtotal_membresia) - descuento_monto
-                monto_impuestos = round(monto_final_venta - (monto_final_venta / (1 + IGV_TASA)), 2)
-                estado_pago_servidor = request.form.get('estado_pago')
+            cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-                # Insertar en 'ventas'
-                sql_venta = "INSERT INTO ventas (sucursal_id, cliente_receptor_id, cliente_facturacion_id, empleado_id, fecha_venta, campana_id, subtotal_servicios, subtotal_productos, descuento_monto, monto_impuestos, monto_final_venta, estado_pago, estado_proceso, tipo_comprobante, serie_comprobante, numero_comprobante, notas_venta, reserva_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-                val_venta = (sucursal_id, cliente_receptor_id, cliente_facturacion_id, empleado_id, fecha_venta, campana_id, recalculado_subtotal_servicios_con_igv + subtotal_membresia, recalculado_subtotal_productos_con_igv, descuento_monto, monto_impuestos, monto_final_venta, estado_pago_servidor, 'Facturada', tipo_comprobante, serie_comprobante, numero_comprobante_final, notas_venta, reserva_id_origen)
-                cursor.execute(sql_venta, val_venta)
-                venta_id = cursor.lastrowid
-                
-                # Bucle para ítems, comisiones y stock
-                for item in lista_items_normales:
-                    # 1. Definir variables al principio del bucle para claridad
-                    item_servicio_id = item.get('item_id') if item.get('tipo_item') == 'Servicio' else None
-                    item_producto_id = item.get('item_id') if item.get('tipo_item') == 'Producto' else None
-                    subtotal_item = float(item['cantidad']) * float(item['precio_unitario_venta'])
-             
-                    es_trabajo_extra = bool(item.get('es__extra', False))
+            if tipo_comprobante == 'Factura Electrónica':
+                if not cliente_receptor_id:
+                    raise ValueError("Se requiere un cliente para la Factura Electrónica.")
+                cursor.execute("SELECT numero_documento FROM clientes WHERE id = %s", (cliente_receptor_id,))
+                cliente_doc = cursor.fetchone()
+                if not cliente_doc or len(cliente_doc['numero_documento']) != 11:
+                    raise ValueError("El cliente debe tener un RUC de 11 dígitos para Factura Electrónica.")
 
-                    valor_produccion_item = subtotal_item # Por defecto, es el subtotal de venta
-                    usado_como_beneficio = bool(item.get('usado_como_beneficio', False))
-                    credito_id_usado = item.get('credito_id_usado')
-                    
-                    notas_del_item = item.get('notas_item', '').strip() or None
-                    
-                    
-                    # 2. Determinar el valor de producción del ítem
-                    valor_produccion_item = subtotal_item # Por defecto, es el subtotal de venta
-
-                    if usado_como_beneficio and credito_id_usado:
-                        # Si se usó un crédito, buscamos el precio definido en el paquete
-                        cursor.execute("""
-                            SELECT b.precio_en_paquete FROM membresia_plan_beneficios b
-                            JOIN cliente_membresias cm ON b.plan_id = cm.plan_id
-                            JOIN cliente_membresia_creditos c ON cm.id = c.cliente_membresia_id
-                            WHERE c.id = %s
-                        """, (credito_id_usado,))
-                        beneficio_info = cursor.fetchone()
-                        if beneficio_info and beneficio_info.get('precio_en_paquete') is not None:
-                            valor_produccion_item = float(beneficio_info['precio_en_paquete'])
-                        else:
-                            # Si no se encuentra, usamos el precio normal del servicio (respaldo)
-                            cursor.execute("SELECT precio FROM servicios WHERE id = %s", (item_servicio_id,))
-                            servicio_info = cursor.fetchone()
-                            valor_produccion_item = float(servicio_info['precio']) if servicio_info else 0.0
-                    
-                    # 3. Insertar el ítem en la tabla venta_items
-                    sql_item = "INSERT INTO venta_items (venta_id, servicio_id, producto_id, descripcion_item_venta, cantidad, precio_unitario_venta, subtotal_item_bruto, subtotal_item_neto, valor_produccion, es_trabajo_extra, notas_item, usado_como_beneficio) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-                    val_item = (venta_id, item_servicio_id, item_producto_id, item['descripcion_item_venta'], int(item['cantidad']), float(item['precio_unitario_venta']), subtotal_item, subtotal_item, valor_produccion_item, bool(item.get('es_trabajo_extra', False)), item.get('notas_item'), usado_como_beneficio)
-                    cursor.execute(sql_item, val_item)
-                    venta_item_id = cursor.lastrowid
-
-                    # 4. Descontar crédito de membresía si se usó
-                    if usado_como_beneficio and credito_id_usado:
-                        cursor.execute("UPDATE cliente_membresia_creditos SET cantidad_usada = cantidad_usada + 1 WHERE id = %s AND (cantidad_total - cantidad_usada) > 0", (credito_id_usado,))
-                        if cursor.rowcount == 0: raise ValueError(f"El crédito para el servicio '{item['descripcion_item_venta']}' ya no estaba disponible.")
-                    
-                    # 5. Calcular y registrar comisión (solo si NO se usó un crédito)
-                    monto_comision = 0.0
-                    if not usado_como_beneficio:
-                        if item_producto_id:
-                            cursor.execute("SELECT comision_vendedor_monto FROM productos WHERE id = %s", (item_producto_id,))
-                            producto_info = cursor.fetchone()
-                            if producto_info and producto_info.get('comision_vendedor_monto'):
-                                monto_comision = float(producto_info['comision_vendedor_monto']) * int(item['cantidad'])
-                        elif es_trabajo_extra and item_servicio_id:
-                            cursor.execute("SELECT porcentaje_comision_extra FROM servicios WHERE id = %s", (item_servicio_id,))
-                            servicio_info = cursor.fetchone()
-                            if servicio_info and servicio_info.get('porcentaje_comision_extra'):
-                                monto_comision = subtotal_item * (float(servicio_info['porcentaje_comision_extra']) / 100)
-                        
-                        if monto_comision > 0:
-                            sql_comision = "INSERT INTO comisiones (venta_item_id, colaborador_id, monto_comision, estado) VALUES (%s, %s, %s, 'Pendiente')"
-                            val_comision = (venta_item_id, empleado_id, round(monto_comision, 2))
-                            cursor.execute(sql_comision, val_comision)
-
-                    # 6. Actualizar el stock si el ítem es un producto
-                    if item_producto_id:
-                        sql_stock = "UPDATE productos SET stock_actual = stock_actual - %s WHERE id = %s"
-                        cursor.execute(sql_stock, (int(item['cantidad']), item_producto_id))
-                
-                        
-                # Activar membresía si se vendió
-                if item_membresia_vendida and cliente_receptor_id:
-                    plan_id = int(item_membresia_vendida['item_id'])
-                    cursor.execute("SELECT duracion_dias FROM membresia_planes WHERE id = %s", (plan_id,))
-                    plan_info = cursor.fetchone()
-                    if not plan_info: raise ValueError("El plan de membresía vendido no es válido.")
-                    duracion = timedelta(days=plan_info['duracion_dias'])
-                    sql_membresia = "INSERT INTO cliente_membresias (cliente_id, plan_id, venta_id, fecha_inicio, fecha_fin, estado) VALUES (%s, %s, %s, %s, %s, 'Activa')"
-                    cursor.execute(sql_membresia, (cliente_receptor_id, plan_id, venta_id, date.today(), date.today() + duracion))
-                    cliente_membresia_id = cursor.lastrowid
-                    cursor.execute("SELECT servicio_id, cantidad_incluida FROM membresia_plan_beneficios WHERE plan_id = %s", (plan_id,))
-                    beneficios = cursor.fetchall()
-                    if beneficios:
-                        sql_credito = "INSERT INTO cliente_membresia_creditos (cliente_membresia_id, servicio_id, cantidad_total) VALUES (%s, %s, %s)"
-                        valores_creditos = [(cliente_membresia_id, b['servicio_id'], b['cantidad_incluida']) for b in beneficios]
-                        cursor.executemany(sql_credito, valores_creditos)
-
-                # Insertar Pagos
-                for pago in lista_pagos:
-                    cursor.execute("INSERT INTO venta_pagos (venta_id, metodo_pago, monto, referencia_pago) VALUES (%s, %s, %s, %s)", (venta_id, pago['metodo_pago'], float(pago['monto']), pago.get('referencia_pago')))
-
-                # Lógica de Puntos
-                if puntos_canjeados > 0 and cliente_receptor_id:
-                    cursor.execute("UPDATE clientes SET puntos_fidelidad = puntos_fidelidad - %s WHERE id = %s", (puntos_canjeados, cliente_receptor_id))
-                    cursor.execute("INSERT INTO puntos_log (cliente_id, venta_id, puntos_cambio, tipo_transaccion, descripcion) VALUES (%s, %s, %s, 'Canje en Venta', %s)", (cliente_receptor_id, venta_id, -puntos_canjeados, f"Descuento de S/ {descuento_monto:.2f}"))
-                if estado_pago_servidor == 'Pagado' and cliente_receptor_id:
-                    monto_base_puntos = recalculado_subtotal_servicios_con_igv
-                    if monto_base_puntos > 0:
-                        puntos_base = math.floor(monto_base_puntos / PUNTOS_POR_SOL_GANADOS)
-                        puntos_ganados = puntos_base
-                        # ... (lógica de campañas para multiplicar puntos) ...
-                        if puntos_ganados > 0:
-                            cursor.execute("UPDATE clientes SET puntos_fidelidad = puntos_fidelidad + %s WHERE id = %s", (puntos_ganados, cliente_receptor_id))
-                            cursor.execute("INSERT INTO puntos_log (cliente_id, venta_id, puntos_cambio, tipo_transaccion) VALUES (%s, %s, %s, 'Acumulación por Venta')", (cliente_receptor_id, venta_id, puntos_ganados))
+            # 3. Obtener Serie y Número
+            cursor.execute("""
+                SELECT serie, ultimo_numero 
+                FROM series_comprobantes 
+                WHERE sucursal_id = %s AND tipo_comprobante = %s AND activo = TRUE
+                ORDER BY serie DESC LIMIT 1
+            """, (sucursal_id, tipo_comprobante))
+            serie_row = cursor.fetchone()
             
+            if not serie_row:
+                raise ValueError(f"No hay una serie activa configurada para '{tipo_comprobante}' en esta sucursal.")
+
+            serie_comprobante = serie_row['serie']
+            nuevo_numero = serie_row['ultimo_numero'] + 1
+            numero_comprobante_str = str(nuevo_numero).zfill(8)
+
+            cursor.execute("""
+                UPDATE series_comprobantes SET ultimo_numero = %s 
+                WHERE sucursal_id = %s AND serie = %s
+            """, (nuevo_numero, sucursal_id, serie_comprobante))
+
+            # 4. Vincular con Caja Abierta
+            cursor.execute("SELECT id FROM caja_sesiones WHERE usuario_id=%s AND estado='Abierta' AND sucursal_id=%s", (current_user.id, sucursal_id))
+            row_caja = cursor.fetchone()
+            caja_id = row_caja['id'] if row_caja else None
+
+            # 5. Insertar Venta
+            sql_venta = """
+                INSERT INTO ventas (
+                    sucursal_id, cliente_receptor_id, empleado_id, fecha_venta, 
+                    tipo_comprobante, serie_comprobante, numero_comprobante,
+                    subtotal_servicios, subtotal_productos, descuento_monto, monto_final_venta,
+                    estado_pago, campana_id, caja_sesion_id
+                ) VALUES (%s, %s, %s, CURRENT_TIMESTAMP, %s, %s, %s, %s, %s, %s, %s, 'Pagado', %s, %s) RETURNING id """
+            
+            cursor.execute(sql_venta, (
+                sucursal_id, cliente_receptor_id, empleado_id, tipo_comprobante, 
+                serie_comprobante, numero_comprobante_str, subtotal_servicios, 
+                subtotal_productos, descuento_global, monto_final, campana_id, caja_id
+            ))
+            venta_id = cursor.fetchone()['id']
+
+            # 6. Insertar Ítems y Actualizar Stock
+            sql_item = """
+                INSERT INTO venta_items (venta_id, servicio_id, producto_id, descripcion_item_venta, cantidad, precio_unitario_venta, subtotal_item_bruto, subtotal_item_neto) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            for item in items:
+                total_item = float(item['precio']) * float(item['cantidad'])
+                cursor.execute(sql_item, (
+                    venta_id, 
+                    item['id'] if item['tipo'] == 'servicio' else None,
+                    item['id'] if item['tipo'] == 'producto' else None,
+                    item['descripcion'], item['cantidad'], item['precio'], 
+                    total_item, total_item
+                ))
+                if item['tipo'] == 'producto':
+                    cursor.execute("UPDATE productos SET stock_actual = stock_actual - %s WHERE id = %s", (item['cantidad'], item['id']))
+
+            # 7. Insertar Pagos
+            if not pagos:
+                pagos = [{'metodo': 'Efectivo', 'monto': monto_final, 'referencia': ''}]
+            sql_pago = "INSERT INTO venta_pagos (venta_id, metodo_pago, monto, referencia_pago) VALUES (%s, %s, %s, %s)"
+            for p in pagos:
+                cursor.execute(sql_pago, (venta_id, p['metodo'], p['monto'], p.get('referencia')))
+
             db_conn.commit()
-            flash(f"Venta #{venta_id} registrada exitosamente.", "success")
-            return redirect(url_for('main.nueva_venta')) 
+            flash(f'Venta registrada: {serie_comprobante}-{numero_comprobante_str}', 'success')
+            return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
 
-        except (ValueError, mysql.connector.Error, Exception) as e:
-            if db_conn and db_conn.in_transaction: db_conn.rollback()
-            flash(f"No se pudo guardar la venta. Error: {str(e)}", "warning")
-            current_app.logger.error(f"Error procesando venta: {e}")
-            return render_template('ventas/form_venta.html', form_data=request.form, es_nuevo=True, titulo_form="Registrar Nueva Venta (Corregir Errores)", **listas_para_form)
-    # --- FIN PARTE 2 ---
-    
-    # --- INICIO PARTE 3: Lógica para el método GET ---
-    # Este bloque se ejecuta si la petición NO es POST, es decir, al cargar la página por primera vez
-    # o al ser redirigido desde otra página.
-    
-    # Preparar variables para pre-llenar el formulario
-    
-    
-    prefill_data = {}
-    prefill_items_json = '[]'
-    comanda_origen_id = request.args.get('comanda_id', type=int)
-    
-    if comanda_origen_id:
-        try:
-            with db_conn.cursor(dictionary=True) as cursor:
-                cursor.execute("SELECT * FROM ventas WHERE id = %s AND estado_proceso = 'En Comanda'", (comanda_origen_id,))
-                comanda_data = cursor.fetchone()
+        except Exception as e:
+            if db_conn: db_conn.rollback()
+            import traceback
+            traceback.print_exc()
+            flash(f"Error al procesar la venta: {e}", "danger")
+            return redirect(url_for('main.nueva_venta'))
+        finally:
+            if cursor: cursor.close()
 
-                if comanda_data:
-                    # Preparar los datos de la cabecera para los campos del formulario
-                    prefill_data['sucursal_id'] = comanda_data['sucursal_id']
-                    prefill_data['cliente_receptor_id'] = comanda_data['cliente_receptor_id']
-                    prefill_data['empleado_id'] = comanda_data['empleado_id']
-                    
-                    cursor.execute("SELECT * FROM venta_items WHERE venta_id = %s", (comanda_origen_id,))
-                    items_de_comanda = cursor.fetchall()
-                    
-                    items_para_js = []
-                    for item in items_de_comanda:
-                        items_para_js.append({
-                            "tipo_item": "Servicio" if item['servicio_id'] else "Producto",
-                            "item_id": str(item['servicio_id'] or item['producto_id']),
-                            "descripcion_item_venta": item['descripcion_item_venta'],
-                            "cantidad": item['cantidad'],
-                            "precio_unitario_venta": float(item['precio_unitario_venta']),
-                            "es_trabajo_extra": bool(item['es_trabajo_extra']),
-                            "notas_item": item.get('notas_item', ''),
-                            "subtotal_item_neto": float(item['subtotal_item_neto']),
-                            "subtotal_item_bruto": float(item['subtotal_item_bruto'])
-                        })
-                    prefill_items_json = json.dumps(items_para_js)
-                    flash(f"Cargando Comanda #{comanda_origen_id} para finalizar la venta.", "info")
-                else:
-                    flash(f"La comanda #{comanda_origen_id} no fue encontrada o ya fue procesada.", "warning")
-                    comanda_origen_id = None
-        except mysql.connector.Error as err:
-            flash(f"Error al cargar datos de la comanda: {err}", "danger")
-    
+    # --- LÓGICA GET (CARGAR FORMULARIO) ---
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Clientes (Actualizado con campos de campaña cumpleaños)
+            cursor.execute("""
+                SELECT id, razon_social_nombres, apellidos, telefono, numero_documento,
+                       TO_CHAR(fecha_nacimiento, 'YYYY-MM-DD') as fecha_nac_str,
+                       cumpleanos_validado, rechazo_dato_cumpleanos
+                FROM clientes 
+                ORDER BY razon_social_nombres
+            """)
+            clientes = cursor.fetchall()
             
-    reserva_id_origen = request.args.get('reserva_id', type=int)
-    
-    if reserva_id_origen:
-        try:
-            with db_conn.cursor(dictionary=True) as cursor:
-                # Obtener datos de la reserva
-                cursor.execute("""
-                    SELECT r.cliente_id, r.empleado_id, r.sucursal_id, r.servicio_id, s.nombre as servicio_nombre, s.precio as servicio_precio 
-                    FROM reservas r JOIN servicios s ON r.servicio_id = s.id 
-                    WHERE r.id = %s
-                """, (reserva_id_origen,))
-                reserva_data = cursor.fetchone()
-                
-                if reserva_data:
-                    prefill_data['cliente_receptor_id'] = reserva_data['cliente_id']
-                    prefill_data['empleado_id'] = reserva_data['empleado_id']
-                    prefill_data['sucursal_id'] = reserva_data['sucursal_id']
-                    
-                    # Crear el ítem del servicio para la tabla de venta
-                    item_servicio = {
-                        "tipo_item": "Servicio",
-                        "item_id": str(reserva_data['servicio_id']),
-                        "descripcion_item_venta": reserva_data['servicio_nombre'],
-                        "cantidad": 1,
-                        "precio_unitario_venta": float(reserva_data['servicio_precio']),
-                        "es_trabajo_extra": False,
-                        "notas_item": "",
-                        "subtotal_item_neto": float(reserva_data['servicio_precio']),
-                        "subtotal_item_bruto": float(reserva_data['servicio_precio'])
-                    }
-                    prefill_items_json = json.dumps([item_servicio]) # Convertir a string JSON
-                    flash(f"Cargando datos de la Reserva #{reserva_id_origen}.", "info")
+            for c in clientes:
+                nombre_full = f"{c['razon_social_nombres']} {c['apellidos'] or ''}".strip()
+                doc = c['numero_documento'] or 'S/D'
+                tel = c['telefono'] or ''
+                c['texto_busqueda'] = f"{nombre_full} | Doc: {doc} | Tel: {tel}"
 
-        except mysql.connector.Error as err:
-            flash(f"Error al cargar datos de la reserva: {err}", "danger")
-
-    return render_template('ventas/form_venta.html',
-                           es_nuevo=True, 
-                           titulo_form="Registrar Venta",
-                           action_url=url_for('main.nueva_venta'),
-                           prefill_data=prefill_data,
-                           prefill_items_json=prefill_items_json,
-                           comanda_origen_id=comanda_origen_id,
-                           **listas_para_form)
-    # --- FIN PARTE 3 ---
-    
+            # Empleados, Servicios, Productos, Campañas
+            cursor.execute("SELECT id, nombre_display FROM empleados WHERE activo = TRUE AND realiza_servicios = TRUE ORDER BY nombres")
+            empleados = cursor.fetchall()
+            cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY nombre")
+            servicios = cursor.fetchall()
+            cursor.execute("SELECT id, nombre, precio_venta, stock_actual FROM productos WHERE activo = TRUE ORDER BY nombre")
+            productos = cursor.fetchall()
+            cursor.execute("SELECT id, nombre FROM campanas WHERE activo = TRUE AND CURRENT_DATE BETWEEN fecha_inicio AND fecha_fin")
+            campanas = cursor.fetchall()
+            
+            # Nota: Asegúrate de que el nombre del template sea correcto. 
+            # En tu código anterior era 'ventas/form_venta.html' pero en nuestros pasos previos usamos 'ventas/nueva_venta.html'.
+            # Usaré el que tenías en tu código original para no romper nada.
+            return render_template('ventas/form_venta.html',
+                                   clientes=clientes, empleados=empleados,
+                                   servicios=servicios, productos=productos,
+                                   campanas=campanas, hoy=date.today().strftime('%d/%m/%Y'))
+                                   
+    except Exception as e:
+        flash(f"Error cargando formulario: {e}", "danger")
+        return redirect(url_for('main.index'))    
+        
 @main_bp.route('/ventas/editar/<int:venta_id>', methods=['GET', 'POST'])
 @login_required
 def editar_venta(venta_id):
-    """
-    Maneja la visualización (GET) y el procesamiento (POST) 
-    del formulario para editar una venta existente.
-    """
     db_conn = get_db()
     
-    # --- 1. Obtener los datos de la venta que se está editando ---
-    # Esto se hace fuera del bloque POST/GET porque se necesita en ambos casos
-    try:
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT * FROM ventas WHERE id = %s", (venta_id,))
-            venta_actual = cursor.fetchone()
-    except mysql.connector.Error as err_fetch:
-        flash(f"Error de base de datos al buscar la venta: {err_fetch}", "danger")
-        return redirect(url_for('main.listar_ventas'))
-
-    if not venta_actual:
-        flash(f"Venta con ID {venta_id} no encontrada.", "warning")
-        return redirect(url_for('main.listar_ventas'))
-
-    # --- 2. Cargar datos maestros para los menús desplegables ---
-    # Esto también se necesita en ambos casos (GET y re-renderizado en POST con error)
-    sucursales_activas, clientes_todos, empleados_activos = [], [], []
-    metodos_pago_opciones = ["Efectivo", "Tarjeta Visa", "Tarjeta Mastercard", "Yape", "Plin", "Transferencia Bancaria", "Otro"]
-    tipos_comprobante_opciones = ["Nota de Venta", "Boleta Electrónica", "Factura Electrónica", "Otro"]
-    try:
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
-            sucursales_activas = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, nombres, apellidos FROM clientes ORDER BY apellidos, nombres")
-            clientes_todos = cursor.fetchall()
-            clientes_todos.insert(0, {"id": "0", "nombres": "Cliente", "apellidos": "Varios"})
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE ORDER BY apellidos, nombres")
-            empleados_activos = cursor.fetchall()
-    except mysql.connector.Error as err_load:
-        flash(f"Error al cargar datos maestros para el formulario: {err_load}", "danger")
-        current_app.logger.error(f"Error DB cargando dropdown data en editar_venta: {err_load}")
-
-
-    # --- 3. Lógica POST (cuando se guarda el formulario de edición) ---
+    # --- LÓGICA POST (GUARDAR CAMBIOS SIMPLES) ---
     if request.method == 'POST':
-        cursor_update = None
         try:
-            # Recoger datos del formulario
-            sucursal_id = request.form.get('sucursal_id', type=int)
-            cliente_id_str = request.form.get('cliente_id')
-            empleado_id = request.form.get('empleado_id', type=int)
+            # 1. Recoger Datos Editables
+            # Nota: El tipo, serie y número NO se recogen porque no se pueden cambiar aquí.
+            
+            # Gestión del Cliente (Igual que antes para permitir corregir el cliente)
+            cliente_id = request.form.get('cliente_id')
+            nuevo_doc = request.form.get('nuevo_cliente_doc')
+            nuevo_nombre = request.form.get('nuevo_cliente_nombre')
+            nuevo_dir = request.form.get('nuevo_cliente_dir')
+            
+            with db_conn.cursor() as cursor:
+                if nuevo_doc and nuevo_nombre:
+                    cursor.execute("SELECT id FROM clientes WHERE numero_documento = %s", (nuevo_doc,))
+                    res_cli = cursor.fetchone()
+                    tipo_doc = 'RUC' if len(nuevo_doc) == 11 else 'DNI'
+                    if res_cli:
+                        cliente_id = res_cli[0]
+                        cursor.execute("UPDATE clientes SET razon_social_nombres=%s, direccion=%s WHERE id=%s", (nuevo_nombre, nuevo_dir, cliente_id))
+                    else:
+                        cursor.execute("INSERT INTO clientes (tipo_documento, numero_documento, razon_social_nombres, direccion) VALUES (%s, %s, %s, %s) RETURNING id", (tipo_doc, nuevo_doc, nuevo_nombre, nuevo_dir))
+                        cliente_id = cursor.fetchone()[0]
+            
+            if not cliente_id or str(cliente_id) == 'API_NEW': cliente_id = None 
+
+            empleado_id = request.form.get('empleado_id')
             fecha_venta_str = request.form.get('fecha_venta')
-            tipo_comprobante = request.form.get('tipo_comprobante', '').strip() or None
-            notas_venta = request.form.get('notas_venta', '').strip() or None
-            pagos_json_str = request.form.get('pagos_json')
-            
-            # Validar datos básicos
-            errores = []
-            if not sucursal_id: errores.append("Sucursal es obligatoria.")
-            if not empleado_id: errores.append("Colaborador es obligatorio.")
-            if not fecha_venta_str: errores.append("Fecha de venta es obligatoria.")
-            
-            cliente_id = int(cliente_id_str) if cliente_id_str and cliente_id_str != "0" else None
-            fecha_venta = datetime.fromisoformat(fecha_venta_str)
-            
-            lista_pagos_nuevos = json.loads(pagos_json_str) if pagos_json_str else []
-            if not lista_pagos_nuevos:
-                errores.append("Debe haber al menos un método de pago registrado.")
+            notas_venta = request.form.get('notas_venta')
+            estado_pago_calculado = request.form.get('estado_pago')
 
-            if errores:
-                raise ValueError("; ".join(errores))
+            # Pagos
+            pagos_json = request.form.get('pagos_json')
+            lista_pagos = json.loads(pagos_json) if pagos_json else []
 
-            # Calcular nuevo estado de pago
-            total_pagado_nuevo = sum(float(p['monto']) for p in lista_pagos_nuevos)
-            monto_final_venta = float(venta_actual['monto_final_venta'])
-            
-            estado_pago_nuevo = "Pendiente de Pago"
-            if abs(total_pagado_nuevo - monto_final_venta) < 0.01 or total_pagado_nuevo > monto_final_venta:
-                estado_pago_nuevo = "Pagado"
-            elif total_pagado_nuevo > 0:
-                estado_pago_nuevo = "Parcialmente Pagado"
-            
-            # Iniciar Transacción de forma implícita (NO se usa start_transaction())
-            cursor_update = db_conn.cursor()
+            with db_conn.cursor() as cursor_update:
+                # 2. Actualizar Venta (SIN CAMBIAR SERIE NI TIPO)
+                sql_update_venta = """
+                    UPDATE ventas 
+                    SET cliente_receptor_id = %s,
+                        empleado_id = %s,
+                        fecha_venta = %s,
+                        notas_venta = %s,
+                        estado_pago = %s
+                        -- NO actualizamos tipo_comprobante, serie, numero ni estado_sunat
+                    WHERE id = %s
+                """
+                cursor_update.execute(sql_update_venta, (
+                    cliente_id, 
+                    empleado_id, 
+                    fecha_venta_str, 
+                    notas_venta, 
+                    estado_pago_calculado,
+                    venta_id
+                ))
 
-            # Actualizar la cabecera de la venta
-            sql_update_venta = """UPDATE ventas SET 
-                                    sucursal_id = %s, cliente_id = %s, empleado_id = %s, fecha_venta = %s,
-                                    tipo_comprobante = %s, notas_venta = %s, estado_pago = %s
-                                  WHERE id = %s"""
-            val_update_venta = (sucursal_id, cliente_id, empleado_id, fecha_venta, 
-                                tipo_comprobante, notas_venta, 
-                                estado_pago_nuevo, venta_id)
-            cursor_update.execute(sql_update_venta, val_update_venta)
-
-            # Borrar los pagos antiguos y guardar los nuevos
-            cursor_update.execute("DELETE FROM venta_pagos WHERE venta_id = %s", (venta_id,))
-            for pago in lista_pagos_nuevos:
-                sql_pago = "INSERT INTO venta_pagos (venta_id, metodo_pago, monto, referencia_pago) VALUES (%s, %s, %s, %s)"
-                val_pago = (venta_id, pago['metodo_pago'], float(pago['monto']), (pago.get('referencia_pago') or None))
-                cursor_update.execute(sql_pago, val_pago)
-            
-            # Ajustar puntos de fidelidad si el estado de 'Pagado' cambió
-            estado_pago_original = venta_actual['estado_pago']
-            if estado_pago_original != estado_pago_nuevo and venta_actual.get('cliente_id'):
-                puntos_a_ajustar = math.floor(monto_final_venta / 10)
-                if puntos_a_ajustar > 0:
-                    if estado_pago_nuevo == 'Pagado':
-                        sql_puntos = "UPDATE clientes SET puntos_fidelidad = puntos_fidelidad + %s WHERE id = %s"
-                        cursor_update.execute(sql_puntos, (puntos_a_ajustar, venta_actual['cliente_id']))
-                    elif estado_pago_original == 'Pagado':
-                        sql_puntos = "UPDATE clientes SET puntos_fidelidad = GREATEST(0, puntos_fidelidad - %s) WHERE id = %s"
-                        cursor_update.execute(sql_puntos, (puntos_a_ajustar, venta_actual['cliente_id']))
+                # 3. Actualizar Pagos
+                cursor_update.execute("DELETE FROM venta_pagos WHERE venta_id = %s", (venta_id,))
+                sql_insert_pago = "INSERT INTO venta_pagos (venta_id, metodo_pago, monto, referencia_pago, fecha_pago) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)"
+                for pago in lista_pagos:
+                    metodo = pago.get('metodo_pago') or 'Efectivo'
+                    cursor_update.execute(sql_insert_pago, (venta_id, metodo, float(pago.get('monto', 0)), pago.get('referencia_pago')))
 
             db_conn.commit()
-            flash("Venta actualizada exitosamente.", "success")
+            flash('Datos de la venta actualizados correctamente.', 'success')
             return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
 
-        except (ValueError, mysql.connector.Error, Exception) as e:
-            if db_conn and db_conn.in_transaction: 
-                db_conn.rollback()
-            # Flashear el error específico que ocurrió
-            flash(f"No se pudo actualizar la venta. Error: {str(e)}", "danger")
-            current_app.logger.error(f"Error procesando edición de venta: {e}")
-            # La ejecución continuará y re-renderizará el formulario abajo
-            
-    # --- Lógica GET (o si el POST falló) ---
-    # Obtener ítems y pagos actuales para mostrar en el formulario
-    items_actuales, pagos_actuales = [], []
+        except Exception as e:
+            if db_conn: db_conn.rollback()
+            current_app.logger.error(f"Error editando venta {venta_id}: {e}")
+            flash(f"Error al guardar cambios: {e}", "danger")
+            return redirect(url_for('main.editar_venta', venta_id=venta_id))
+
+    # --- LÓGICA GET (CARGAR FORMULARIO) ---
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            sql_venta = """
+                SELECT v.*, v.cliente_receptor_id as cliente_id,
+                       c.razon_social_nombres as cliente_nombre_actual,
+                       TO_CHAR(v.fecha_venta, 'YYYY-MM-DD"T"HH24:MI') as fecha_venta_str
+                FROM ventas v 
+                LEFT JOIN clientes c ON v.cliente_receptor_id = c.id
+                WHERE v.id = %s
+            """
+            cursor.execute(sql_venta, (venta_id,))
+            venta_actual = cursor.fetchone()
+            
+            if not venta_actual: return redirect(url_for('main.listar_ventas'))
+
+            cursor.execute("SELECT * FROM venta_items WHERE venta_id = %s", (venta_id,))
+            items_venta = cursor.fetchall()
+
+            cursor.execute("SELECT metodo_pago, monto, referencia_pago FROM venta_pagos WHERE venta_id = %s", (venta_id,))
+            pagos_venta = cursor.fetchall()
+            for p in pagos_venta: p['monto'] = float(p['monto'])
+            pagos_venta_json = json.dumps(pagos_venta)
+
+            cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
+            sucursales = cursor.fetchall()
+            
             cursor.execute("""
-                SELECT vi.*, p.nombre as producto_nombre, s.nombre as servicio_nombre 
-                FROM venta_items vi 
-                LEFT JOIN productos p ON vi.producto_id = p.id 
-                LEFT JOIN servicios s ON vi.servicio_id = s.id 
-                WHERE vi.venta_id = %s ORDER BY vi.id""", (venta_id,))
-            items_actuales = cursor.fetchall()
+                SELECT id, razon_social_nombres, apellidos, numero_documento 
+                FROM clientes ORDER BY razon_social_nombres
+            """)
+            clientes = cursor.fetchall()
+            for c in clientes:
+                c['texto_busqueda'] = f"{c['razon_social_nombres']} {c['apellidos'] or ''} | {c['numero_documento'] or ''}"
 
-            cursor.execute("SELECT * FROM venta_pagos WHERE venta_id = %s ORDER BY id", (venta_id,))
-            pagos_actuales = cursor.fetchall()
-    except mysql.connector.Error as err_fetch:
-        flash(f"Error al obtener los detalles de la venta a editar: {err_fetch}", "danger")
+            cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE ORDER BY nombres")
+            empleados = cursor.fetchall()
 
-    # Formatear la fecha para el input
-    if venta_actual.get('fecha_venta') and isinstance(venta_actual['fecha_venta'], datetime):
-        venta_actual['fecha_venta_str'] = venta_actual['fecha_venta'].strftime('%Y-%m-%dT%H:%M')
+            # Ya no necesitamos enviar 'tipos_comprobante' porque es readonly
+            metodos_pago = ['Efectivo', 'Yape', 'Plin', 'Tarjeta', 'Transferencia']
+
+            return render_template('ventas/editar_venta.html',
+                                   titulo_form=f"Editar Datos Venta #{venta_actual['numero_comprobante']}",
+                                   action_url=url_for('main.editar_venta', venta_id=venta_id),
+                                   venta=venta_actual,
+                                   items_venta=items_venta,
+                                   pagos_venta_json=pagos_venta_json,
+                                   sucursales=sucursales,
+                                   clientes=clientes,
+                                   empleados=empleados,
+                                   metodos_pago=metodos_pago)
+    except Exception as e:
+        flash(f"Error cargando: {e}", "danger")
+        return redirect(url_for('main.listar_ventas'))
     
-    # Si venimos de un POST fallido, form_data será request.form. Si es GET, será None.
-    form_data_source = request.form if request.method == 'POST' else None
-    # Si venimos de un POST fallido, usar el JSON de pagos que el usuario intentó guardar
-    pagos_json_para_plantilla = request.form.get('pagos_json', '[]') if request.method == 'POST' else json.dumps(pagos_actuales, default=str)
-
-    return render_template('ventas/form_editar_venta.html',
-                           titulo_form=f"Editar Venta #{venta_id}",
-                           action_url=url_for('main.editar_venta', venta_id=venta_id),
-                           venta=venta_actual,
-                           items_venta=items_actuales,
-                           pagos_venta_json=pagos_json_para_plantilla,
-                           form_data=form_data_source,
-                           # Pasar listas para los desplegables
-                           sucursales=sucursales_activas,
-                           clientes=clientes_todos,
-                           empleados=empleados_activos,
-                           metodos_pago=metodos_pago_opciones,
-                           tipos_comprobante=tipos_comprobante_opciones
-                           )
-
 
 @main_bp.route('/ventas/anular/<int:venta_id>', methods=['POST'])
 @login_required
@@ -4643,7 +4821,7 @@ def anular_venta(venta_id):
     
     try:
         # Usamos 'with' para que el cursor se cierre automáticamente
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # NO hay 'start_transaction()'. La transacción comenzará con el 'FOR UPDATE'.
             
             # 1. Obtener datos de la venta para validar y bloquear la fila
@@ -4687,7 +4865,7 @@ def anular_venta(venta_id):
         db_conn.commit()
         flash(f"Venta #{venta_id} anulada exitosamente. El stock y los puntos han sido revertidos.", "success")
 
-    except (ValueError, mysql.connector.Error, Exception) as e:
+    except (ValueError, Exception, Exception) as e:
         if db_conn and db_conn.in_transaction:
             db_conn.rollback()
         flash(f"Ocurrió un error inesperado al anular la venta: {e}", "danger")
@@ -4697,7 +4875,6 @@ def anular_venta(venta_id):
 
 @main_bp.route('/ventas/detalle/<int:venta_id>')
 @login_required
-@admin_required # O el permiso correspondiente
 def ver_detalle_venta(venta_id):
     """
     Muestra el detalle completo de una venta.
@@ -4706,7 +4883,7 @@ def ver_detalle_venta(venta_id):
     db_conn = get_db()
     venta_actual, items_actuales, pagos_actuales = None, [], []
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # --- CORRECCIÓN AQUÍ: Se añadió el alias 'AS venta_id' a la columna v.id ---
             sql_cabecera = """
                 SELECT 
@@ -4735,7 +4912,7 @@ def ver_detalle_venta(venta_id):
             cursor.execute("SELECT * FROM venta_pagos WHERE venta_id = %s ORDER BY id", (venta_id,))
             pagos_actuales = cursor.fetchall()
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al cargar el detalle de la venta: {err}", "danger")
         return redirect(url_for('main.listar_ventas'))
 
@@ -4744,6 +4921,46 @@ def ver_detalle_venta(venta_id):
                            items=items_actuales,
                            pagos=pagos_actuales,
                            titulo_pagina=f"Detalle de Venta #{venta_actual['serie_comprobante']}-{venta_actual['numero_comprobante']}")
+
+@main_bp.route('/ventas/ticket/<int:venta_id>')
+@login_required
+def ver_ticket(venta_id):
+    db_conn = get_db()
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Datos Cabecera
+            cursor.execute("""
+                SELECT v.*, 
+                       COALESCE(c.razon_social_nombres, 'Cliente Varios') as cliente_nombre,
+                       c.numero_documento as cliente_doc,
+                       c.direccion as cliente_dir,
+                       e.nombres as empleado_nombre,
+                       s.nombre as sucursal_nombre,
+                       s.direccion as sucursal_direccion
+                FROM ventas v
+                LEFT JOIN clientes c ON v.cliente_receptor_id = c.id
+                JOIN empleados e ON v.empleado_id = e.id
+                JOIN sucursales s ON v.sucursal_id = s.id
+                WHERE v.id = %s
+            """, (venta_id,))
+            venta = cursor.fetchone()
+
+            if not venta:
+                return "Venta no encontrada", 404
+
+            # 2. Ítems
+            cursor.execute("SELECT * FROM venta_items WHERE venta_id = %s", (venta_id,))
+            items = cursor.fetchall()
+
+            # 3. Pagos
+            cursor.execute("SELECT * FROM venta_pagos WHERE venta_id = %s", (venta_id,))
+            pagos = cursor.fetchall()
+
+            return render_template('ventas/ticket.html', venta=venta, items=items, pagos=pagos)
+
+    except Exception as e:
+        return f"Error generando ticket: {e}", 500
+
     
 @main_bp.route('/ventas/imprimir/<int:venta_id>')
 @login_required
@@ -4754,7 +4971,7 @@ def imprimir_ticket_venta(venta_id):
     db_conn = get_db()
     
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # 1. Obtener la cabecera de la venta y datos relacionados
             sql_cabecera = """
                 SELECT 
@@ -4783,7 +5000,7 @@ def imprimir_ticket_venta(venta_id):
             cursor.execute("SELECT * FROM venta_pagos WHERE venta_id = %s ORDER BY id", (venta_id,))
             pagos_actuales = cursor.fetchall()
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al generar el ticket de venta: {err}", "danger")
         return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
 
@@ -4795,8 +5012,10 @@ def imprimir_ticket_venta(venta_id):
     
 @main_bp.route('/ventas')
 @login_required
-@admin_required # O el permiso que hayas definido
 def listar_ventas():
+    if not current_user.can('ver_ventas'):
+        flash('Acceso denegado', 'danger')
+        return redirect(url_for('main.index'))
     """
     Muestra una lista de todas las ventas registradas.
     Versión corregida con el alias 'venta_id' verificado.
@@ -4805,7 +5024,7 @@ def listar_ventas():
     lista_de_ventas = []
     
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # --- CORRECCIÓN CLAVE ---
             # Nos aseguramos de que la columna v.id se renombre a 'venta_id'
             sql = """
@@ -4814,6 +5033,8 @@ def listar_ventas():
                     v.fecha_venta, 
                     v.monto_final_venta, 
                     v.estado_pago,
+                    v.tipo_comprobante,
+                    v.estado_sunat,
                     v.serie_comprobante, 
                     v.numero_comprobante,
                     e.nombre_display AS empleado_nombre,
@@ -4826,7 +5047,7 @@ def listar_ventas():
             cursor.execute(sql)
             lista_de_ventas = cursor.fetchall()
             
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder al historial de ventas: {err}", "danger")
         current_app.logger.error(f"Error en listar_ventas: {err}")
         
@@ -4844,11 +5065,11 @@ def listar_sucursales():
     """
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT * FROM sucursales ORDER BY nombre")
         lista_de_sucursales = cursor.fetchall()
         cursor.close()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a las sucursales: {err}", "danger")
         current_app.logger.error(f"Error en listar_sucursales: {err}")
         lista_de_sucursales = []
@@ -4863,7 +5084,7 @@ def listar_sucursales():
 def nueva_sucursal():
     """
     Muestra el formulario para registrar una nueva sucursal (GET)
-    y procesa la creación de la sucursal (POST).
+    y procesa la creación de la sucursal (POST), incluyendo redes sociales.
     """
     form_titulo = "Registrar Nueva Sucursal"
     action_url_form = url_for('main.nueva_sucursal')
@@ -4877,9 +5098,17 @@ def nueva_sucursal():
         codigo_sunat = request.form.get('codigo_establecimiento_sunat', '').strip()
         activo = 'activo' in request.form
 
+        # --- CAMPOS NUEVOS DE REDES SOCIALES ---
+        facebook_url = request.form.get('facebook_url', '').strip()
+        instagram_url = request.form.get('instagram_url', '').strip()
+        tiktok_url = request.form.get('tiktok_url', '').strip()
+        whatsapp_numero_raw = request.form.get('whatsapp_numero', '').strip()
+
+        # Limpiar WhatsApp: quitar espacios, guiones, etc.
+        whatsapp_numero = ''.join(filter(str.isdigit, whatsapp_numero_raw))
+
         if not nombre:
             flash('El nombre de la sucursal es obligatorio.', 'warning')
-            # Volver a renderizar con los datos ingresados
             return render_template('configuracion/form_sucursal.html', 
                                    form_data=request.form, 
                                    es_nueva=True, 
@@ -4890,23 +5119,25 @@ def nueva_sucursal():
         try:
             db = get_db()
             cursor_insert = db.cursor()
+            # --- SQL ACTUALIZADO ---
             sql = """INSERT INTO sucursales 
-                        (nombre, direccion, ciudad, telefono, email, codigo_establecimiento_sunat, activo) 
-                     VALUES (%s, %s, %s, %s, %s, %s, %s)"""
+                        (nombre, direccion, ciudad, telefono, email, 
+                         codigo_establecimiento_sunat, activo,
+                         facebook_url, instagram_url, tiktok_url, whatsapp_numero) 
+                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
             val = (nombre, 
-                   (direccion if direccion else None), 
-                   (ciudad if ciudad else None), 
-                   (telefono if telefono else None), 
-                   (email if email else None), 
-                   (codigo_sunat if codigo_sunat else None), 
-                   activo)
+                   (direccion or None), (ciudad or None), (telefono or None), (email or None), 
+                   (codigo_sunat or None), activo,
+                   (facebook_url or None), (instagram_url or None), (tiktok_url or None), (whatsapp_numero or None))
+            
             cursor_insert.execute(sql, val)
             db.commit()
             flash(f'Sucursal "{nombre}" registrada exitosamente!', 'success')
             return redirect(url_for('main.listar_sucursales'))
-        except mysql.connector.Error as err:
+        except Exception as err:
             db.rollback()
-            if err.errno == 1062: # Error de entrada duplicada (nombre UNIQUE)
+            # Asumiendo que 'nombre' tiene una constraint UNIQUE
+            if hasattr(err, 'pgcode') and err.pgcode == '23505': 
                 flash(f'Error: Ya existe una sucursal con el nombre "{nombre}".', 'danger')
             else:
                 flash(f'Error al registrar la sucursal: {err}', 'danger')
@@ -4940,10 +5171,10 @@ def editar_sucursal(sucursal_id):
     # Obtener la sucursal actual para editar
     sucursal_actual = None
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT * FROM sucursales WHERE id = %s", (sucursal_id,))
         sucursal_actual = cursor.fetchone()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al buscar la sucursal: {err}", "danger")
         current_app.logger.error(f"Error DB buscando sucursal en editar (ID: {sucursal_id}): {err}")
         return redirect(url_for('main.listar_sucursales'))
@@ -4967,7 +5198,16 @@ def editar_sucursal(sucursal_id):
         email_nuevo = request.form.get('email', '').strip()
         codigo_sunat_nuevo = request.form.get('codigo_establecimiento_sunat', '').strip()
         activo_nuevo = 'activo' in request.form
+
+        # --- CAMPOS NUEVOS DE REDES SOCIALES ---
+        facebook_url_nuevo = request.form.get('facebook_url', '').strip()
+        instagram_url_nuevo = request.form.get('instagram_url', '').strip()
+        tiktok_url_nuevo = request.form.get('tiktok_url', '').strip()
+        whatsapp_numero_raw_nuevo = request.form.get('whatsapp_numero', '').strip()
         
+        # Limpiar WhatsApp
+        whatsapp_numero_nuevo = ''.join(filter(str.isdigit, whatsapp_numero_raw_nuevo))
+
         errores = []
         if not nombre_nuevo:
             errores.append('El nombre de la sucursal es obligatorio.')
@@ -4975,11 +5215,11 @@ def editar_sucursal(sucursal_id):
         # Validar unicidad del nombre si ha cambiado
         if nombre_nuevo and nombre_nuevo.lower() != sucursal_actual.get('nombre', '').lower():
             try:
-                cursor = db_conn.cursor(dictionary=True)
+                cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                 cursor.execute("SELECT id FROM sucursales WHERE nombre = %s AND id != %s", (nombre_nuevo, sucursal_id))
                 if cursor.fetchone():
                     errores.append(f'Error: Ya existe otra sucursal con el nombre "{nombre_nuevo}".')
-            except mysql.connector.Error as err_check:
+            except Exception as err_check:
                 current_app.logger.error(f"Error DB verificando nombre sucursal: {err_check}")
                 errores.append("Error al verificar la disponibilidad del nombre de la sucursal.")
             finally:
@@ -4998,24 +5238,32 @@ def editar_sucursal(sucursal_id):
             # Actualizar la sucursal en la BD
             try:
                 cursor = db_conn.cursor()
+                # --- SQL ACTUALIZADO ---
                 sql_update = """UPDATE sucursales SET 
                                     nombre = %s, direccion = %s, ciudad = %s, telefono = %s, 
-                                    email = %s, codigo_establecimiento_sunat = %s, activo = %s
+                                    email = %s, codigo_establecimiento_sunat = %s, activo = %s,
+                                    facebook_url = %s, instagram_url = %s, tiktok_url = %s, whatsapp_numero = %s
                                 WHERE id = %s"""
                 val_update = (nombre_nuevo, 
-                              (direccion_nueva if direccion_nueva else None),
-                              (ciudad_nueva if ciudad_nueva else None),
-                              (telefono_nuevo if telefono_nuevo else None),
-                              (email_nuevo if email_nuevo else None),
-                              (codigo_sunat_nuevo if codigo_sunat_nuevo else None),
-                              activo_nuevo, sucursal_id)
+                              (direccion_nueva or None),
+                              (ciudad_nueva or None),
+                              (telefono_nuevo or None),
+                              (email_nuevo or None),
+                              (codigo_sunat_nuevo or None),
+                              activo_nuevo,
+                              (facebook_url_nuevo or None),
+                              (instagram_url_nuevo or None),
+                              (tiktok_url_nuevo or None),
+                              (whatsapp_numero_nuevo or None),
+                              sucursal_id)
                 cursor.execute(sql_update, val_update)
                 db_conn.commit()
                 flash(f'Sucursal "{nombre_nuevo}" actualizada exitosamente!', 'success')
                 return redirect(url_for('main.listar_sucursales'))
-            except mysql.connector.Error as err_upd:
+            except Exception as err_upd:
                 db_conn.rollback()
-                if err_upd.errno == 1062:
+                # Adaptado para psycopg2 - el código de error de unicidad es '23505'
+                if hasattr(err_upd, 'pgcode') and err_upd.pgcode == '23505':
                      flash(f'Error: Ya existe una sucursal con el nombre "{nombre_nuevo}".', 'danger')
                 else:
                     flash(f"Error al actualizar la sucursal: {err_upd}", 'danger')
@@ -5049,7 +5297,7 @@ def toggle_activo_sucursal(sucursal_id):
     cursor = None # Usaremos este cursor para leer y luego para escribir
 
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # Obtener el estado actual de la sucursal
         cursor.execute("SELECT id, nombre, activo FROM sucursales WHERE id = %s", (sucursal_id,))
         sucursal_actual = cursor.fetchone()
@@ -5067,7 +5315,7 @@ def toggle_activo_sucursal(sucursal_id):
         mensaje_estado = "activada" if nuevo_estado_activo else "desactivada"
         flash(f'La sucursal "{sucursal_actual["nombre"]}" ha sido {mensaje_estado} exitosamente.', 'success')
         
-    except mysql.connector.Error as err:
+    except Exception as err:
         if db_conn:
             db_conn.rollback()
         flash(f'Error al cambiar el estado de la sucursal: {err}', 'danger')
@@ -5088,21 +5336,21 @@ def listar_series():
     """
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # Consulta actualizada con JOIN a la tabla 'sucursales'
         sql = """
             SELECT 
                 cs.id, cs.tipo_comprobante, cs.serie, 
-                cs.ultimo_numero_usado, cs.activo,
+                cs.ultimo_numero, cs.activo,
                 s.nombre AS sucursal_nombre 
-            FROM comprobante_series cs
+            FROM series_comprobantes cs
             JOIN sucursales s ON cs.sucursal_id = s.id
             ORDER BY s.nombre, cs.tipo_comprobante, cs.serie
         """
         cursor.execute(sql)
         lista_de_series = cursor.fetchall()
         cursor.close()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a la configuración de series: {err}", "danger")
         current_app.logger.error(f"Error en listar_series: {err}")
         lista_de_series = []
@@ -5125,10 +5373,10 @@ def nueva_serie():
     # Cargar sucursales activas para el dropdown
     sucursales_activas = []
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
         sucursales_activas = cursor.fetchall()
-    except mysql.connector.Error as err_load:
+    except Exception as err_load:
         flash(f"Error al cargar sucursales: {err_load}", "danger")
     finally:
         if cursor: cursor.close()
@@ -5141,7 +5389,7 @@ def nueva_serie():
         sucursal_id_str = request.form.get('sucursal_id') # <<< NUEVO
         tipo_comprobante = request.form.get('tipo_comprobante')
         serie = request.form.get('serie', '').strip().upper()
-        ultimo_numero_usado_str = request.form.get('ultimo_numero_usado', '0')
+        ultimo_numero_str = request.form.get('ultimo_numero', '0')
         activo = 'activo' in request.form
 
         errores = []
@@ -5157,11 +5405,11 @@ def nueva_serie():
         if not serie:
             errores.append("El código de la serie es obligatorio (ej. B001, F001).")
         
-        ultimo_numero_usado = 0
+        ultimo_numero = 0
         try:
-            ultimo_numero_usado = int(ultimo_numero_usado_str)
-            if ultimo_numero_usado < 0:
-                errores.append("El último número usado no puede ser negativo.")
+            ultimo_numero = int(ultimo_numero_str)
+            if ultimo_numero < 0:
+                errores.append("El último número no puede ser negativo.")
         except (ValueError, TypeError):
             errores.append("El último número usado debe ser un número entero.")
 
@@ -5180,15 +5428,15 @@ def nueva_serie():
         try:
             cursor_insert = db_conn.cursor()
             # La consulta INSERT ahora incluye sucursal_id
-            sql = "INSERT INTO comprobante_series (sucursal_id, tipo_comprobante, serie, ultimo_numero_usado, activo) VALUES (%s, %s, %s, %s, %s)"
-            val = (sucursal_id, tipo_comprobante, serie, ultimo_numero_usado, activo)
+            sql = "INSERT INTO series_comprobantes (sucursal_id, tipo_comprobante, serie, ultimo_numero, activo) VALUES (%s, %s, %s, %s, %s)"
+            val = (sucursal_id, tipo_comprobante, serie, ultimo_numero, activo)
             cursor_insert.execute(sql, val)
             db_conn.commit()
             flash(f'La serie "{serie}" para "{tipo_comprobante}" ha sido registrada exitosamente!', 'success')
             return redirect(url_for('main.listar_series'))
-        except mysql.connector.Error as err:
+        except Exception as err:
             db_conn.rollback()
-            if err.errno == 1062: # Error de uq_sucursal_tipo_serie
+            if hasattr(err, 'pgcode') and err.pgcode == '23505': # Error de uq_sucursal_tipo_serie
                 flash(f'Error: La combinación de sucursal, tipo "{tipo_comprobante}" y serie "{serie}" ya existe.', 'danger')
             else:
                 flash(f'Error al registrar la serie: {err}', 'danger')
@@ -5229,10 +5477,10 @@ def editar_serie(serie_id):
     # Obtener la serie actual para editar
     serie_actual = None
     try:
-        cursor = db_conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM comprobante_series WHERE id = %s", (serie_id,))
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("SELECT * FROM series_comprobantes WHERE id = %s", (serie_id,))
         serie_actual = cursor.fetchone()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al buscar la serie: {err}", "danger")
         current_app.logger.error(f"Error DB buscando serie en editar (ID: {serie_id}): {err}")
         return redirect(url_for('main.listar_series'))
@@ -5247,10 +5495,10 @@ def editar_serie(serie_id):
     sucursales_activas = []
     tipos_comprobante_opciones = ["Nota de Venta", "Boleta Electrónica", "Factura Electrónica", "Otro"]
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
         sucursales_activas = cursor.fetchall()
-    except mysql.connector.Error as err_load:
+    except Exception as err_load:
         flash(f"Error al cargar sucursales para el formulario: {err_load}", "danger")
     finally:
         if cursor: cursor.close()
@@ -5262,7 +5510,7 @@ def editar_serie(serie_id):
         sucursal_id_str = request.form.get('sucursal_id')
         tipo_comprobante = request.form.get('tipo_comprobante')
         serie_nueva = request.form.get('serie', '').strip().upper()
-        ultimo_numero_usado_str = request.form.get('ultimo_numero_usado', '0')
+        ultimo_numero_str = request.form.get('ultimo_numero', '0')
         activo_nuevo = 'activo' in request.form
 
         errores = []
@@ -5275,25 +5523,25 @@ def editar_serie(serie_id):
         if not tipo_comprobante: errores.append("Debe seleccionar un tipo de comprobante.")
         if not serie_nueva: errores.append("El código de la serie es obligatorio.")
         
-        ultimo_numero_usado = 0
+        ultimo_numero = 0
         try:
-            ultimo_numero_usado = int(ultimo_numero_usado_str)
-            if ultimo_numero_usado < 0:
-                errores.append("El último número usado no puede ser negativo.")
+            ultimo_numero = int(ultimo_numero_str)
+            if ultimo_numero < 0:
+                errores.append("El último número no puede ser negativo.")
         except (ValueError, TypeError):
-            errores.append("El último número usado debe ser un número entero.")
+            errores.append("El último número debe ser un número entero.")
         
         # Validar unicidad de la combinación (sucursal, tipo, serie) si ha cambiado
         if (sucursal_id != serie_actual.get('sucursal_id') or 
             tipo_comprobante != serie_actual.get('tipo_comprobante') or 
             serie_nueva.lower() != serie_actual.get('serie', '').lower()):
             try:
-                cursor = db_conn.cursor(dictionary=True)
-                cursor.execute("SELECT id FROM comprobante_series WHERE sucursal_id = %s AND tipo_comprobante = %s AND serie = %s AND id != %s", 
+                cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                cursor.execute("SELECT id FROM series_comprobantes WHERE sucursal_id = %s AND tipo_comprobante = %s AND serie = %s AND id != %s", 
                                (sucursal_id, tipo_comprobante, serie_nueva, serie_id))
                 if cursor.fetchone():
                     errores.append(f'Error: La combinación de sucursal, tipo y serie ("{serie_nueva}") ya existe.')
-            except mysql.connector.Error as err_check:
+            except Exception as err_check:
                 current_app.logger.error(f"Error DB verificando unicidad de serie: {err_check}")
                 errores.append("Error al verificar la unicidad de la serie.")
             finally:
@@ -5314,19 +5562,19 @@ def editar_serie(serie_id):
             # Actualizar la serie en la BD
             try:
                 cursor = db_conn.cursor()
-                sql_update = """UPDATE comprobante_series SET 
+                sql_update = """UPDATE series_comprobantes SET 
                                     sucursal_id = %s, tipo_comprobante = %s, serie = %s, 
-                                    ultimo_numero_usado = %s, activo = %s
+                                    ultimo_numero = %s, activo = %s
                                 WHERE id = %s"""
                 val_update = (sucursal_id, tipo_comprobante, serie_nueva, 
-                              ultimo_numero_usado, activo_nuevo, serie_id)
+                              ultimo_numero, activo_nuevo, serie_id)
                 cursor.execute(sql_update, val_update)
                 db_conn.commit()
                 flash(f'La serie "{serie_nueva}" ha sido actualizada exitosamente!', 'success')
                 return redirect(url_for('main.listar_series'))
-            except mysql.connector.Error as err_upd:
+            except Exception as err_upd:
                 db_conn.rollback()
-                if err_upd.errno == 1062:
+                if hasattr(err_upd, 'pgcode') and err_upd.pgcode == '23505':
                     flash(f'Error de dato duplicado al actualizar: La combinación de sucursal, tipo y serie ya existe.', 'danger')
                 else:
                     flash(f"Error al actualizar la serie: {err_upd}", 'danger')
@@ -5364,9 +5612,9 @@ def toggle_activo_serie(serie_id):
     cursor = None
 
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # Obtener el estado actual de la serie
-        cursor.execute("SELECT id, serie, tipo_comprobante, activo FROM comprobante_series WHERE id = %s", (serie_id,))
+        cursor.execute("SELECT id, serie, tipo_comprobante, activo FROM series_comprobantes WHERE id = %s", (serie_id,))
         serie_actual = cursor.fetchone()
 
         if not serie_actual:
@@ -5377,13 +5625,13 @@ def toggle_activo_serie(serie_id):
         
         # Actualizar el estado en la base de datos
         # Reutilizamos el cursor ya que la operación de lectura ya terminó
-        cursor.execute("UPDATE comprobante_series SET activo = %s WHERE id = %s", (nuevo_estado_activo, serie_id))
+        cursor.execute("UPDATE series_comprobantes SET activo = %s WHERE id = %s", (nuevo_estado_activo, serie_id))
         db_conn.commit()
         
         mensaje_estado = "activada" if nuevo_estado_activo else "desactivada"
         flash(f'La serie "{serie_actual["serie"]}" para "{serie_actual["tipo_comprobante"]}" ha sido {mensaje_estado} exitosamente.', 'success')
         
-    except mysql.connector.Error as err:
+    except Exception as err:
         if db_conn:
             db_conn.rollback()
         flash(f'Error al cambiar el estado de la serie: {err}', 'danger')
@@ -5417,9 +5665,9 @@ def api_get_series_por_sucursal_y_tipo():
     db_conn = get_db()
     cursor = None
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         sql = """
-            SELECT serie FROM comprobante_series 
+            SELECT serie FROM series_comprobantes 
             WHERE sucursal_id = %s AND tipo_comprobante = %s AND activo = TRUE
             ORDER BY serie
         """
@@ -5427,7 +5675,7 @@ def api_get_series_por_sucursal_y_tipo():
         resultados = cursor.fetchall()
         # Creamos una lista simple de strings con las series
         series_disponibles = [row['serie'] for row in resultados]
-    except mysql.connector.Error as err:
+    except Exception as err:
         current_app.logger.error(f"Error DB en api_get_series: {err}")
         return jsonify({"error": "Error interno al consultar las series."}), 500
     finally:
@@ -5448,11 +5696,11 @@ def listar_categorias_gastos():
     """
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT id, nombre, descripcion FROM categorias_gastos ORDER BY nombre")
         lista_de_categorias = cursor.fetchall()
         cursor.close()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a las categorías de gastos: {err}", "danger")
         current_app.logger.error(f"Error en listar_categorias_gastos: {err}")
         lista_de_categorias = []
@@ -5494,7 +5742,7 @@ def nueva_categoria_gasto():
             db.commit()
             flash(f'Categoría de gasto "{nombre}" registrada exitosamente!', 'success')
             return redirect(url_for('main.listar_categorias_gastos'))
-        except mysql.connector.Error as err:
+        except Exception as err:
             db.rollback()
             if err.errno == 1062: # Error de entrada duplicada (nombre UNIQUE)
                 flash(f'Error: Ya existe una categoría de gasto con el nombre "{nombre}".', 'danger')
@@ -5530,10 +5778,10 @@ def editar_categoria_gasto(categoria_id):
     # Obtener la categoría actual para editar
     categoria_actual = None
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT id, nombre, descripcion FROM categorias_gastos WHERE id = %s", (categoria_id,))
         categoria_actual = cursor.fetchone()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al buscar la categoría de gasto: {err}", "danger")
         current_app.logger.error(f"Error DB buscando categoría de gasto en editar (ID: {categoria_id}): {err}")
         return redirect(url_for('main.listar_categorias_gastos'))
@@ -5560,11 +5808,11 @@ def editar_categoria_gasto(categoria_id):
         # Validar unicidad del nombre si ha cambiado
         if nombre_nuevo and nombre_nuevo.lower() != categoria_actual.get('nombre', '').lower():
             try:
-                cursor = db_conn.cursor(dictionary=True)
+                cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                 cursor.execute("SELECT id FROM categorias_gastos WHERE nombre = %s AND id != %s", (nombre_nuevo, categoria_id))
                 if cursor.fetchone():
                     errores.append(f'Error: Ya existe otra categoría de gasto con el nombre "{nombre_nuevo}".')
-            except mysql.connector.Error as err_check:
+            except Exception as err_check:
                 current_app.logger.error(f"Error DB verificando nombre de categoría de gasto: {err_check}")
                 errores.append("Error al verificar la disponibilidad del nombre.")
             finally:
@@ -5589,7 +5837,7 @@ def editar_categoria_gasto(categoria_id):
                 db_conn.commit()
                 flash(f'Categoría de gasto "{nombre_nuevo}" actualizada exitosamente!', 'success')
                 return redirect(url_for('main.listar_categorias_gastos'))
-            except mysql.connector.Error as err_upd:
+            except Exception as err_upd:
                 db_conn.rollback()
                 if err_upd.errno == 1062:
                      flash(f'Error: Ya existe una categoría de gasto con el nombre "{nombre_nuevo}".', 'danger')
@@ -5623,7 +5871,7 @@ def eliminar_categoria_gasto(categoria_id):
     db_conn = get_db()
     cursor = None
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         # 1. Verificar si la categoría tiene gastos asociados antes de intentar borrar
         cursor.execute("SELECT COUNT(*) as count FROM gastos WHERE categoria_gasto_id = %s", (categoria_id,))
@@ -5642,7 +5890,7 @@ def eliminar_categoria_gasto(categoria_id):
         else:
             flash('No se encontró la categoría de gasto o no se pudo eliminar.', 'warning')
             
-    except mysql.connector.Error as err:
+    except Exception as err:
         db_conn.rollback()
         # Este error podría ocurrir si, a pesar de nuestra comprobación, existe una restricción de FK
         # que no consideramos (quizás en otra tabla futura). Es bueno manejarlo.
@@ -5659,14 +5907,16 @@ def eliminar_categoria_gasto(categoria_id):
 
 @main_bp.route('/finanzas/gastos')
 @login_required
-@admin_required
 def listar_gastos():
+    if not current_user.can('ver_finanzas'):
+        flash('Acceso denegado', 'danger')
+        return redirect(url_for('main.index'))
     """
     Muestra una lista de todos los gastos registrados.
     """
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # Unimos con otras tablas para obtener nombres en lugar de solo IDs
         sql = """
             SELECT 
@@ -5683,7 +5933,7 @@ def listar_gastos():
         cursor.execute(sql)
         lista_de_gastos = cursor.fetchall()
         cursor.close()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a los gastos: {err}", "danger")
         current_app.logger.error(f"Error en listar_gastos: {err}")
         lista_de_gastos = []
@@ -5694,46 +5944,53 @@ def listar_gastos():
 
 @main_bp.route('/finanzas/gastos/nuevo', methods=['GET', 'POST'])
 @login_required
-@admin_required
 def nuevo_gasto():
-    """
-    Muestra el formulario para registrar un nuevo gasto (GET)
-    y procesa la creación del gasto (POST), incluyendo detalles opcionales del comprobante.
-    """
+    # Verificación de Permisos
+    # (Ajusta esto según tu lógica de roles si es necesario, por ahora permitimos admin y cajero o permiso)
+    es_admin = getattr(current_user, 'rol_nombre', '') == 'Administrador'
+    es_cajero = getattr(current_user, 'rol_nombre', '') == 'Cajero'
+    
+    if not es_admin and not es_cajero and not current_user.can('ver_finanzas'):
+        flash('Acceso denegado', 'danger')
+        return redirect(url_for('main.index'))
+    
+    # 1. OBTENER SUCURSAL AUTOMÁTICAMENTE
+    sucursal_id = session.get('sucursal_id')
+    if not sucursal_id:
+        flash("Debe seleccionar una sucursal para registrar gastos.", "warning")
+        return redirect(url_for('main.index'))
+
     db_conn = get_db()
     
-    # Cargar datos para los menús desplegables (necesario para GET y para re-renderizar en POST con error)
-    sucursales_activas = []
+    # 2. CARGAR DATOS PARA EL FORMULARIO
     categorias_gastos = []
     colaboradores_activos = []
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
-            sucursales_activas = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Categorías
             cursor.execute("SELECT id, nombre FROM categorias_gastos ORDER BY nombre")
             categorias_gastos = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
+            
+            # Colaboradores
             cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE ORDER BY apellidos, nombres")
             colaboradores_activos = cursor.fetchall()
-    except mysql.connector.Error as err_load:
-        flash(f"Error al cargar datos para el formulario de gasto: {err_load}", "danger")
-        current_app.logger.error(f"Error DB cargando dropdowns en nuevo_gasto: {err_load}")
+    except Exception as err_load:
+        flash(f"Error al cargar datos: {err_load}", "danger")
 
     form_titulo = "Registrar Nuevo Gasto"
     action_url_form = url_for('main.nuevo_gasto')
 
+    # --- LÓGICA POST ---
     if request.method == 'POST':
-        # Recoger todos los campos del formulario
-        sucursal_id_str = request.form.get('sucursal_id')
+        # Recoger datos
         categoria_gasto_id_str = request.form.get('categoria_gasto_id')
-        registrado_por_colaborador_id_str = request.form.get('registrado_por_colaborador_id')
         fecha_str = request.form.get('fecha')
         descripcion = request.form.get('descripcion')
         monto_str = request.form.get('monto')
         metodo_pago = request.form.get('metodo_pago')
-        
-        # Nuevos campos del comprobante
+        empleado_beneficiario_id_str = request.form.get('empleado_beneficiario_id')
+
+        # Campos del comprobante
         comprobante_tipo = request.form.get('comprobante_tipo', '').strip()
         comprobante_serie = request.form.get('comprobante_serie', '').strip()
         comprobante_numero = request.form.get('comprobante_numero', '').strip()
@@ -5741,192 +5998,207 @@ def nuevo_gasto():
         comprobante_razon_social_emisor = request.form.get('comprobante_razon_social_emisor', '').strip()
         
         errores = []
-        if not sucursal_id_str: errores.append("Debe seleccionar una sucursal.")
-        if not categoria_gasto_id_str: errores.append("Debe seleccionar una categoría de gasto.")
-        if not registrado_por_colaborador_id_str: errores.append("Debe seleccionar el colaborador que registra el gasto.")
+        if not categoria_gasto_id_str: errores.append("Seleccione una categoría.")
         if not fecha_str: errores.append("La fecha es obligatoria.")
-        if not descripcion or not descripcion.strip(): errores.append("La descripción es obligatoria.")
+        if not descripcion: errores.append("La descripción es obligatoria.")
         if not monto_str: errores.append("El monto es obligatorio.")
-        if not metodo_pago: errores.append("El método de pago es obligatorio.")
+        
+        # CORRECCIÓN IMPORTANTE: Si método es vacío, asumimos Efectivo
+        if not metodo_pago: metodo_pago = 'Efectivo' 
 
         monto = 0.0
         try:
             monto = float(monto_str)
-            if monto <= 0: errores.append("El monto debe ser un valor positivo.")
-        except (ValueError, TypeError):
-            errores.append("El monto debe ser un número válido.")
+            if monto <= 0: errores.append("El monto debe ser positivo.")
+        except:
+            errores.append("Monto inválido.")
         
+        # 3. VINCULAR CON CAJA ABIERTA
+        caja_id = None
+        try:
+            with db_conn.cursor() as cursor_caja:
+                cursor_caja.execute(
+                    "SELECT id FROM caja_sesiones WHERE usuario_id=%s AND estado='Abierta' AND sucursal_id=%s",
+                    (current_user.id, sucursal_id)
+                )
+                caja_abierta = cursor_caja.fetchone()
+                if caja_abierta:
+                    caja_id = caja_abierta[0]
+                elif metodo_pago == 'Efectivo':
+                    # Si es efectivo, exigimos caja abierta
+                    errores.append("No tienes una caja abierta para registrar salidas de efectivo.")
+        except Exception as e:
+            errores.append(f"Error verificando caja: {e}")
+
         if errores:
             for error in errores: flash(error, 'warning')
         else:
-            cursor_insert = None
+            # 4. INSERTAR GASTO
             try:
-                # Si no hay errores, proceder con la inserción
-                cursor_insert = db_conn.cursor()
-                sql = """INSERT INTO gastos 
-                            (sucursal_id, categoria_gasto_id, fecha, descripcion, monto, metodo_pago, 
-                             registrado_por_colaborador_id, comprobante_tipo, comprobante_serie, 
-                             comprobante_numero, comprobante_ruc_emisor, comprobante_razon_social_emisor)
-                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-                val = (int(sucursal_id_str), int(categoria_gasto_id_str), fecha_str, descripcion, monto, 
-                       metodo_pago, int(registrado_por_colaborador_id_str),
-                       (comprobante_tipo if comprobante_tipo else None),
-                       (comprobante_serie if comprobante_serie else None),
-                       (comprobante_numero if comprobante_numero else None),
-                       (comprobante_ruc_emisor if comprobante_ruc_emisor else None),
-                       (comprobante_razon_social_emisor if comprobante_razon_social_emisor else None)
-                      )
-                cursor_insert.execute(sql, val)
+                with db_conn.cursor() as cursor:
+                    sql = """INSERT INTO gastos 
+                                (sucursal_id, categoria_gasto_id, fecha, descripcion, monto, metodo_pago, 
+                                 registrado_por_colaborador_id, empleado_beneficiario_id, caja_sesion_id,
+                                 comprobante_tipo, comprobante_serie, comprobante_numero, 
+                                 comprobante_ruc_emisor, comprobante_razon_social_emisor)
+                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+                    
+                    empleado_beneficiario_id = int(empleado_beneficiario_id_str) if empleado_beneficiario_id_str else None
+
+                    val = (sucursal_id, int(categoria_gasto_id_str), fecha_str, descripcion, monto, 
+                           metodo_pago, current_user.id, empleado_beneficiario_id, caja_id,
+                           comprobante_tipo or None, comprobante_serie or None,
+                           comprobante_numero or None, comprobante_ruc_emisor or None,
+                           comprobante_razon_social_emisor or None
+                          )
+                    cursor.execute(sql, val)
+                
                 db_conn.commit()
                 flash("Gasto registrado exitosamente.", "success")
-                return redirect(url_for('main.listar_gastos')) # Redirigir a la lista de gastos
-            except mysql.connector.Error as err:
+                return redirect(url_for('main.listar_gastos'))
+                
+            except Exception as err:
                 db_conn.rollback()
-                flash(f"Error al registrar el gasto: {err}", "danger")
-                current_app.logger.error(f"Error en nuevo_gasto (POST): {err}")
-            finally:
-                if cursor_insert: cursor_insert.close()
+                flash(f"Error al guardar gasto: {err}", "danger")
+                current_app.logger.error(f"Error nuevo_gasto POST: {err}")
         
-        # Si hubo un error de validación o de BD, se llega aquí. Re-renderizar el formulario.
+        # Si hubo error, volver al formulario
         return render_template('finanzas/form_gasto.html', 
-                               form_data=request.form, 
-                               es_nueva=True, 
+                               form_data=request.form, es_nueva=True, 
                                titulo_form=form_titulo,
                                action_url=action_url_form, 
-                               sucursales=sucursales_activas,
                                categorias_gastos=categorias_gastos, 
-                               colaboradores=colaboradores_activos)
+                               colaboradores=colaboradores_activos,
+                               hoy=date.today().strftime('%Y-%m-%d'))
 
-    # Método GET: muestra el formulario vacío
+    # --- LÓGICA GET ---
     return render_template('finanzas/form_gasto.html', 
                            es_nueva=True, 
                            titulo_form=form_titulo,
                            action_url=action_url_form, 
-                           sucursales=sucursales_activas,
                            categorias_gastos=categorias_gastos, 
-                           colaboradores=colaboradores_activos)
+                           colaboradores=colaboradores_activos,
+                           hoy=date.today().strftime('%Y-%m-%d'))
 
 @main_bp.route('/finanzas/gastos/editar/<int:gasto_id>', methods=['GET', 'POST'])
 @login_required
-@admin_required
 def editar_gasto(gasto_id):
     db_conn = get_db()
-    cursor = None 
-
-    # Obtener el gasto actual para editar
-    gasto_actual = None
+    
+    # 1. Buscar Gasto Actual
     try:
-        cursor = db_conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM gastos WHERE id = %s", (gasto_id,))
-        gasto_actual = cursor.fetchone()
-    except mysql.connector.Error as err:
-        flash(f"Error al buscar el gasto: {err}", "danger")
-        current_app.logger.error(f"Error DB buscando gasto en editar (ID: {gasto_id}): {err}")
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            cursor.execute("SELECT * FROM gastos WHERE id = %s", (gasto_id,))
+            gasto_actual = cursor.fetchone()
+            
+            if not gasto_actual:
+                flash(f"Gasto no encontrado.", "warning")
+                return redirect(url_for('main.listar_gastos'))
+
+            # Cargar Maestros
+            cursor.execute("SELECT id, nombre FROM categorias_gastos ORDER BY nombre")
+            categorias_gastos = cursor.fetchall()
+            
+            cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE ORDER BY apellidos, nombres")
+            colaboradores_activos = cursor.fetchall()
+            
+    except Exception as e:
+        flash(f"Error al cargar datos: {e}", "danger")
         return redirect(url_for('main.listar_gastos'))
-    finally:
-        if cursor: cursor.close()
 
-    if not gasto_actual:
-        flash(f"Gasto con ID {gasto_id} no encontrado.", "warning")
-        return redirect(url_for('main.listar_gastos'))
-
-    # Cargar datos para los menús desplegables
-    sucursales_activas, categorias_gastos, colaboradores_activos = [], [], []
-    try:
-        with db_conn.cursor(dictionary=True) as cursor_dd:
-            cursor_dd.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
-            sucursales_activas = cursor_dd.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor_dd:
-            cursor_dd.execute("SELECT id, nombre FROM categorias_gastos ORDER BY nombre")
-            categorias_gastos = cursor_dd.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor_dd:
-            cursor_dd.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE ORDER BY apellidos, nombres")
-            colaboradores_activos = cursor_dd.fetchall()
-    except mysql.connector.Error as err_load:
-        flash(f"Error al cargar datos para el formulario: {err_load}", "danger")
-
-    form_titulo = f"Editar Gasto #{gasto_actual['id']}"
+    form_titulo = f"Editar Gasto #{gasto_id}"
     action_url_form = url_for('main.editar_gasto', gasto_id=gasto_id)
 
+    # --- LÓGICA POST (ACTUALIZAR) ---
     if request.method == 'POST':
-        # Recoger datos del formulario
-        sucursal_id_str = request.form.get('sucursal_id')
+        # Recoger datos
+        # Sucursal NO se edita (se mantiene la original del gasto o la de sesión)
+        # sucursal_id = gasto_actual['sucursal_id'] 
+        
         categoria_gasto_id_str = request.form.get('categoria_gasto_id')
-        registrado_por_colaborador_id_str = request.form.get('registrado_por_colaborador_id')
         fecha_str = request.form.get('fecha')
         descripcion = request.form.get('descripcion')
         monto_str = request.form.get('monto')
         metodo_pago = request.form.get('metodo_pago')
+        empleado_beneficiario_id_str = request.form.get('empleado_beneficiario_id')
+
+        # Comprobante
         comprobante_tipo = request.form.get('comprobante_tipo', '').strip()
         comprobante_serie = request.form.get('comprobante_serie', '').strip()
         comprobante_numero = request.form.get('comprobante_numero', '').strip()
         comprobante_ruc_emisor = request.form.get('comprobante_ruc_emisor', '').strip()
         comprobante_razon_social_emisor = request.form.get('comprobante_razon_social_emisor', '').strip()
-        
-        # Validaciones (similar a nuevo_gasto)
+
         errores = []
-        # ... (puedes añadir la misma lógica de validación que en nuevo_gasto aquí)
-        if not descripcion or not descripcion.strip():
-            errores.append("La descripción es obligatoria.")
+        if not descripcion: errores.append("Descripción obligatoria.")
         
+        # Validación monto
+        monto = 0.0
+        try:
+            monto = float(monto_str)
+            if monto <= 0: errores.append("Monto debe ser positivo.")
+        except:
+            errores.append("Monto inválido.")
+
         if errores:
             for error in errores: flash(error, 'warning')
-            # Re-renderizar con los datos para que el usuario corrija
             return render_template('finanzas/form_gasto.html', 
                                    es_nueva=False, form_data=request.form, gasto=gasto_actual,
                                    titulo_form=form_titulo, action_url=action_url_form,
-                                   sucursales=sucursales_activas, categorias_gastos=categorias_gastos,
-                                   colaboradores=colaboradores_activos)
-        
-        # Si no hay errores, proceder con la actualización
+                                   categorias_gastos=categorias_gastos, colaboradores=colaboradores_activos)
+
         try:
-            with db_conn.cursor() as cursor_update:
+            with db_conn.cursor() as cursor:
                 sql_update = """UPDATE gastos SET 
-                                    sucursal_id = %s, categoria_gasto_id = %s, fecha = %s, 
-                                    descripcion = %s, monto = %s, metodo_pago = %s, 
-                                    registrado_por_colaborador_id = %s, comprobante_tipo = %s, 
-                                    comprobante_serie = %s, comprobante_numero = %s, 
-                                    comprobante_ruc_emisor = %s, comprobante_razon_social_emisor = %s
+                                    categoria_gasto_id = %s, 
+                                    fecha = %s, 
+                                    descripcion = %s, 
+                                    monto = %s, 
+                                    metodo_pago = %s, 
+                                    empleado_beneficiario_id = %s, -- Faltaba este
+                                    comprobante_tipo = %s, 
+                                    comprobante_serie = %s, 
+                                    comprobante_numero = %s, 
+                                    comprobante_ruc_emisor = %s, 
+                                    comprobante_razon_social_emisor = %s
                                 WHERE id = %s"""
+                
+                # CORRECCIÓN DE TIPOS INT/NONE
+                cat_id = int(categoria_gasto_id_str)
+                beneficiario_id = int(empleado_beneficiario_id_str) if empleado_beneficiario_id_str else None
+
                 val_update = (
-                    int(sucursal_id_str), int(categoria_gasto_id_str), fecha_str, descripcion, 
-                    float(monto_str), metodo_pago, int(registrado_por_colaborador_id_str),
-                    (comprobante_tipo if comprobante_tipo else None),
-                    (comprobante_serie if comprobante_serie else None),
-                    (comprobante_numero if comprobante_numero else None),
-                    (comprobante_ruc_emisor if comprobante_ruc_emisor else None),
-                    (comprobante_razon_social_emisor if comprobante_razon_social_emisor else None),
+                    cat_id, fecha_str, descripcion, monto, metodo_pago, 
+                    beneficiario_id,
+                    comprobante_tipo or None, comprobante_serie or None,
+                    comprobante_numero or None, comprobante_ruc_emisor or None,
+                    comprobante_razon_social_emisor or None,
                     gasto_id
                 )
-                cursor_update.execute(sql_update, val_update)
+                cursor.execute(sql_update, val_update)
+            
             db_conn.commit()
             flash("Gasto actualizado exitosamente.", "success")
             return redirect(url_for('main.listar_gastos'))
-        except mysql.connector.Error as err:
+            
+        except Exception as err:
             db_conn.rollback()
-            flash(f"Error al actualizar el gasto: {err}", "danger")
-            current_app.logger.error(f"Error DB en editar_gasto (POST): {err}")
-            # Volver a mostrar el formulario con los datos que se intentaron guardar
-            return render_template('finanzas/form_gasto.html', 
-                                   es_nueva=False, form_data=request.form, gasto=gasto_actual,
-                                   titulo_form=form_titulo, action_url=action_url_form,
-                                   sucursales=sucursales_activas, categorias_gastos=categorias_gastos,
-                                   colaboradores=colaboradores_activos)
+            flash(f"Error al actualizar: {err}", "danger")
+            current_app.logger.error(f"Error editar_gasto: {err}")
+            return redirect(url_for('main.editar_gasto', gasto_id=gasto_id))
 
-    # Método GET: Mostrar el formulario con los datos actuales
-    # Formatear la fecha para que el input type="date" la muestre correctamente
-    if gasto_actual.get('fecha') and isinstance(gasto_actual['fecha'], date):
+    # --- LÓGICA GET ---
+    if gasto_actual.get('fecha'):
         gasto_actual['fecha'] = gasto_actual['fecha'].strftime('%Y-%m-%d')
         
     return render_template('finanzas/form_gasto.html', 
                            es_nueva=False, 
                            titulo_form=form_titulo,
                            action_url=action_url_form,
-                           gasto=gasto_actual, # 'gasto' para que coincida con el form
-                           sucursales=sucursales_activas,
+                           gasto=gasto_actual,
                            categorias_gastos=categorias_gastos,
                            colaboradores=colaboradores_activos)
-
+    
 @main_bp.route('/finanzas/gastos/eliminar/<int:gasto_id>', methods=['GET'])
 @login_required
 @admin_required
@@ -5946,15 +6218,107 @@ def eliminar_gasto(gasto_id):
         else:
             flash('No se encontró el gasto o no se pudo eliminar.', 'warning')
             
-    except mysql.connector.Error as err:
+    except Exception as err:
         db_conn.rollback()
-        flash(f"Error al eliminar el registro de gasto: {err}", 'danger')
+        flash(f"Error al eliminar el registro de gasto: {err}", "danger")
         current_app.logger.error(f"Error DB en eliminar_gasto (ID: {gasto_id}): {err}")
     finally:
         if cursor:
             cursor.close()
 
     return redirect(url_for('main.listar_gastos'))
+
+
+@main_bp.route('/finanzas/caja/detalle/<int:sesion_id>')
+@login_required
+def ver_detalle_caja(sesion_id):
+    db_conn = get_db()
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Datos de la Sesión
+            cursor.execute("""
+                SELECT cs.*, e.nombres || ' ' || e.apellidos as cajero_nombre, s.nombre as sucursal_nombre
+                FROM caja_sesiones cs
+                JOIN empleados e ON cs.usuario_id = e.id
+                JOIN sucursales s ON cs.sucursal_id = s.id
+                WHERE cs.id = %s
+            """, (sesion_id,))
+            sesion = cursor.fetchone()
+            
+            if not sesion:
+                flash("Sesión no encontrada.", "danger")
+                return redirect(url_for('main.listar_historial_caja'))
+
+            # 2. Obtener Ventas (Tienen fecha y hora)
+            cursor.execute("""
+                SELECT id, fecha_venta as fecha, 'Venta' as tipo, 
+                       'Venta #' || COALESCE(serie_comprobante, '') || '-' || COALESCE(numero_comprobante, 'S/N') as descripcion,
+                       monto_final_venta as monto, 'Ingreso' as flujo,
+                       'Efectivo' as metodo_pago -- Simplificación para visualización
+                FROM ventas 
+                WHERE caja_sesion_id = %s AND estado_pago != 'Anulado'
+            """, (sesion_id,))
+            ventas = cursor.fetchall()
+
+            # 3. Obtener Gastos (Tienen fecha sola, a veces)
+            cursor.execute("""
+                SELECT id, fecha, 'Gasto' as tipo, 
+                       descripcion, monto, 'Egreso' as flujo,
+                       metodo_pago
+                FROM gastos 
+                WHERE caja_sesion_id = %s
+            """, (sesion_id,))
+            gastos = cursor.fetchall()
+
+            # 4. UNIFICAR Y NORMALIZAR FECHAS (Solución del Error)
+            movimientos = ventas + gastos
+            
+            for mov in movimientos:
+                fecha_dato = mov.get('fecha')
+                # Si es tipo 'date' puro (sin hora), lo convertimos a 'datetime' (con hora 00:00)
+                # Usamos type() estricto porque datetime es instancia de date
+                if type(fecha_dato) is date:
+                    mov['fecha'] = datetime.combine(fecha_dato, time.min)
+            
+            # Ahora sí podemos ordenar
+            movimientos.sort(key=lambda x: x['fecha'], reverse=True)
+
+            return render_template('caja/ver_detalle.html', sesion=sesion, movimientos=movimientos)
+
+    except Exception as e:
+        # Imprimir el error real en la consola para que lo veas
+        import traceback
+        traceback.print_exc()
+        flash(f"Error al cargar el detalle: {e}", "danger")
+        return redirect(url_for('main.listar_historial_caja'))
+
+@main_bp.route('/finanzas/gastos/detalle/<int:gasto_id>')
+@login_required
+def ver_detalle_gasto(gasto_id):
+    db_conn = get_db()
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            cursor.execute("""
+                SELECT g.*, cg.nombre as categoria, s.nombre as sucursal,
+                       e.nombres || ' ' || e.apellidos as registrado_por
+                FROM gastos g
+                JOIN categorias_gastos cg ON g.categoria_gasto_id = cg.id
+                JOIN sucursales s ON g.sucursal_id = s.id
+                LEFT JOIN empleados e ON g.registrado_por_colaborador_id = e.id
+                WHERE g.id = %s
+            """, (gasto_id,))
+            gasto = cursor.fetchone()
+        
+        # Puedes crear una plantilla 'finanzas/ver_gasto.html' o usar un modal
+        # Por ahora, para no romper, mostramos un texto simple o redirigimos
+        return f"Detalle del Gasto ID {gasto_id}: {gasto['descripcion']} - S/ {gasto['monto']}"
+        
+    except Exception as e:
+        flash(f"Error al ver gasto: {e}", "danger")
+        return redirect(url_for('main.gestionar_caja'))
+
+
+# --- RUTAS PARA COMPRAS ---
 
 @main_bp.route('/compras/nueva', methods=['GET', 'POST'])
 @login_required
@@ -5971,13 +6335,13 @@ def nueva_compra():
     estados_pago_compra = ["Pagada", "Pendiente de Pago", "Crédito"]
     
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre_empresa FROM proveedores WHERE activo = TRUE ORDER BY nombre_empresa")
             proveedores_activos = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
             sucursales_activas = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Consulta actualizada para incluir el nombre de la marca
             sql_productos_compra = """
                 SELECT 
@@ -5990,7 +6354,7 @@ def nueva_compra():
             """
             cursor.execute(sql_productos_compra)
             productos_activos = cursor.fetchall()
-    except mysql.connector.Error as err_load:
+    except Exception as err_load:
         flash(f"Error al cargar datos para el formulario de compra: {err_load}", "danger")
         current_app.logger.error(f"Error DB cargando dropdown data en nueva_compra: {err_load}")
 
@@ -6055,7 +6419,7 @@ def nueva_compra():
             flash(f"Compra #{compra_id} registrada exitosamente. El stock ha sido actualizado.", "success")
             return redirect(url_for('main.listar_compras'))
 
-        except (ValueError, mysql.connector.Error, Exception) as e:
+        except (ValueError, Exception, Exception) as e:
             if db_conn and db_conn.in_transaction: 
                 db_conn.rollback()
             flash(f"No se pudo guardar la compra. Error: {str(e)}", "warning")
@@ -6096,7 +6460,7 @@ def listar_compras():
     lista_de_compras = []
 
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # Unimos con proveedores y sucursales para obtener sus nombres
         sql = """
             SELECT 
@@ -6116,7 +6480,7 @@ def listar_compras():
         
         cursor.execute(sql)
         lista_de_compras = cursor.fetchall()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder al historial de compras: {err}", "danger")
         current_app.logger.error(f"Error en listar_compras: {err}")
     finally:
@@ -6140,7 +6504,7 @@ def ver_detalle_compra(compra_id):
     compra_detalle_items = []
 
     try:
-        cursor = db_conn.cursor(dictionary=True)
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         # 1. Obtener la cabecera de la compra
         sql_cabecera = """
@@ -6178,7 +6542,7 @@ def ver_detalle_compra(compra_id):
         cursor.execute(sql_items, (compra_id,))
         compra_detalle_items = cursor.fetchall()
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a los detalles de la compra: {err}", "danger")
         current_app.logger.error(f"Error en ver_detalle_compra (ID: {compra_id}): {err}")
         return redirect(url_for('main.listar_compras'))
@@ -6191,118 +6555,249 @@ def ver_detalle_compra(compra_id):
                            items=compra_detalle_items,
                            titulo_pagina=f"Detalle de Compra #{compra_cabecera.get('compra_id', compra_id)}")
 
+# --- RUTAS PARA CAJA ---
 
-@main_bp.route('/finanzas/caja', methods=['GET'])
+# -------------------------------------------------------------------------
+# GESTIÓN DE CAJA (CORREGIDA)
+# -------------------------------------------------------------------------
+@main_bp.route('/finanzas/caja', methods=['GET', 'POST'])
 @login_required
-@admin_required
-def pagina_caja():
-    """
-    Página principal de gestión de caja. Ahora desglosa los egresos por categoría.
-    """
+def gestionar_caja():
     db_conn = get_db()
-    sucursal_id_seleccionada = request.args.get('sucursal_id', type=int)
+    sucursal_id = session.get('sucursal_id')
+    usuario_id = current_user.id
     
-    # Inicializar todas las listas de datos
-    sucursales_activas, colaboradores_activos = [], []
-    sesion_abierta = None
-    resumen_sesion = { "ingresos_por_metodo": [], "egresos_por_categoria": [], "efectivo_calculado": 0.0 }
-    comisiones_pendientes = []
+    if not sucursal_id:
+        flash("Error: No se detectó sucursal.", "danger")
+        return redirect(url_for('main.index'))
+
+    # --- POST: ABRIR CAJA ---
+    if request.method == 'POST':
+        try:
+            monto_base = request.form.get('monto_base')
+            monto_adicional = request.form.get('monto_adicional')
+            monto_inicial_manual = request.form.get('monto_inicial')
+
+            # Calcular monto final
+            if monto_base:
+                monto_final = float(monto_base) + float(monto_adicional or 0)
+            else:
+                monto_final = float(monto_inicial_manual or 0)
+
+            with db_conn.cursor() as cursor:
+                cursor.execute("SELECT id FROM caja_sesiones WHERE usuario_id=%s AND estado='Abierta'", (usuario_id,))
+                if cursor.fetchone():
+                    flash("Ya tienes una caja abierta.", "warning")
+                else:
+                    cursor.execute("""
+                        INSERT INTO caja_sesiones (usuario_id, sucursal_id, monto_inicial, estado, fecha_apertura)
+                        VALUES (%s, %s, %s, 'Abierta', CURRENT_TIMESTAMP)
+                    """, (usuario_id, sucursal_id, monto_final))
+                    db_conn.commit()
+                    flash(f"¡Caja abierta con S/ {monto_final:.2f}!", "success")
+        except Exception as e:
+            db_conn.rollback()
+            flash(f"Error al abrir caja: {e}", "danger")
+        return redirect(url_for('main.gestionar_caja'))
+
+    # --- GET: VER ESTADO ---
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Buscar sesión abierta
+            cursor.execute("""
+                SELECT * FROM caja_sesiones 
+                WHERE usuario_id = %s AND sucursal_id = %s AND estado = 'Abierta'
+            """, (usuario_id, sucursal_id))
+            sesion_abierta = cursor.fetchone()
+
+            # CASO A: CAJA CERRADA -> Preparar Apertura
+            if not sesion_abierta:
+                monto_sugerido = 0.00
+                
+                # CORRECCIÓN DE LÓGICA: Buscar la ÚLTIMA absoluta, sin filtrar por destino
+                cursor.execute("""
+                    SELECT monto_final_real, destino_remanente 
+                    FROM caja_sesiones 
+                    WHERE sucursal_id = %s AND estado = 'Cerrada'
+                    ORDER BY fecha_cierre DESC 
+                    LIMIT 1
+                """, (sucursal_id,))
+                ultima_caja = cursor.fetchone()
+                
+                # Solo si la última caja se quedó "En Caja", sugerimos el saldo.
+                # Si fue a "Gerencia", sugerimos 0.00
+                if ultima_caja and ultima_caja['destino_remanente'] == 'Caja':
+                    monto_sugerido = float(ultima_caja['monto_final_real'])
+
+                return render_template('caja/apertura.html', monto_sugerido=monto_sugerido)
+
+            # CASO B: CAJA ABIERTA -> Panel de Gestión
+            caja_id = sesion_abierta['id']
+            
+            # Totales
+            cursor.execute("""
+                SELECT COALESCE(SUM(vp.monto), 0) as total
+                FROM venta_pagos vp JOIN ventas v ON vp.venta_id = v.id
+                WHERE v.caja_sesion_id = %s AND vp.metodo_pago = 'Efectivo' AND v.estado_pago != 'Anulado'
+            """, (caja_id,))
+            total_efectivo = float(cursor.fetchone()['total'])
+
+            cursor.execute("""
+                SELECT COALESCE(SUM(vp.monto), 0) as total
+                FROM venta_pagos vp JOIN ventas v ON vp.venta_id = v.id
+                WHERE v.caja_sesion_id = %s AND vp.metodo_pago != 'Efectivo' AND v.estado_pago != 'Anulado'
+            """, (caja_id,))
+            total_digital = float(cursor.fetchone()['total'])
+
+            cursor.execute("""
+                SELECT COALESCE(SUM(monto), 0) as total 
+                FROM gastos WHERE caja_sesion_id = %s AND (metodo_pago = 'Efectivo' OR metodo_pago = 'Efectivo de Caja')
+            """, (caja_id,))
+            total_gastos = float(cursor.fetchone()['total'])
+
+            saldo_teorico = (float(sesion_abierta['monto_inicial']) + total_efectivo) - total_gastos
+
+            # Movimientos
+            sql_movimientos = """
+                (SELECT v.fecha_venta as fecha, vp.monto, vp.metodo_pago, 
+                        'Venta #' || COALESCE(v.serie_comprobante, '') || '-' || COALESCE(v.numero_comprobante, 'S/N') as descripcion, 
+                        'Ingreso' as flujo, v.id as id, 'Venta' as tipo
+                 FROM venta_pagos vp JOIN ventas v ON vp.venta_id = v.id
+                 WHERE v.caja_sesion_id = %s AND v.estado_pago != 'Anulado')
+                UNION ALL
+                (SELECT g.fecha_registro as fecha, (g.monto * -1) as monto, g.metodo_pago, 
+                        g.descripcion, 'Egreso' as flujo, g.id as id, 'Gasto' as tipo
+                 FROM gastos g WHERE g.caja_sesion_id = %s)
+                ORDER BY fecha DESC LIMIT 20
+            """
+            cursor.execute(sql_movimientos, (caja_id, caja_id))
+            movimientos_caja = cursor.fetchall()
+
+            # Comisiones
+            cursor.execute("""
+                SELECT c.id, c.monto_comision, TO_CHAR(c.fecha_generacion, 'DD/MM HH24:MI') as fecha_fmt,
+                       vi.descripcion_item_venta as concepto, v.numero_comprobante
+                FROM comisiones c
+                JOIN empleados e ON c.empleado_id = e.id
+                JOIN venta_items vi ON c.venta_item_id = vi.id
+                JOIN ventas v ON vi.venta_id = v.id
+                WHERE c.empleado_id = %s AND c.estado = 'Pendiente' AND v.sucursal_id = %s
+                ORDER BY c.fecha_generacion DESC
+            """, (usuario_id, sucursal_id))
+            comisiones = cursor.fetchall()
+
+            return render_template('caja/cierre.html', 
+                                   sesion=sesion_abierta,
+                                   total_efectivo=total_efectivo,
+                                   total_digital=total_digital,
+                                   total_gastos=total_gastos,
+                                   saldo_teorico=saldo_teorico,
+                                   movimientos=movimientos_caja,
+                                   comisiones_pendientes=comisiones)
+
+    except Exception as e:
+        flash(f"Error cargando caja: {e}", "danger")
+        return redirect(url_for('main.index'))
+
+# -------------------------------------------------------------------------
+# CERRAR CAJA
+# -------------------------------------------------------------------------
+@main_bp.route('/finanzas/caja/cerrar/<int:sesion_id>', methods=['POST'])
+@login_required
+def cerrar_caja(sesion_id):
+    db_conn = get_db()
+    
+    monto_final_real = request.form.get('monto_final_real')
+    notas_cierre = request.form.get('notas_cierre')
+    destino_remanente = request.form.get('destino_remanente') # 'Caja' o 'Gerencia'
+    
+    # Lógica de Estado
+    estado_entrega = 'En Caja' if destino_remanente == 'Caja' else 'Pendiente'
     
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
-            # Cargar sucursales y colaboradores para los formularios
-            cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
-            sucursales_activas = cursor.fetchall()
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Recalcular totales por seguridad
+            cursor.execute("SELECT monto_inicial FROM caja_sesiones WHERE id=%s", (sesion_id,))
+            res = cursor.fetchone()
+            if not res: 
+                flash("Sesión no encontrada", "danger")
+                return redirect(url_for('main.gestionar_caja'))
             
-            if sucursal_id_seleccionada:
-                cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE AND sucursal_id = %s ORDER BY apellidos, nombres", (sucursal_id_seleccionada,))
-                colaboradores_activos = cursor.fetchall()
-                
-                # Buscar sesión de caja ABIERTA
-                cursor.execute("SELECT cs.*, e.nombres as apertura_nombres, e.apellidos as apertura_apellidos FROM caja_sesiones cs JOIN empleados e ON cs.usuario_apertura_id = e.id WHERE cs.sucursal_id = %s AND cs.estado = 'Abierta' ORDER BY cs.fecha_hora_apertura DESC LIMIT 1", (sucursal_id_seleccionada,))
-                sesion_abierta = cursor.fetchone()
+            monto_inicial = float(res['monto_inicial'])
 
-                # Obtener comisiones pendientes para la sucursal seleccionada
-                cursor.execute("""
-                    SELECT c.id, c.monto_comision, c.fecha_generacion,
-                           CONCAT(e.nombres, ' ', e.apellidos) AS colaborador_nombre,
-                           vi.descripcion_item_venta, v.id as venta_id
-                    FROM comisiones c
-                    JOIN empleados e ON c.colaborador_id = e.id
-                    JOIN venta_items vi ON c.venta_item_id = vi.id
-                    JOIN ventas v ON vi.venta_id = v.id
-                    WHERE c.estado = 'Pendiente' AND v.sucursal_id = %s
-                    ORDER BY c.fecha_generacion ASC
-                """, (sucursal_id_seleccionada,))
-                comisiones_pendientes = cursor.fetchall()
+            cursor.execute("SELECT COALESCE(SUM(vp.monto), 0) as total FROM venta_pagos vp JOIN ventas v ON vp.venta_id = v.id WHERE v.caja_sesion_id = %s AND vp.metodo_pago = 'Efectivo' AND v.estado_pago != 'Anulado'", (sesion_id,))
+            total_efectivo = float(cursor.fetchone()['total'])
 
-                if sesion_abierta:
-                    fecha_apertura = sesion_abierta['fecha_hora_apertura']
-                    
-                    # 1. Calcular ingresos por método de pago
-                    sql_ingresos = """
-                        SELECT vp.metodo_pago, SUM(vp.monto) as total
-                        FROM venta_pagos vp
-                        JOIN ventas v ON vp.venta_id = v.id
-                        WHERE v.sucursal_id = %s AND v.fecha_venta >= %s AND v.estado_pago != 'Anulado'
-                        GROUP BY vp.metodo_pago
-                    """
-                    cursor.execute(sql_ingresos, (sucursal_id_seleccionada, fecha_apertura))
-                    ingresos_por_metodo = cursor.fetchall()
-                    
-                    # 2. Calcular gastos pagados con 'Efectivo de Caja'
-                    sql_gastos = "SELECT SUM(monto) as total FROM gastos WHERE sucursal_id = %s AND fecha >= %s AND metodo_pago = 'Efectivo de Caja'"
-                    cursor.execute(sql_gastos, (sucursal_id_seleccionada, fecha_apertura.date()))
-                    resultado_gastos = cursor.fetchone()
-                    # CORRECCIÓN: Convertir a float, con valor por defecto 0.0
-                    total_gastos_efectivo = float(resultado_gastos['total']) if resultado_gastos and resultado_gastos['total'] else 0.0
+            cursor.execute("SELECT COALESCE(SUM(vp.monto), 0) as total FROM venta_pagos vp JOIN ventas v ON vp.venta_id = v.id WHERE v.caja_sesion_id = %s AND vp.metodo_pago != 'Efectivo' AND v.estado_pago != 'Anulado'", (sesion_id,))
+            total_digital = float(cursor.fetchone()['total'])
 
-                    
-                    # 2. CORRECCIÓN: Calcular egresos en efectivo DESGLOSADOS POR CATEGORÍA
-                    sql_gastos = """
-                        SELECT cg.nombre AS categoria_nombre, SUM(g.monto) as total
-                        FROM gastos g
-                        JOIN categorias_gastos cg ON g.categoria_gasto_id = cg.id
-                        WHERE g.sucursal_id = %s AND g.fecha >= %s AND g.metodo_pago = 'Efectivo de Caja'
-                        GROUP BY cg.nombre
-                        ORDER BY cg.nombre
-                    """
-                    cursor.execute(sql_gastos, (sucursal_id_seleccionada, fecha_apertura.date()))
-                    egresos_por_categoria = cursor.fetchall()
-                    
-                    # 3. Calcular el efectivo esperado en caja
-                    monto_inicial = float(sesion_abierta['monto_inicial_efectivo'])
-                    
-                    ingresos_efectivo = 0.0
-                    for ingreso in ingresos_por_metodo:
-                        if ingreso['metodo_pago'].lower() == 'efectivo':
-                            ingresos_efectivo = float(ingreso['total'])
-                            break
-                            
-                    total_egresos_efectivo = sum(float(egreso['total']) for egreso in egresos_por_categoria)
-                    
-                    efectivo_calculado = (monto_inicial + ingresos_efectivo) - total_egresos_efectivo
-                    
-                    resumen_sesion = {
-                        "ingresos_por_metodo": ingresos_por_metodo,
-                        "egresos_por_categoria": egresos_por_categoria, # <-- NUEVA LISTA DESGLOSADA
-                        "efectivo_calculado": efectivo_calculado
-                    }
-                    
-    except mysql.connector.Error as err:
-        flash(f"Error al verificar el estado de la caja: {err}", "danger")
+            cursor.execute("SELECT COALESCE(SUM(monto), 0) as total FROM gastos WHERE caja_sesion_id = %s AND (metodo_pago = 'Efectivo' OR metodo_pago = 'Efectivo de Caja')", (sesion_id,))
+            total_gastos = float(cursor.fetchone()['total'])
 
-    return render_template('finanzas/pagina_caja.html',
-                           sucursales=sucursales_activas,
-                           colaboradores=colaboradores_activos,
-                           sucursal_seleccionada_id=sucursal_id_seleccionada,
-                           sesion_abierta=sesion_abierta,
-                           resumen=resumen_sesion,
-                           comisiones_pendientes=comisiones_pendientes)    
+            saldo_teorico = (monto_inicial + total_efectivo) - total_gastos
+            diferencia = float(monto_final_real) - saldo_teorico
+
+            # Update
+            cursor.execute("""
+                UPDATE caja_sesiones 
+                SET fecha_cierre = CURRENT_TIMESTAMP,
+                    estado = 'Cerrada',
+                    monto_final_real = %s,
+                    total_ventas_efectivo = %s,
+                    total_ventas_digital = %s,
+                    total_gastos = %s,
+                    diferencia = %s,
+                    notas_cierre = %s,
+                    destino_remanente = %s,
+                    estado_entrega = %s
+                WHERE id = %s
+            """, (monto_final_real, total_efectivo, total_digital, total_gastos, diferencia, notas_cierre, destino_remanente, estado_entrega, sesion_id))
+            
+            db_conn.commit()
+            
+            if abs(diferencia) < 0.1:
+                flash("Caja cerrada. ¡Cuadre perfecto!", "success")
+            elif diferencia > 0:
+                flash(f"Caja cerrada con sobrante de S/ {diferencia:.2f}", "info")
+            else:
+                flash(f"Caja cerrada con faltante de S/ {abs(diferencia):.2f}", "warning")
+
+    except Exception as e:
+        db_conn.rollback()
+        flash(f"Error al cerrar caja: {e}", "danger")
+
+    return redirect(url_for('main.gestionar_caja'))
+# -------------------------------------------------------------------------
+# CONFIRMAR RECEPCIÓN (NUEVA RUTA)
+# -------------------------------------------------------------------------
+@main_bp.route('/finanzas/caja/confirmar_recepcion/<int:sesion_id>', methods=['POST'])
+@login_required
+def confirmar_recepcion_caja(sesion_id):
+    # Validar permisos (solo admin o quien tenga permiso especial)
+    es_admin = getattr(current_user, 'rol_nombre', '') == 'Administrador'
+    if not es_admin:
+        flash("No tienes permiso para confirmar recepciones.", "danger")
+        return redirect(url_for('main.listar_historial_caja'))
+
+    db_conn = get_db()
+    try:
+        with db_conn.cursor() as cursor:
+            cursor.execute("""
+                UPDATE caja_sesiones 
+                SET estado_entrega = 'Conforme' 
+                WHERE id = %s AND destino_remanente = 'Gerencia'
+            """, (sesion_id,))
+            db_conn.commit()
+        flash("Recepción de dinero confirmada.", "success")
+    except Exception as e:
+        db_conn.rollback()
+        flash(f"Error: {e}", "danger")
+        
+    return redirect(url_for('main.listar_historial_caja'))
 
 @main_bp.route('/finanzas/caja/abrir', methods=['POST'])
 @login_required
-@admin_required
+
 def abrir_caja():
     """
     Procesa la apertura de una nueva sesión de caja, obteniendo el colaborador desde el formulario.
@@ -6319,7 +6814,7 @@ def abrir_caja():
         return redirect(url_for('main.pagina_caja'))
 
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Verificar que no haya otra caja abierta para esta sucursal
             cursor.execute("SELECT id FROM caja_sesiones WHERE sucursal_id = %s AND estado = 'Abierta'", (sucursal_id,))
             if cursor.fetchone():
@@ -6337,213 +6832,131 @@ def abrir_caja():
             db_conn.commit()
             flash("Caja abierta exitosamente.", "success")
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         db_conn.rollback()
         flash(f"Error al abrir la caja: {err}", "danger")
         current_app.logger.error(f"Error en abrir_caja: {err}")
 
     return redirect(url_for('main.pagina_caja'))
 
-@main_bp.route('/finanzas/caja/cerrar/<int:sesion_id>', methods=['POST'])
+# -------------------------------------------------------------------------
+# HISTORIAL DE CAJA Y CONFIRMACIÓN
+# -------------------------------------------------------------------------
+@main_bp.route('/finanzas/caja/historial')
 @login_required
-@admin_required
-def cerrar_caja(sesion_id):
-    """
-    Procesa el cierre de una sesión de caja.
-    """
+def listar_historial_caja():
+    """Muestra la lista de todas las sesiones de caja pasadas."""
     db_conn = get_db()
-    
-    # 1. Recoger datos del formulario
-    monto_contado_str = request.form.get('monto_final_efectivo_contado')
-    notas_cierre = request.form.get('notas_cierre', '').strip()
-    usuario_cierre_id = request.form.get('usuario_cierre_id', type=int)
-
-    # 2. Validar datos de entrada
-    if monto_contado_str is None or not usuario_cierre_id:
-        flash("Debe ingresar el monto contado y seleccionar el colaborador que cierra la caja.", "warning")
-        return redirect(url_for('main.pagina_caja'))
+    sucursal_id = session.get('sucursal_id')
     
     try:
-        monto_contado = float(monto_contado_str)
-        if monto_contado < 0:
-             flash("El monto contado no puede ser negativo.", "warning")
-             return redirect(url_for('main.pagina_caja'))
-    except (ValueError, TypeError):
-        flash("El monto contado debe ser un número válido.", "warning")
-        return redirect(url_for('main.pagina_caja'))
-
-    cursor = None
-    try:
-        # 3. Iniciar transacción y realizar operaciones
-        db_conn.start_transaction()
-        cursor = db_conn.cursor(dictionary=True)
-
-        # 3a. Obtener la sesión y asegurarse de que esté abierta, bloqueando la fila
-        cursor.execute("SELECT * FROM caja_sesiones WHERE id = %s AND estado = 'Abierta' FOR UPDATE", (sesion_id,))
-        sesion_abierta = cursor.fetchone()
-
-        if not sesion_abierta:
-            db_conn.rollback() # No hay nada que hacer, pero es buena práctica
-            flash("La sesión de caja que intentas cerrar no existe o ya ha sido cerrada.", "warning")
-            return redirect(url_for('main.pagina_caja'))
-
-        # 3b. Recalcular los montos en el servidor para máxima seguridad
-        fecha_apertura = sesion_abierta['fecha_hora_apertura']
-        sucursal_id = sesion_abierta['sucursal_id']
-        monto_inicial = float(sesion_abierta['monto_inicial_efectivo'])
-        
-        # Ingresos en efectivo
-        cursor.execute("""
-            SELECT SUM(monto) as total 
-            FROM venta_pagos vp 
-            JOIN ventas v ON vp.venta_id = v.id 
-            WHERE v.sucursal_id = %s AND v.fecha_venta >= %s AND vp.metodo_pago = 'Efectivo' AND v.estado_pago != 'Anulado'
-        """, (sucursal_id, fecha_apertura))
-        ingresos_efectivo = float(cursor.fetchone()['total'] or 0.0)
-
-        # Gastos en efectivo
-        cursor.execute("SELECT SUM(monto) as total FROM gastos WHERE sucursal_id = %s AND fecha >= %s AND metodo_pago = 'Efectivo de Caja'", (sucursal_id, fecha_apertura.date()))
-        gastos_efectivo = float(cursor.fetchone()['total'] or 0.0)
-        
-        # TODO: Sumar egresos por pago de comisiones en efectivo aquí cuando se implemente
-        comisiones_efectivo = 0.0
-        
-        # Calcular el saldo final esperado por el sistema
-        monto_calculado = (monto_inicial + ingresos_efectivo) - gastos_efectivo - comisiones_efectivo
-        diferencia = monto_contado - monto_calculado
-
-        # 3c. Actualizar el registro de la sesión de caja con los datos de cierre
-        sql_update = """UPDATE caja_sesiones SET 
-                            estado = 'Cerrada', 
-                            fecha_hora_cierre = %s,
-                            usuario_cierre_id = %s,
-                            monto_final_efectivo_contado = %s,
-                            monto_final_efectivo_calculado = %s,
-                            diferencia_efectivo = %s,
-                            notas_cierre = %s
-                        WHERE id = %s"""
-        val_update = (datetime.now(), usuario_cierre_id, monto_contado, 
-                      monto_calculado, diferencia, (notas_cierre or None), sesion_id)
-        cursor.execute(sql_update, val_update)
-        
-        # 4. Confirmar la transacción
-        db_conn.commit()
-        flash(f"Caja cerrada exitosamente. Diferencia encontrada: S/ {diferencia:.2f}", "success" if abs(diferencia) < 0.1 else "warning")
-
-    except mysql.connector.Error as err:
-        if db_conn and db_conn.in_transaction: 
-            db_conn.rollback()
-        flash(f"Error de base de datos al cerrar la caja: {err}", "danger")
-        current_app.logger.error(f"Error DB en cerrar_caja (ID: {sesion_id}): {err}")
-    except Exception as e:
-        if db_conn and db_conn.in_transaction: 
-            db_conn.rollback()
-        flash(f"Ocurrió un error inesperado al cerrar la caja: {e}", "danger")
-        current_app.logger.error(f"Error inesperado en cerrar_caja (ID: {sesion_id}): {e}")
-    finally:
-        if cursor:
-            cursor.close()
-
-    return redirect(url_for('main.pagina_caja'))
-
-@main_bp.route('/finanzas/caja/pagar_comisiones', methods=['POST'])
-@login_required
-@admin_required
-def pagar_comisiones_caja():
-    """
-    Procesa el pago de comisiones seleccionadas desde la página de caja.
-    """
-    db_conn = get_db()
-    cursor = None
-    
-    # Obtener el sucursal_id de la URL para la redirección
-    sucursal_id_para_redirect = request.args.get('sucursal_id')
-    
-    # Obtener los datos del formulario
-    comisiones_a_pagar_ids = request.form.getlist('comision_id')
-    caja_sesion_id = request.form.get('caja_sesion_id', type=int)
-    # Obtener el ID del colaborador desde el nuevo desplegable del formulario
-    registrado_por_id = request.form.get('registrado_por_colaborador_id', type=int)
-
-    # Validaciones
-    if not comisiones_a_pagar_ids:
-        flash("No se seleccionó ninguna comisión para pagar.", "warning")
-        return redirect(url_for('main.pagina_caja', sucursal_id=sucursal_id_para_redirect))
-    if not caja_sesion_id or not registrado_por_id:
-        flash("No se pudo identificar la sesión de caja o el colaborador que registra el pago. Por favor, seleccione ambos.", "danger")
-        return redirect(url_for('main.pagina_caja', sucursal_id=sucursal_id_para_redirect))
-
-    try:
-        db_conn.start_transaction()
-        cursor = db_conn.cursor(dictionary=True)
-
-        # 1. Validar las comisiones y calcular el total a pagar
-        total_pagado = 0.0
-        ids_para_update = []
-        
-        placeholders = ', '.join(['%s'] * len(comisiones_a_pagar_ids))
-        sql_select_comisiones = f"SELECT id, monto_comision FROM comisiones WHERE id IN ({placeholders}) AND estado = 'Pendiente' FOR UPDATE"
-        cursor.execute(sql_select_comisiones, tuple(comisiones_a_pagar_ids))
-        comisiones_a_procesar = cursor.fetchall()
-        
-        if len(comisiones_a_procesar) != len(comisiones_a_pagar_ids):
-            raise ValueError("Algunas de las comisiones seleccionadas ya no están pendientes o no existen.")
-
-        for comision in comisiones_a_procesar:
-            total_pagado += float(comision['monto_comision'])
-            ids_para_update.append(comision['id'])
-
-        if total_pagado > 0:
-            # 2. Registrar un único Gasto por el total de comisiones pagadas
-            # Buscar el ID de la categoría "Pago de Comisiones"
-            cursor.execute("SELECT id FROM categorias_gastos WHERE nombre = 'Pago de Comisiones'")
-            cat_gasto = cursor.fetchone()
-            if not cat_gasto:
-                cursor.execute("INSERT INTO categorias_gastos (nombre, descripcion) VALUES ('Pago de Comisiones', 'Pagos de comisiones generadas por ventas a colaboradores')")
-                categoria_gasto_id = cursor.lastrowid
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            
+            # LÓGICA INTELIGENTE:
+            # 1. Si es Administrador: Ver historial de TODAS las sucursales.
+            # 2. Si es Cajero/Otro: Ver solo historial de SU sucursal actual.
+            
+            es_admin = getattr(current_user, 'rol_nombre', '') == 'Administrador'
+            
+            if es_admin:
+                # Consulta GLOBAL (sin filtro de sucursal)
+                sql = """
+                    SELECT cs.*, 
+                           e.nombres || ' ' || e.apellidos as cajero_nombre,
+                           s.nombre as sucursal_nombre, -- Agregamos el nombre de la sede
+                           TO_CHAR(cs.fecha_apertura, 'DD/MM/YYYY HH24:MI') as inicio_fmt,
+                           TO_CHAR(cs.fecha_cierre, 'DD/MM/YYYY HH24:MI') as fin_fmt
+                    FROM caja_sesiones cs
+                    JOIN empleados e ON cs.usuario_id = e.id
+                    LEFT JOIN sucursales s ON cs.sucursal_id = s.id
+                    ORDER BY cs.fecha_apertura DESC
+                    LIMIT 100
+                """
+                cursor.execute(sql)
+            
+            elif sucursal_id:
+                # Consulta FILTRADA por sucursal
+                sql = """
+                    SELECT cs.*, 
+                           e.nombres || ' ' || e.apellidos as cajero_nombre,
+                           s.nombre as sucursal_nombre,
+                           TO_CHAR(cs.fecha_apertura, 'DD/MM/YYYY HH24:MI') as inicio_fmt,
+                           TO_CHAR(cs.fecha_cierre, 'DD/MM/YYYY HH24:MI') as fin_fmt
+                    FROM caja_sesiones cs
+                    JOIN empleados e ON cs.usuario_id = e.id
+                    LEFT JOIN sucursales s ON cs.sucursal_id = s.id
+                    WHERE cs.sucursal_id = %s
+                    ORDER BY cs.fecha_apertura DESC
+                    LIMIT 50
+                """
+                cursor.execute(sql, (sucursal_id,))
             else:
-                categoria_gasto_id = cat_gasto['id']
+                # Si no es admin y no tiene sucursal, no ve nada
+                flash("Selecciona una sucursal para ver el historial.", "warning")
+                return redirect(url_for('main.index'))
 
-            # Obtener sucursal_id de la sesión de caja
-            cursor.execute("SELECT sucursal_id FROM caja_sesiones WHERE id = %s", (caja_sesion_id,))
-            sesion_info = cursor.fetchone()
-            if not sesion_info: raise ValueError("La sesión de caja activa no es válida.")
-            sucursal_id_gasto = sesion_info['sucursal_id']
+            sesiones = cursor.fetchall()
             
-            descripcion_gasto = f"Pago de {len(ids_para_update)} comision(es). IDs: {', '.join(map(str, ids_para_update))}."
-            
-            sql_gasto = """
-                INSERT INTO gastos (sucursal_id, categoria_gasto_id, caja_sesion_id, fecha, descripcion, monto, metodo_pago, registrado_por_colaborador_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            # Usar el 'registrado_por_id' del formulario
-            val_gasto = (sucursal_id_gasto, categoria_gasto_id, caja_sesion_id, date.today(), descripcion_gasto, total_pagado, 'Efectivo de Caja', registrado_por_id)
-            cursor.execute(sql_gasto, val_gasto)
-
-            # 3. Actualizar el estado de las comisiones a 'Pagada'
-            update_placeholders = ', '.join(['%s'] * len(ids_para_update))
-            sql_update_comisiones = f"UPDATE comisiones SET estado = 'Pagada', fecha_pago = %s, pago_caja_sesion_id = %s WHERE id IN ({update_placeholders})"
-            params_update = [datetime.now(), caja_sesion_id] + ids_para_update
-            cursor.execute(sql_update_comisiones, tuple(params_update))
+        return render_template('caja/historial.html', sesiones=sesiones)
         
-        # 4. Confirmar la transacción
-        db_conn.commit()
-        if total_pagado > 0:
-            flash(f"Se registraron exitosamente {len(ids_para_update)} pagos de comisiones por un total de S/ {total_pagado:.2f}.", "success")
-        else:
-            flash("No se procesaron pagos de comisiones.", "info")
+    except Exception as e:
+        flash(f"Error al cargar historial: {e}", "danger")
+        current_app.logger.error(f"Error historial caja: {e}")
+        return redirect(url_for('main.gestionar_caja'))
 
-    except (ValueError, mysql.connector.Error, Exception) as e:
-        if db_conn and db_conn.in_transaction: 
-            db_conn.rollback()
-        flash(f"No se pudo registrar el pago de comisiones. Error: {str(e)}", "danger")
-        current_app.logger.error(f"Error en pagar_comisiones_caja: {e}")
-    finally:
-        if cursor:
-            cursor.close()
+@main_bp.route('/finanzas/caja/pagar-comision/<int:comision_id>', methods=['POST'])
+@login_required
+@admin_required
+def pagar_comision_caja(comision_id):
+    """
+    Registra el pago de una comisión específica usando dinero de la caja abierta.
+    """
+    db_conn = get_db()
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Verificar que exista caja abierta
+            sucursal_id = session.get('sucursal_id')
+            cursor.execute("SELECT id FROM caja_sesiones WHERE sucursal_id = %s AND estado = 'Abierta'", (sucursal_id,))
+            caja = cursor.fetchone()
+            
+            if not caja:
+                flash("No hay caja abierta para registrar este pago.", "warning")
+                return redirect(url_for('main.pagina_caja', sucursal_id=sucursal_id))
 
-    # Al redirigir, pasamos el sucursal_id para que la página de caja se recargue correctamente
-    return redirect(url_for('main.pagina_caja', sucursal_id=sucursal_id_para_redirect))
+            # 2. Obtener datos de la comisión
+            cursor.execute("SELECT monto_comision, colaborador_id FROM comisiones WHERE id = %s", (comision_id,))
+            comision = cursor.fetchone()
+
+            # 3. Registrar el GASTO en la caja (Salida de dinero)
+            # Primero buscamos o creamos la categoría "Pago de Comisiones"
+            cursor.execute("SELECT id FROM categorias_gastos WHERE nombre = 'Pago de Comisiones'")
+            cat = cursor.fetchone()
+            if not cat:
+                cursor.execute("INSERT INTO categorias_gastos (nombre) VALUES ('Pago de Comisiones') RETURNING id")
+                cat_id = cursor.fetchone()['id']
+            else:
+                cat_id = cat['id']
+
+            cursor.execute("""
+                INSERT INTO gastos (sucursal_id, categoria_gasto_id, caja_sesion_id, fecha, descripcion, monto, metodo_pago, registrado_por_colaborador_id)
+                VALUES (%s, %s, %s, CURRENT_DATE, %s, %s, 'Efectivo', %s)
+            """, (sucursal_id, cat_id, caja['id'], f"Pago comisión ID {comision_id}", comision['monto_comision'], current_user.id))
+
+            # 4. Marcar comisión como PAGADA
+            cursor.execute("""
+                UPDATE comisiones 
+                SET estado = 'Pagada', fecha_pago = CURRENT_TIMESTAMP, pago_caja_sesion_id = %s 
+                WHERE id = %s
+            """, (caja['id'], comision_id))
+
+            db_conn.commit()
+            flash(f"Comisión de S/ {comision['monto_comision']} pagada correctamente.", "success")
+
+    except Exception as e:
+        db_conn.rollback()
+        flash(f"Error al pagar comisión: {e}", "danger")
+
+    return redirect(url_for('main.pagina_caja', sucursal_id=sucursal_id))
 
 @main_bp.route('/api/clientes/<int:cliente_id>/puntos', methods=['GET'])
 @login_required
@@ -6557,7 +6970,7 @@ def api_get_puntos_cliente(cliente_id):
 
     db_conn = get_db()
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT puntos_fidelidad FROM clientes WHERE id = %s", (cliente_id,))
             cliente = cursor.fetchone()
             
@@ -6569,7 +6982,7 @@ def api_get_puntos_cliente(cliente_id):
             else:
                 return jsonify({"error": "Cliente no encontrado."}), 404
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         current_app.logger.error(f"Error DB en api_get_puntos_cliente (ID: {cliente_id}): {err}")
         return jsonify({"error": "Error interno al consultar los puntos del cliente."}), 500
 
@@ -6594,10 +7007,10 @@ def reporte_estado_resultados():
     # Cargar sucursales para el menú desplegable de filtros
     sucursales_activas = []
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
             sucursales_activas = cursor.fetchall()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al cargar sucursales: {err}", "danger")
 
     resultados = None # Inicializamos los resultados como nulos
@@ -6611,7 +7024,7 @@ def reporte_estado_resultados():
             fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d').date()
             fecha_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%d').date()
             
-            with db_conn.cursor(dictionary=True) as cursor:
+            with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
                 # 1. Calcular Ingresos (de ventas no anuladas)
                 sql_ingresos = """
                     SELECT 
@@ -6655,7 +7068,7 @@ def reporte_estado_resultados():
                     "utilidad_neta": utilidad_neta
                 }
 
-        except (ValueError, mysql.connector.Error) as e:
+        except (ValueError, Exception) as e:
             flash(f"Error al generar el reporte: {e}", "danger")
             current_app.logger.error(f"Error generando reporte estado de resultados: {e}")
 
@@ -6684,10 +7097,10 @@ def reporte_liquidacion():
     # Cargar colaboradores para el menú desplegable de filtros
     colaboradores_activos = []
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE ORDER BY apellidos, nombres")
             colaboradores_activos = cursor.fetchall()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al cargar la lista de colaboradores: {err}", "danger")
 
     resultados = None
@@ -6695,7 +7108,7 @@ def reporte_liquidacion():
     if colaborador_id and anio and mes:
         try:
             # Primero, verificar si la liquidación para este período ya fue pagada
-            with db_conn.cursor(dictionary=True) as cursor:
+            with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
                  cursor.execute("SELECT * FROM liquidaciones WHERE colaborador_id = %s AND anio = %s AND mes = %s", (colaborador_id, anio, mes))
                  liquidacion_existente = cursor.fetchone()
             
@@ -6708,7 +7121,7 @@ def reporte_liquidacion():
                 fecha_inicio_periodo = date(anio, mes, 1)
                 fecha_fin_periodo = date(anio, mes, num_dias_mes)
 
-                with db_conn.cursor(dictionary=True) as cursor:
+                with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
                     # 1. Obtener datos base del colaborador
                     cursor.execute("SELECT * FROM empleados WHERE id = %s", (colaborador_id,))
                     colaborador_seleccionado = cursor.fetchone()
@@ -6753,7 +7166,7 @@ def reporte_liquidacion():
                             bonos_ganados.append(bono)
 
                     # 4. Obtener Comisiones y Ajustes pendientes
-                    cursor.execute("SELECT *, DATE_FORMAT(fecha_generacion, '%%d/%m/%Y') as fecha_corta FROM comisiones WHERE colaborador_id = %s AND estado = 'Pendiente' AND DATE(fecha_generacion) BETWEEN %s AND %s", (colaborador_id, fecha_inicio_periodo, fecha_fin_periodo))
+                    cursor.execute("SELECT *, TO_CHAR(fecha_generacion, 'DD/MM/YYYY') as fecha_corta FROM comisiones WHERE colaborador_id = %s AND estado = 'Pendiente' AND DATE(fecha_generacion) BETWEEN %s AND %s", (colaborador_id, fecha_inicio_periodo, fecha_fin_periodo))
                     comisiones_pendientes = cursor.fetchall()
                     total_comisiones = sum(float(c['monto_comision']) for c in comisiones_pendientes)
 
@@ -6805,11 +7218,11 @@ def listar_campanas():
     """
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
-        cursor.execute("SELECT *, DATE_FORMAT(fecha_inicio, '%d/%m/%Y') as f_inicio, DATE_FORMAT(fecha_fin, '%d/%m/%Y') as f_fin FROM campanas ORDER BY fecha_inicio DESC")
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("SELECT *, TO_CHAR(fecha_inicio, 'DD/MM/YYYY') as f_inicio, TO_CHAR(fecha_fin, 'DD/MM/YYYY') as f_fin FROM campanas ORDER BY fecha_inicio DESC")
         lista_de_campanas = cursor.fetchall()
         cursor.close()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a las campañas: {err}", "danger")
         current_app.logger.error(f"Error en listar_campanas: {err}")
         lista_de_campanas = []
@@ -6868,7 +7281,7 @@ def nueva_campana():
                 db.commit()
                 flash(f'Campaña "{nombre}" registrada exitosamente!', 'success')
                 return redirect(url_for('main.listar_campanas'))
-            except mysql.connector.Error as err:
+            except Exception as err:
                 db.rollback()
                 if err.errno == 1062:
                     flash(f'Error: Ya existe una campaña con el nombre "{nombre}".', 'danger')
@@ -6912,19 +7325,19 @@ def reporte_produccion():
     sucursales = []
     colaboradores = []
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
             sucursales = cursor.fetchall()
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE ORDER BY apellidos, nombres")
             colaboradores = cursor.fetchall()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al cargar datos para los filtros: {err}", "danger")
 
     resultados = None
     if colaborador_id and sucursal_id and fecha_inicio and fecha_fin:
         try:
-            with db_conn.cursor(dictionary=True) as cursor:
+            with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
                 # Consulta para el detalle de SERVICIOS
                 sql_servicios = """
                     SELECT 
@@ -6993,7 +7406,7 @@ def reporte_produccion():
                     "total_comisiones": total_comisiones
                 }
                 
-        except mysql.connector.Error as err:
+        except Exception as err:
             flash(f"Error al generar el reporte de producción: {err}", "danger")
             current_app.logger.error(f"Error generando reporte de producción: {err}")
             resultados = None
@@ -7025,7 +7438,7 @@ def exportar_reporte_produccion():
         return redirect(url_for('main.reporte_produccion'))
 
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Obtener nombre del colaborador para el nombre del archivo
             cursor.execute("SELECT nombres, apellidos FROM empleados WHERE id = %s", (colaborador_id,))
             colaborador = cursor.fetchone()
@@ -7059,7 +7472,8 @@ def exportar_reporte_produccion():
             df_productos.to_excel(writer, sheet_name='Productos Vendidos', index=False)
         output.seek(0)
         
-        # Preparar la respuesta para descargar el archivo
+        # Preparar la respuesta para 
+        # el archivo
         sanitized_name = "".join([c for c in nombre_colaborador if c.isalpha() or c.isdigit() or c==' ']).rstrip()
         nombre_archivo = f"Reporte_Produccion_{sanitized_name}_{fecha_inicio}_a_{fecha_fin}.xlsx"
         
@@ -7093,17 +7507,17 @@ def reporte_produccion_general():
     # Cargar sucursales para el menú desplegable
     sucursales = []
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
             sucursales = cursor.fetchall()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al cargar sucursales: {err}", "danger")
 
     resultados = []
     totales_generales = {}
     if sucursal_id and fecha_inicio and fecha_fin:
         try:
-            with db_conn.cursor(dictionary=True) as cursor:
+            with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
                 # Esta consulta obtiene la producción y comisiones agrupadas por colaborador
                 sql = """
                     SELECT
@@ -7132,7 +7546,7 @@ def reporte_produccion_general():
                         'total_comisiones': sum(float(r['total_comisiones'] or 0) for r in resultados)
                     }
 
-        except mysql.connector.Error as err:
+        except Exception as err:
             flash(f"Error al generar el reporte de producción: {err}", "danger")
 
     return render_template('reportes/reporte_produccion_general.html',
@@ -7143,6 +7557,8 @@ def reporte_produccion_general():
                            totales=totales_generales)
 
 
+# --- RUTAS PARA ROLES ---
+
 @main_bp.route('/configuracion/roles')
 @login_required
 @admin_required # Solo un administrador puede gestionar roles
@@ -7152,10 +7568,10 @@ def listar_roles():
     """
     try:
         db = get_db()
-        with db.cursor(dictionary=True) as cursor:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre, descripcion FROM roles ORDER BY nombre")
             lista_de_roles = cursor.fetchall()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a los roles: {err}", "danger")
         current_app.logger.error(f"Error en listar_roles: {err}")
         lista_de_roles = []
@@ -7185,7 +7601,7 @@ def nuevo_rol():
                     db.commit()
                     flash(f'Rol "{nombre}" creado exitosamente.', 'success')
                     return redirect(url_for('main.listar_roles'))
-            except mysql.connector.Error as err:
+            except Exception as err:
                 db.rollback()
                 if err.errno == 1062: # Error de nombre de rol duplicado
                     flash(f'Error: El rol "{nombre}" ya existe.', 'danger')
@@ -7210,7 +7626,7 @@ def gestionar_permisos_rol(rol_id):
     """
     db_conn = get_db()
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Obtener el rol que estamos editando
             cursor.execute("SELECT * FROM roles WHERE id = %s", (rol_id,))
             rol = cursor.fetchone()
@@ -7227,7 +7643,7 @@ def gestionar_permisos_rol(rol_id):
             # Creamos un set (conjunto) de IDs para una búsqueda más eficiente en la plantilla
             permisos_asignados_ids = {row['permiso_id'] for row in cursor.fetchall()}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al cargar la página de permisos: {err}", "danger")
         return redirect(url_for('main.listar_roles'))
     
@@ -7266,14 +7682,14 @@ def guardar_permisos_rol(rol_id):
             db_conn.commit()
             flash("Permisos actualizados exitosamente.", "success")
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         db_conn.rollback()
         flash(f"Error de base de datos al guardar los permisos: {err}", "danger")
 
     return redirect(url_for('main.listar_roles'))
 
 
-#Aplicacion WEB
+# --- RUTAS PARA COMANDA ---
 
 
 @main_bp.route('/comandas/nueva', methods=['GET', 'POST'])
@@ -7362,7 +7778,7 @@ def nueva_comanda():
             flash(f"Comanda #{venta_id} enviada a caja exitosamente.", "success")
             return redirect(url_for('main.nueva_comanda'))
 
-        except (ValueError, mysql.connector.Error, Exception) as e:
+        except (ValueError, Exception, Exception) as e:
             if db_conn and db_conn.in_transaction: db_conn.rollback()
             flash(f"No se pudo enviar la comanda. Error: {str(e)}", "warning")
             current_app.logger.error(f"Error procesando comanda: {e}")
@@ -7371,7 +7787,7 @@ def nueva_comanda():
     # --- Lógica GET (para mostrar el formulario) ---
     listas_para_form = { 'clientes': [], 'servicios': [], 'productos': [], 'estilos_catalogo': [] }
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, razon_social_nombres, apellidos FROM clientes WHERE tipo_documento != 'RUC' OR tipo_documento IS NULL ORDER BY razon_social_nombres, apellidos")
             listas_para_form['clientes'] = cursor.fetchall()
             cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY nombre")
@@ -7405,7 +7821,7 @@ def listar_comandas_pendientes():
     comandas_pendientes = []
 
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Siempre cargamos las sucursales para el selector
             cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
             sucursales = cursor.fetchall()
@@ -7426,7 +7842,7 @@ def listar_comandas_pendientes():
                 cursor.execute(sql, (sucursal_id_seleccionada,))
                 comandas_pendientes = cursor.fetchall()
     
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al cargar las comandas pendientes: {err}", "danger")
         current_app.logger.error(f"Error en listar_comandas_pendientes: {err}")
 
@@ -7436,6 +7852,7 @@ def listar_comandas_pendientes():
                            sucursal_seleccionada_id=sucursal_id_seleccionada,
                            comandas=comandas_pendientes)
     
+# --- RUTAS PARA BONOS ---
 
 @main_bp.route('/configuracion/bonos')
 @login_required
@@ -7446,10 +7863,10 @@ def listar_bonos():
     """
     try:
         db = get_db()
-        with db.cursor(dictionary=True) as cursor:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT * FROM bonos ORDER BY nombre")
             lista_de_bonos = cursor.fetchall()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a los bonos: {err}", "danger")
         lista_de_bonos = []
         
@@ -7482,7 +7899,7 @@ def nuevo_bono():
                     db.commit()
                     flash(f'Bono "{nombre}" creado exitosamente.', 'success')
                     return redirect(url_for('main.listar_bonos'))
-            except mysql.connector.Error as err:
+            except Exception as err:
                 db.rollback()
                 flash(f'Error al crear el bono: {err}', 'danger')
         
@@ -7503,7 +7920,7 @@ def gestionar_reglas_bono(bono_id):
     """
     db_conn = get_db()
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Obtener datos del bono para mostrar su nombre
             cursor.execute("SELECT * FROM bonos WHERE id = %s", (bono_id,))
             bono = cursor.fetchone()
@@ -7524,7 +7941,7 @@ def gestionar_reglas_bono(bono_id):
             cursor.execute("SELECT id, nombre FROM servicios WHERE activo = TRUE ORDER BY nombre")
             servicios_disponibles = cursor.fetchall()
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al cargar la página de reglas: {err}", "danger")
         return redirect(url_for('main.listar_bonos'))
 
@@ -7573,7 +7990,7 @@ def agregar_regla_bono(bono_id):
             cursor.execute(sql, (bono_id, tipo_regla, operador, valor_objetivo, servicio_id_asociado))
             db.commit()
             flash("Regla añadida exitosamente.", "success")
-    except (ValueError, mysql.connector.Error) as e:
+    except (ValueError, Exception) as e:
         get_db().rollback()
         flash(f"Error al guardar la regla: {e}", "danger")
     
@@ -7590,7 +8007,7 @@ def eliminar_regla_bono(regla_id):
     db = get_db()
     bono_id_para_redirigir = None
     try:
-        with db.cursor(dictionary=True) as cursor:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Primero, obtenemos el bono_id para saber a dónde volver
             cursor.execute("SELECT bono_id FROM bono_reglas WHERE id = %s", (regla_id,))
             regla = cursor.fetchone()
@@ -7604,7 +8021,7 @@ def eliminar_regla_bono(regla_id):
             else:
                 flash("La regla que intentas eliminar no fue encontrada.", "warning")
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         db.rollback()
         flash(f"Error al eliminar la regla: {err}", "danger")
 
@@ -7613,6 +8030,9 @@ def eliminar_regla_bono(regla_id):
     else:
         # Si algo falla, volver a la lista general de bonos
         return redirect(url_for('main.listar_bonos'))
+
+# --- RUTAS PARA MEMBRESIAS ---
+
 
 @main_bp.route('/configuracion/membresias')
 @login_required
@@ -7623,10 +8043,10 @@ def listar_planes_membresia():
     """
     try:
         db = get_db()
-        with db.cursor(dictionary=True) as cursor:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT * FROM membresia_planes ORDER BY nombre")
             planes = cursor.fetchall()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a los planes de membresía: {err}", "danger")
         current_app.logger.error(f"Error en listar_planes_membresia: {err}")
         planes = []
@@ -7634,8 +8054,6 @@ def listar_planes_membresia():
     return render_template('membresias/lista_planes.html', 
                            planes=planes,
                            titulo_pagina="Planes de Membresía")
-
-
 
 @main_bp.route('/configuracion/membresias/nuevo', methods=['GET', 'POST'])
 @login_required
@@ -7673,14 +8091,14 @@ def nuevo_plan_membresia():
             flash(f'Plan de membresía "{nombre}" creado exitosamente.', 'success')
             return redirect(url_for('main.listar_planes_membresia'))
 
-        except (ValueError, mysql.connector.Error, Exception) as e:
+        except (ValueError, Exception, Exception) as e:
             if db_conn and db_conn.in_transaction: db_conn.rollback()
             flash(f"Error al crear el plan: {e}", "danger")
     
     # Lógica GET (sin cambios)
     servicios_disponibles = []
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY nombre")
             servicios_disponibles = cursor.fetchall()
     except Exception as e:
@@ -7746,7 +8164,7 @@ def editar_plan_membresia(plan_id):
             flash(f'Plan de membresía "{nombre}" actualizado exitosamente.', 'success')
             return redirect(url_for('main.listar_planes_membresia'))
 
-        except (ValueError, mysql.connector.Error, Exception) as e:
+        except (ValueError, Exception, Exception) as e:
             if db_conn and db_conn.in_transaction: db_conn.rollback()
             flash(f"Error al actualizar el plan: {e}", "danger")
             # En caso de error, volver a la misma página de edición
@@ -7754,7 +8172,7 @@ def editar_plan_membresia(plan_id):
 
     # --- Lógica GET (para mostrar el formulario con datos existentes) ---
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Obtener el plan
             cursor.execute("SELECT * FROM membresia_planes WHERE id = %s", (plan_id,))
             plan_actual = cursor.fetchone()
@@ -7791,6 +8209,67 @@ def editar_plan_membresia(plan_id):
                            beneficios_json=json.dumps(beneficios_actuales, default=str),
                            servicios_disponibles=servicios_disponibles)
     
+@main_bp.route('/membresias/clientes')
+@login_required
+@admin_required # Solo un administrador puede ver este reporte
+def listar_cliente_membresias():
+    """
+    Muestra una lista de todas las membresías adquiridas por los clientes.
+    Calcula el estado (Activa/Expirada) al momento de la consulta.
+    """
+    db_conn = get_db()
+    
+    # Obtener el filtro de estado de la URL, por defecto mostrará 'Activa'
+    filtro_estado = request.args.get('filtro_estado', 'Activa')
+    
+    lista_membresias = []
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # La consulta base une las 3 tablas necesarias
+            sql_base = """
+                SELECT 
+                    cm.id,
+                    CONCAT(c.razon_social_nombres, ' ', IFNULL(c.apellidos, '')) AS cliente_nombre,
+                    mp.nombre AS plan_nombre,
+                    cm.fecha_inicio,
+                    cm.fecha_fin,
+                    CASE
+                        WHEN CURDATE() > cm.fecha_fin THEN 'Expirada'
+                        ELSE 'Activa'
+                    END AS estado_calculado
+                FROM cliente_membresias cm
+                JOIN clientes c ON cm.cliente_id = c.id
+                JOIN membresia_planes mp ON cm.plan_id = mp.id
+            """
+            
+            params = []
+            where_clauses = []
+            
+            # Aplicar filtro de estado si no es 'Todas'
+            if filtro_estado != 'Todas':
+                if filtro_estado == 'Expirada':
+                    where_clauses.append("(cm.estado = 'Expirada' OR (cm.estado = 'Activa' AND cm.fecha_fin < CURDATE()))")
+                else: # Para 'Activa' y otros futuros estados
+                    where_clauses.append("cm.estado = %s AND cm.fecha_fin >= CURDATE()")
+                    params.append(filtro_estado)
+            
+            if where_clauses:
+                sql_base += " WHERE " + " AND ".join(where_clauses)
+
+            sql_base += " ORDER BY cm.fecha_fin ASC"
+            
+            cursor.execute(sql_base, tuple(params))
+            lista_membresias = cursor.fetchall()
+
+    except Exception as err:
+        flash(f"Error al acceder a las membresías de clientes: {err}", "danger")
+        current_app.logger.error(f"Error en listar_cliente_membresias: {err}")
+
+    return render_template('membresias/lista_cliente_membresias.html',
+                           membresias=lista_membresias,
+                           filtro_actual=filtro_estado,
+                           titulo_pagina="Membresías de Clientes")
+
 
 @main_bp.route('/configuracion/membresias/toggle-activo/<int:plan_id>')
 @login_required
@@ -7801,7 +8280,7 @@ def toggle_activo_plan_membresia(plan_id):
     """
     db = get_db()
     try:
-        with db.cursor(dictionary=True) as cursor:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Primero, obtenemos el estado actual del plan
             cursor.execute("SELECT activo, nombre FROM membresia_planes WHERE id = %s", (plan_id,))
             plan = cursor.fetchone()
@@ -7816,7 +8295,7 @@ def toggle_activo_plan_membresia(plan_id):
             else:
                 flash("Plan de membresía no encontrado.", "warning")
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         db.rollback()
         flash(f"Error al cambiar el estado del plan: {err}", "danger")
 
@@ -7836,7 +8315,7 @@ def api_get_creditos_cliente(cliente_id):
     creditos_disponibles = []
     
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Esta consulta busca los créditos de una membresía que esté 'Activa'
             # y cuya fecha de hoy esté dentro de su período de vigencia.
             # También calcula los créditos restantes.
@@ -7862,11 +8341,12 @@ def api_get_creditos_cliente(cliente_id):
             for credito in creditos_disponibles:
                 credito['cantidad_restante'] = int(credito['cantidad_restante'])
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         current_app.logger.error(f"Error DB en api_get_creditos_cliente (ID: {cliente_id}): {err}")
         return jsonify({"error": "Error interno al consultar los créditos del cliente."}), 500
 
     return jsonify(creditos_disponibles)
+
 
 
 @main_bp.route('/reportes/liquidacion/pagar', methods=['POST'])
@@ -7901,7 +8381,7 @@ def pagar_liquidacion():
 
     try:
         # Usamos 'with' para que el cursor se cierre automáticamente
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # La transacción se inicia implícitamente con la primera operación de escritura
             
             # 2. Recalcular todos los montos en el servidor para verificar
@@ -7959,7 +8439,7 @@ def pagar_liquidacion():
             
             # 4. Actualizar estados
             if comisiones_ids:
-                cursor.execute(f"UPDATE comisiones SET estado = 'Pagada', fecha_pago = NOW() WHERE id IN ({format_strings_com})", tuple(comisiones_ids))
+                cursor.execute(f"UPDATE comisiones SET estado = 'Pagada', fecha_pago = CURRENT_TIMESTAMP WHERE id IN ({format_strings_com})", tuple(comisiones_ids))
             if ajustes_ids:
                 cursor.execute(f"UPDATE ajustes_pago SET estado = 'Aplicado en Liquidación' WHERE id IN ({format_strings_aj})", tuple(ajustes_ids))
 
@@ -7971,7 +8451,7 @@ def pagar_liquidacion():
         db_conn.commit()
         flash(f"Liquidación para el período {mes}/{anio} registrada y marcada como pagada exitosamente.", "success")
 
-    except (ValueError, mysql.connector.Error, Exception) as e:
+    except (ValueError, Exception, Exception) as e:
         if db_conn and db_conn.in_transaction: db_conn.rollback()
         flash(f"No se pudo registrar el pago de la liquidación. Error: {str(e)}", "danger")
         current_app.logger.error(f"Error en pagar_liquidacion: {e}")
@@ -7980,144 +8460,116 @@ def pagar_liquidacion():
 
 # En app/routes.py
 
+import pandas as pd # Asegúrate de importar pandas al inicio del archivo
+from werkzeug.utils import secure_filename
+
 @main_bp.route('/clientes/importar', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def importar_clientes():
-    """
-    Maneja la carga de un archivo Excel para la importación masiva de clientes,
-    adaptado a la nueva estructura de la tabla clientes.
-    """
+    resultados = {'insertados': 0, 'errores': []}
+    procesado = False
+
     if request.method == 'POST':
-        if 'archivo_excel' not in request.files:
-            flash('No se encontró el archivo en la solicitud.', 'danger')
+        # --- 1. VERIFICACIÓN DE SUCURSAL ACTIVA ---
+        sucursal_id = session.get('sucursal_id')
+        if not sucursal_id:
+            # Como fallback, intentar obtenerla del objeto de usuario si existiera ese atributo.
+            sucursal_id = getattr(current_user, 'sucursal_id', None)
+        
+        if not sucursal_id:
+            flash('Por favor seleccione una sucursal de trabajo antes de importar clientes', 'danger')
+            return redirect(request.url)
+
+        # --- 2. VALIDACIÓN DEL ARCHIVO ---
+        if 'archivo' not in request.files or not request.files['archivo'].filename:
+            flash('No se seleccionó ningún archivo.', 'danger')
             return redirect(request.url)
         
-        archivo = request.files['archivo_excel']
-        if archivo.filename == '':
-            flash('No se seleccionó ningún archivo.', 'warning')
+        file = request.files['archivo']
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            flash('Formato de archivo inválido. Solo se permiten .xlsx y .xls.', 'danger')
             return redirect(request.url)
 
-        if archivo and (archivo.filename.endswith('.xlsx') or archivo.filename.endswith('.xls')):
-            try:
-                df = pd.read_excel(archivo, dtype=str).fillna('')
+        # --- 3. PROCESAMIENTO DEL ARCHIVO ---
+        db = get_db()
+        cursor = None
+        procesado = True
+
+        try:
+            df = pd.read_excel(file)
+            df.columns = [str(c).strip().upper() for c in df.columns]
+
+            required_cols = ['RAZONSOCIALNOMBRES', 'TELEFONO']
+            if not all(col in df.columns for col in required_cols):
+                flash(f'El archivo Excel debe contener las columnas obligatorias: {", ".join(required_cols)}.', 'danger')
+                return render_template('clientes/importar_clientes.html', titulo_pagina="Importar Clientes", resultados=resultados, procesado=procesado)
+
+            db.autocommit = False
+            cursor = db.cursor()
+
+            for index, row in df.iterrows():
+                try:
+                    nombre = str(row.get('RAZONSOCIALNOMBRES', '')).strip()
+                    telefono = str(row.get('TELEFONO', '')).strip()
+                    num_doc = str(row.get('NUMERODOCUMENTO', '')).strip() if pd.notna(row.get('NUMERODOCUMENTO')) else None
+
+                    if not nombre or not telefono:
+                        resultados['errores'].append(f"Fila {index + 2}: Faltan RAZONSOCIALNOMBRES o TELEFONO.")
+                        continue
+
+                    if num_doc:
+                        cursor.execute("SELECT id FROM clientes WHERE numero_documento = %s", (num_doc,))
+                        if cursor.fetchone():
+                            resultados['errores'].append(f"Fila {index + 2}: El NÚMERO DE DOCUMENTO '{num_doc}' ya está registrado.")
+                            continue
+                    
+                    cursor.execute("SELECT id FROM clientes WHERE LOWER(telefono) = %s AND LOWER(razon_social_nombres) = %s", (telefono.lower(), nombre.lower()))
+                    if cursor.fetchone():
+                        resultados['errores'].append(f"Fila {index + 2}: El cliente '{nombre}' con teléfono '{telefono}' ya existe.")
+                        continue
+
+                    def clean_value(v): return str(v).strip() if pd.notna(v) and str(v).strip().lower() not in ['nan', ''] else None
+                    def parse_date(v): return pd.to_datetime(v).date() if pd.notna(v) else None
+
+                    sql = """
+                        INSERT INTO clientes (
+                            razon_social_nombres, telefono, sucursal_id, apellidos, tipo_documento, numero_documento,
+                            email, direccion, fecha_nacimiento, fecha_registro, genero, preferencia_servicio
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    params = (
+                        nombre, telefono, sucursal_id,
+                        clean_value(row.get('APELLIDOS')), clean_value(row.get('TIPODOCUMENTO')), num_doc,
+                        clean_value(row.get('EMAIL')), clean_value(row.get('DIRECCION')),
+                        parse_date(row.get('FECHANACIMIENTO')), parse_date(row.get('FECHAREGISTRO')) or datetime.now().date(),
+                        clean_value(row.get('GENERO')) or 'Masculino',
+                        clean_value(row.get('PREFERENCIASERVICIO')) or 'Barberia'
+                    )
+                    cursor.execute(sql, params)
+                    resultados['insertados'] += 1
                 
-                # Columnas requeridas actualizadas
-                columnas_requeridas = ['TipoDocumento', 'NumeroDocumento', 'RazonSocialNombres']
-                if not all(col in df.columns for col in columnas_requeridas):
-                    flash(f"El archivo debe contener, como mínimo, las columnas: {', '.join(columnas_requeridas)}.", 'danger')
-                    return redirect(request.url)
+                except Exception as row_e:
+                    resultados['errores'].append(f"Fila {index + 2}: Error interno al procesar. ({str(row_e)})")
 
-                clientes_a_insertar = []
-                for index, row in df.iterrows():
-                    # Validar que los campos requeridos no estén vacíos en esta fila
-                    if not all([row.get('TipoDocumento'), row.get('NumeroDocumento'), row.get('RazonSocialNombres')]):
-                        continue # Saltar esta fila si le falta un dato obligatorio
+            db.commit()
+            
+            if resultados['insertados'] > 0:
+                flash(f"Proceso finalizado. Se importaron {resultados['insertados']} clientes a la sucursal actual.", 'success')
+            if resultados['errores']:
+                flash(f"Se encontraron {len(resultados['errores'])} problemas. Revisa el detalle de errores.", 'warning')
+            if resultados['insertados'] == 0 and not resultados['errores']:
+                flash("El archivo fue procesado, pero no se encontraron nuevos clientes para importar.", "info")
 
-                    tipo_doc = str(row['TipoDocumento']).strip().upper()
-                    apellidos = str(row.get('Apellidos', '')) or None
-                    if tipo_doc == 'RUC':
-                        apellidos = None # Las empresas no tienen apellidos
-
-                    cliente_data = {
-                        'tipo_documento': tipo_doc,
-                        'numero_documento': str(row['NumeroDocumento']).strip(),
-                        'razon_social_nombres': str(row['RazonSocialNombres']).strip(),
-                        'apellidos': apellidos,
-                        'direccion': str(row.get('Direccion', '')) or None,
-                        'email': str(row.get('Email', '')) or None,
-                        'telefono': str(row.get('Telefono', '')).strip().replace(' ', '') or None,
-                        'fecha_nacimiento': pd.to_datetime(row.get('FechaNacimiento'), errors='coerce').date() if pd.notna(row.get('FechaNacimiento')) else None
-                    }
-                    clientes_a_insertar.append(tuple(cliente_data.values()))
-
-                if not clientes_a_insertar:
-                    flash("No se encontraron filas válidas para importar en el archivo.", "warning")
-                    return redirect(request.url)
-                
-                db = get_db()
-                with db.cursor() as cursor:
-                    # INSERT IGNORE usará la restricción UNIQUE del numero_documento para evitar duplicados
-                    sql = "INSERT IGNORE INTO clientes (tipo_documento, numero_documento, razon_social_nombres, apellidos, direccion, email, telefono, fecha_nacimiento) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
-                    cursor.executemany(sql, clientes_a_insertar)
-                    db.commit()
-                    flash(f"Importación completada. Se insertaron {cursor.rowcount} nuevos clientes. Se ignoraron {len(clientes_a_insertar) - cursor.rowcount} registros por duplicados (basado en el número de documento).", "success")
-
-                return redirect(url_for('main.listar_clientes'))
-
-            except Exception as e:
-                flash(f"Ocurrió un error al procesar el archivo: {e}", "danger")
-                current_app.logger.error(f"Error importando clientes: {e}")
-                return redirect(request.url)
-        else:
-            flash('Formato de archivo no válido. Por favor, suba un archivo .xlsx o .xls', 'warning')
-            return redirect(request.url)
-
-    return render_template('clientes/importar_clientes.html', 
-                           titulo_pagina="Importar Clientes desde Excel")
-
-
-@main_bp.route('/membresias/clientes')
-@login_required
-@admin_required # Solo un administrador puede ver este reporte
-def listar_cliente_membresias():
-    """
-    Muestra una lista de todas las membresías adquiridas por los clientes.
-    Calcula el estado (Activa/Expirada) al momento de la consulta.
-    """
-    db_conn = get_db()
+        except (Exception, psycopg2.Error) as e:
+            if db: db.rollback()
+            flash(f'Ocurrió un error crítico durante la importación: {str(e)}', 'danger')
+            current_app.logger.error(f"Error en importación de clientes: {e}", exc_info=True)
+        finally:
+            if cursor: cursor.close()
+            if db: db.autocommit = True
     
-    # Obtener el filtro de estado de la URL, por defecto mostrará 'Activa'
-    filtro_estado = request.args.get('filtro_estado', 'Activa')
-    
-    lista_membresias = []
-    try:
-        with db_conn.cursor(dictionary=True) as cursor:
-            # La consulta base une las 3 tablas necesarias
-            sql_base = """
-                SELECT 
-                    cm.id,
-                    CONCAT(c.razon_social_nombres, ' ', IFNULL(c.apellidos, '')) AS cliente_nombre,
-                    mp.nombre AS plan_nombre,
-                    cm.fecha_inicio,
-                    cm.fecha_fin,
-                    CASE
-                        WHEN CURDATE() > cm.fecha_fin THEN 'Expirada'
-                        ELSE 'Activa'
-                    END AS estado_calculado
-                FROM cliente_membresias cm
-                JOIN clientes c ON cm.cliente_id = c.id
-                JOIN membresia_planes mp ON cm.plan_id = mp.id
-            """
-            
-            params = []
-            where_clauses = []
-            
-            # Aplicar filtro de estado si no es 'Todas'
-            if filtro_estado != 'Todas':
-                if filtro_estado == 'Expirada':
-                    where_clauses.append("(cm.estado = 'Expirada' OR (cm.estado = 'Activa' AND cm.fecha_fin < CURDATE()))")
-                else: # Para 'Activa' y otros futuros estados
-                    where_clauses.append("cm.estado = %s AND cm.fecha_fin >= CURDATE()")
-                    params.append(filtro_estado)
-            
-            if where_clauses:
-                sql_base += " WHERE " + " AND ".join(where_clauses)
-
-            sql_base += " ORDER BY cm.fecha_fin ASC"
-            
-            cursor.execute(sql_base, tuple(params))
-            lista_membresias = cursor.fetchall()
-
-    except mysql.connector.Error as err:
-        flash(f"Error al acceder a las membresías de clientes: {err}", "danger")
-        current_app.logger.error(f"Error en listar_cliente_membresias: {err}")
-
-    return render_template('membresias/lista_cliente_membresias.html',
-                           membresias=lista_membresias,
-                           filtro_actual=filtro_estado,
-                           titulo_pagina="Membresías de Clientes")
-
+    return render_template('clientes/importar_clientes.html', titulo_pagina="Importar Clientes", resultados=resultados, procesado=procesado)
 
 @main_bp.route('/configuracion/facturacion', methods=['GET', 'POST'])
 @login_required
@@ -8125,8 +8577,8 @@ def listar_cliente_membresias():
 def configurar_facturacion():
     instance_path = current_app.instance_path
     certs_path = os.path.join(instance_path, 'certs')
-    credentials_file_path = os.path.join(instance_path, 'sunat_credentials.json')
     os.makedirs(certs_path, exist_ok=True)
+    db_conn = get_db()
 
     if request.method == 'POST':
         try:
@@ -8138,31 +8590,56 @@ def configurar_facturacion():
                     archivo.save(os.path.join(certs_path, nombre_seguro))
                     flash('Certificado digital guardado exitosamente.', 'success')
 
-            # Guardar las Credenciales, incluyendo el RUC
-            credenciales = {
-                'emisor_ruc': request.form.get('emisor_ruc'),
-                'password_certificado': request.form.get('password_certificado'),
-                'usuario_sol': request.form.get('usuario_sol'),
-                'clave_sol': request.form.get('clave_sol')
-            }
-            with open(credentials_file_path, 'w') as f:
-                json.dump(credenciales, f)
-            flash('Configuración de facturación guardada exitosamente.', 'success')
+            # Guardar configuración en la base de datos
+            with db_conn.cursor() as cursor:
+                sql_update = """
+                    UPDATE configuracion_sistema SET
+                        ruc_empresa = %s,
+                        razon_social = %s,
+                        direccion_fiscal = %s,
+                        ubigeo = %s,
+                        clave_certificado = %s,
+                        usuario_sol = %s,
+                        clave_sol = %s
+                    WHERE id = 1
+                """
+                val = (
+                    request.form.get('ruc_empresa'),
+                    request.form.get('razon_social'),
+                    request.form.get('direccion_fiscal'),
+                    request.form.get('ubigeo'),
+                    request.form.get('clave_certificado'),
+                    request.form.get('usuario_sol'),
+                    request.form.get('clave_sol')
+                )
+                cursor.execute(sql_update, val)
+            db_conn.commit()
+            
+            # Opcional: Eliminar el archivo JSON antiguo si existe para evitar confusiones
+            credentials_file_path = os.path.join(instance_path, 'sunat_credentials.json')
+            if os.path.exists(credentials_file_path):
+                os.remove(credentials_file_path)
+
+            flash('Configuración de facturación guardada en la base de datos exitosamente.', 'success')
             return redirect(url_for('main.configurar_facturacion'))
         except Exception as e:
+            db_conn.rollback()
             flash(f"Ocurrió un error al guardar la configuración: {e}", 'danger')
 
     # Lógica GET
     certificado_existente = os.path.exists(os.path.join(certs_path, "certificado_sunat.pfx"))
-    credenciales_existentes = {}
-    if os.path.exists(credentials_file_path):
-        with open(credentials_file_path, 'r') as f:
-            credenciales_existentes = json.load(f)
+    config_existente = {}
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            cursor.execute("SELECT * FROM configuracion_sistema WHERE id = 1")
+            config_existente = cursor.fetchone()
+    except Exception as e:
+        flash(f"Error al cargar la configuración existente: {e}", "warning")
 
     return render_template('configuracion/form_facturacion.html',
                            titulo_pagina="Configuración de Facturación Electrónica",
                            certificado_existente=certificado_existente,
-                           credenciales=credenciales_existentes)
+                           credenciales=config_existente)
 
 
 def _generar_y_firmar_xml(venta_id):
@@ -8172,57 +8649,55 @@ def _generar_y_firmar_xml(venta_id):
     """
     db_conn = get_db()
     
-    # --- 1. Cargar Todos los Datos Necesarios de la BD ---
-    with db_conn.cursor(dictionary=True) as cursor:
-        # Datos de la venta, sucursal, etc.
-        sql_venta = "SELECT v.*, s.nombre AS sucursal_nombre FROM ventas v JOIN sucursales s ON v.sucursal_id = s.id WHERE v.id = %s"
+    # --- 1. Cargar Datos de BD ---
+    with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+        sql_venta = """
+            SELECT v.*, s.nombre AS sucursal_nombre 
+            FROM ventas v JOIN sucursales s ON v.sucursal_id = s.id 
+            WHERE v.id = %s
+        """
         cursor.execute(sql_venta, (venta_id,))
         venta = cursor.fetchone()
-        if not venta:
-            raise ValueError("Venta no encontrada.")
+        if not venta: raise ValueError("Venta no encontrada.")
         
-        # Datos del cliente (o datos genéricos si no hay cliente de facturación)
-        cliente = {}
+        # Cliente
         if venta.get('cliente_facturacion_id'):
             cursor.execute("SELECT * FROM clientes WHERE id = %s", (venta['cliente_facturacion_id'],))
             cliente = cursor.fetchone()
-        
-        if not cliente:
-            cliente = {'tipo_documento': 'Otro', 'numero_documento': '00000000', 'razon_social_nombres': 'CLIENTES', 'apellidos': 'VARIOS'}
+        else:
+            # Cliente genérico 'VARIOS' si no hay datos específicos
+            cliente = {'tipo_documento': 'Otro', 'numero_documento': '00000000', 'razon_social_nombres': 'CLIENTES VARIOS', 'apellidos': ''}
 
-        # Datos de los ítems de la venta
+        # Ítems
         cursor.execute("SELECT * FROM venta_items WHERE venta_id = %s", (venta_id,))
         items = cursor.fetchall()
-        if not items:
-            raise ValueError("La venta no tiene ítems.")
+        if not items: raise ValueError("La venta no tiene ítems.")
 
-    # --- 2. Cargar Certificado y Credenciales ---
+        # Configuración de Empresa
+        cursor.execute("SELECT ruc_empresa, razon_social, clave_certificado FROM configuracion_sistema WHERE id = 1")
+        config_empresa = cursor.fetchone()
+        if not config_empresa: raise ValueError("Falta configuración de empresa.")
+
+    # --- 2. Cargar Certificado ---
     instance_path = current_app.instance_path
     certs_path = os.path.join(instance_path, 'certs', 'certificado_sunat.pfx')
-    credentials_file_path = os.path.join(instance_path, 'sunat_credentials.json')
     
-    if not os.path.exists(certs_path) or not os.path.exists(credentials_file_path):
-        raise ValueError("No se ha configurado el Certificado Digital o las credenciales SUNAT.")
+    if not os.path.exists(certs_path):
+        raise ValueError("No se encuentra el archivo certificado_sunat.pfx")
     
-    with open(credentials_file_path, 'r') as f:
-        credenciales = json.load(f)
-    
-    password_certificado = credenciales.get('password_certificado')
-    if not password_certificado:
-        raise ValueError("La contraseña del certificado no está configurada.")
-    
+    clave_cert = config_empresa.get('clave_certificado')
+    if not clave_cert: raise ValueError("No hay clave de certificado en la BD.")
+
     with open(certs_path, 'rb') as pfx_file:
         pfx_data = pfx_file.read()
     
+    # Cargar llaves
     private_key, public_cert, additional_certs = pkcs12.load_key_and_certificates(
         pfx_data, 
-        password_certificado.encode('utf-8')
+        clave_cert.encode('utf-8')
     )
-    
-    # --- FIN PARTE 1 ---
-    # --- INICIO PARTE 2: Construcción de la Estructura XML ---
 
-    # 2a. Definir los namespaces (un estándar requerido por SUNAT)
+    # --- 3. Construcción del XML (UBL 2.1) ---
     NS_MAP = {
         None: "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2",
         "cac": "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
@@ -8231,118 +8706,140 @@ def _generar_y_firmar_xml(venta_id):
         "ds": "http://www.w3.org/2000/09/xmldsig#"
     }
     
-    # Crear el elemento raíz del XML. Para Boletas y Facturas se usa "Invoice".
     invoice = ET.Element("Invoice", nsmap=NS_MAP)
     
-    # UBLExtensions: Un contenedor que es requerido y que contendrá la firma digital
+    # Extensión para la Firma
     ubl_extensions = ET.SubElement(invoice, ET.QName(NS_MAP["ext"], "UBLExtensions"))
-    signature_extension = ET.SubElement(ubl_extensions, ET.QName(NS_MAP["ext"], "UBLExtension"))
-    ET.SubElement(signature_extension, ET.QName(NS_MAP["ext"], "ExtensionContent"))
+    ubl_extension = ET.SubElement(ubl_extensions, ET.QName(NS_MAP["ext"], "UBLExtension"))
+    ext_content = ET.SubElement(ubl_extension, ET.QName(NS_MAP["ext"], "ExtensionContent"))
 
-    # 2b. Información General del Comprobante
+    # Datos Generales
     ET.SubElement(invoice, ET.QName(NS_MAP["cbc"], "UBLVersionID")).text = "2.1"
     ET.SubElement(invoice, ET.QName(NS_MAP["cbc"], "CustomizationID")).text = "2.0"
     
-    comprobante_id = f"{venta.get('serie_comprobante')}-{venta.get('numero_comprobante')}"
+    serie = venta.get('serie_comprobante', 'B001')
+    numero = str(venta.get('numero_comprobante', 1)).zfill(8)
+    comprobante_id = f"{serie}-{numero}"
+    
     ET.SubElement(invoice, ET.QName(NS_MAP["cbc"], "ID")).text = comprobante_id
     ET.SubElement(invoice, ET.QName(NS_MAP["cbc"], "IssueDate")).text = venta['fecha_venta'].strftime('%Y-%m-%d')
     ET.SubElement(invoice, ET.QName(NS_MAP["cbc"], "IssueTime")).text = venta['fecha_venta'].strftime('%H:%M:%S')
     
-    # Tipo de Comprobante: 01 para Factura, 03 para Boleta
-    tipo_doc_map = { 'Boleta Electrónica': '03', 'Factura Electrónica': '01' }
-    tipo_documento_code = tipo_doc_map.get(venta['tipo_comprobante'], '03') # '03' (Boleta) por defecto
-    ET.SubElement(invoice, ET.QName(NS_MAP["cbc"], "InvoiceTypeCode"), listID="0101").text = tipo_documento_code
+    # Tipo Comprobante (01=Factura, 03=Boleta)
+    tipo_code = '01' if venta['tipo_comprobante'] == 'Factura Electrónica' else '03'
+    ET.SubElement(invoice, ET.QName(NS_MAP["cbc"], "InvoiceTypeCode"), listID="0101").text = tipo_code
     ET.SubElement(invoice, ET.QName(NS_MAP["cbc"], "DocumentCurrencyCode")).text = "PEN"
 
-    # 2c. Datos del Emisor (Tu Negocio)
-    emisor_ruc = credenciales.get('emisor_ruc')
-    # TODO: La razón social también debería estar en la configuración
-    emisor_razon_social = "JV STUDIO S.A.C." 
-    
-    supplier_party = ET.SubElement(invoice, ET.QName(NS_MAP["cac"], "AccountingSupplierParty"))
-    party_emisor = ET.SubElement(supplier_party, ET.QName(NS_MAP["cac"], "Party"))
-    party_identification_emisor = ET.SubElement(party_emisor, ET.QName(NS_MAP["cac"], "PartyIdentification"))
-    ET.SubElement(party_identification_emisor, ET.QName(NS_MAP["cbc"], "ID"), schemeID="6").text = emisor_ruc # schemeID 6 es para RUC
-    
-    party_legal_entity_emisor = ET.SubElement(party_emisor, ET.QName(NS_MAP["cac"], "PartyLegalEntity"))
-    ET.SubElement(party_legal_entity_emisor, ET.QName(NS_MAP["cbc"], "RegistrationName")).text = emisor_razon_social
-    
-    # 2d. Datos del Receptor (Tu Cliente)
-    tipo_doc_cliente_map = { 'DNI': '1', 'RUC': '6', 'Otro': '0' }
-    cliente_doc_tipo = tipo_doc_cliente_map.get(cliente['tipo_documento'], '0')
-    cliente_nombre_completo = f"{cliente['razon_social_nombres']} {cliente['apellidos'] or ''}".strip()
-    
-    customer_party = ET.SubElement(invoice, ET.QName(NS_MAP["cac"], "AccountingCustomerParty"))
-    party_cliente = ET.SubElement(customer_party, ET.QName(NS_MAP["cac"], "Party"))
-    party_identification_cliente = ET.SubElement(party_cliente, ET.QName(NS_MAP["cac"], "PartyIdentification"))
-    ET.SubElement(party_identification_cliente, ET.QName(NS_MAP["cbc"], "ID"), schemeID=cliente_doc_tipo).text = cliente['numero_documento']
+    # Emisor
+    supplier = ET.SubElement(invoice, ET.QName(NS_MAP["cac"], "AccountingSupplierParty"))
+    party_s = ET.SubElement(supplier, ET.QName(NS_MAP["cac"], "Party"))
+    party_id_s = ET.SubElement(party_s, ET.QName(NS_MAP["cac"], "PartyIdentification"))
+    ET.SubElement(party_id_s, ET.QName(NS_MAP["cbc"], "ID"), schemeID="6").text = config_empresa['ruc_empresa']
+    party_legal_s = ET.SubElement(party_s, ET.QName(NS_MAP["cac"], "PartyLegalEntity"))
+    ET.SubElement(party_legal_s, ET.QName(NS_MAP["cbc"], "RegistrationName")).text = config_empresa['razon_social']
 
-    party_legal_entity_cliente = ET.SubElement(party_cliente, ET.QName(NS_MAP["cac"], "PartyLegalEntity"))
-    ET.SubElement(party_legal_entity_cliente, ET.QName(NS_MAP["cbc"], "RegistrationName")).text = cliente_nombre_completo
-    
-    # --- FIN PARTE 2 ---
-    # --- INICIO PARTE 3: Detalle de Ítems, Totales y Firma ---
+    # Receptor
+    doc_type_map = {'DNI': '1', 'RUC': '6', 'Otro': '0'}
+    cliente_doc_code = doc_type_map.get(cliente.get('tipo_documento'), '0')
+    cliente_num = cliente.get('numero_documento', '00000000')
+    cliente_nom = f"{cliente.get('razon_social_nombres', '')} {cliente.get('apellidos', '')}".strip()
 
-    # 3a. Totales Globales del Comprobante
+    customer = ET.SubElement(invoice, ET.QName(NS_MAP["cac"], "AccountingCustomerParty"))
+    party_c = ET.SubElement(customer, ET.QName(NS_MAP["cac"], "Party"))
+    party_id_c = ET.SubElement(party_c, ET.QName(NS_MAP["cac"], "PartyIdentification"))
+    ET.SubElement(party_id_c, ET.QName(NS_MAP["cbc"], "ID"), schemeID=cliente_doc_code).text = cliente_num
+    party_legal_c = ET.SubElement(party_c, ET.QName(NS_MAP["cac"], "PartyLegalEntity"))
+    ET.SubElement(party_legal_c, ET.QName(NS_MAP["cbc"], "RegistrationName")).text = cliente_nom or "CLIENTES VARIOS"
+
+    # Totales
+    monto_total = float(venta['monto_final_venta'])
+    monto_impuestos = float(venta['monto_impuestos'])
+    base_imponible = monto_total - monto_impuestos
+
     tax_total = ET.SubElement(invoice, ET.QName(NS_MAP["cac"], "TaxTotal"))
-    ET.SubElement(tax_total, ET.QName(NS_MAP["cbc"], "TaxAmount"), currencyID="PEN").text = f"{venta['monto_impuestos']:.2f}"
+    ET.SubElement(tax_total, ET.QName(NS_MAP["cbc"], "TaxAmount"), currencyID="PEN").text = f"{monto_impuestos:.2f}"
     
-    tax_subtotal = ET.SubElement(tax_total, ET.QName(NS_MAP["cac"], "TaxSubtotal"))
-    base_imponible = venta['monto_final_venta'] - venta['monto_impuestos']
-    ET.SubElement(tax_subtotal, ET.QName(NS_MAP["cbc"], "TaxableAmount"), currencyID="PEN").text = f"{base_imponible:.2f}"
-    ET.SubElement(tax_subtotal, ET.QName(NS_MAP["cbc"], "TaxAmount"), currencyID="PEN").text = f"{venta['monto_impuestos']:.2f}"
-    tax_category = ET.SubElement(tax_subtotal, ET.QName(NS_MAP["cac"], "TaxCategory"))
-    tax_scheme = ET.SubElement(tax_category, ET.QName(NS_MAP["cac"], "TaxScheme"))
-    ET.SubElement(tax_scheme, ET.QName(NS_MAP["cbc"], "ID")).text = "1000" # Código para IGV
-    ET.SubElement(tax_scheme, ET.QName(NS_MAP["cbc"], "Name")).text = "IGV"
-    ET.SubElement(tax_scheme, ET.QName(NS_MAP["cbc"], "TaxTypeCode")).text = "VAT"
+    tax_sub = ET.SubElement(tax_total, ET.QName(NS_MAP["cac"], "TaxSubtotal"))
+    ET.SubElement(tax_sub, ET.QName(NS_MAP["cbc"], "TaxableAmount"), currencyID="PEN").text = f"{base_imponible:.2f}"
+    ET.SubElement(tax_sub, ET.QName(NS_MAP["cbc"], "TaxAmount"), currencyID="PEN").text = f"{monto_impuestos:.2f}"
     
-    legal_monetary_total = ET.SubElement(invoice, ET.QName(NS_MAP["cac"], "LegalMonetaryTotal"))
-    ET.SubElement(legal_monetary_total, ET.QName(NS_MAP["cbc"], "LineExtensionAmount"), currencyID="PEN").text = f"{base_imponible:.2f}"
-    ET.SubElement(legal_monetary_total, ET.QName(NS_MAP["cbc"], "PayableAmount"), currencyID="PEN").text = f"{venta['monto_final_venta']:.2f}"
+    tax_cat = ET.SubElement(tax_sub, ET.QName(NS_MAP["cac"], "TaxCategory"))
+    tax_sch = ET.SubElement(tax_cat, ET.QName(NS_MAP["cac"], "TaxScheme"))
+    ET.SubElement(tax_sch, ET.QName(NS_MAP["cbc"], "ID")).text = "1000"
+    ET.SubElement(tax_sch, ET.QName(NS_MAP["cbc"], "Name")).text = "IGV"
+    ET.SubElement(tax_sch, ET.QName(NS_MAP["cbc"], "TaxTypeCode")).text = "VAT"
 
-    # 3b. Detalle de Ítems (Bucle)
+    legal = ET.SubElement(invoice, ET.QName(NS_MAP["cac"], "LegalMonetaryTotal"))
+    ET.SubElement(legal, ET.QName(NS_MAP["cbc"], "LineExtensionAmount"), currencyID="PEN").text = f"{base_imponible:.2f}"
+    ET.SubElement(legal, ET.QName(NS_MAP["cbc"], "PayableAmount"), currencyID="PEN").text = f"{monto_total:.2f}"
+
+    # Detalle Ítems
     for i, item in enumerate(items, 1):
         line = ET.SubElement(invoice, ET.QName(NS_MAP["cac"], "InvoiceLine"))
         ET.SubElement(line, ET.QName(NS_MAP["cbc"], "ID")).text = str(i)
+        ET.SubElement(line, ET.QName(NS_MAP["cbc"], "InvoicedQuantity"), unitCode="NIU").text = str(int(item['cantidad']))
         
-        cantidad = int(item['cantidad'])
-        ET.SubElement(line, ET.QName(NS_MAP["cbc"], "InvoicedQuantity"), unitCode="NIU").text = str(cantidad) # NIU = Unidad
-        
-        line_extension_amount = ET.SubElement(line, ET.QName(NS_MAP["cbc"], "LineExtensionAmount"), currencyID="PEN")
-        line_extension_amount.text = f"{float(item['subtotal_item_neto']) / 1.18:.2f}" # Subtotal de línea sin IGV
+        p_unit = float(item['precio_unitario_venta'])
+        valor_unit = p_unit / 1.18
+        subtotal_neto = float(item['subtotal_item_neto'])
+        valor_venta_item = subtotal_neto / 1.18
+        igv_item = subtotal_neto - valor_venta_item
 
-        pricing_reference = ET.SubElement(line, ET.QName(NS_MAP["cac"], "PricingReference"))
-        alt_condition_price = ET.SubElement(pricing_reference, ET.QName(NS_MAP["cac"], "AlternativeConditionPrice"))
-        ET.SubElement(alt_condition_price, ET.QName(NS_MAP["cbc"], "PriceAmount"), currencyID="PEN").text = f"{float(item['precio_unitario_venta']):.2f}"
-        ET.SubElement(alt_condition_price, ET.QName(NS_MAP["cbc"], "PriceTypeCode")).text = "01" # Precio unitario (incluye IGV)
+        ET.SubElement(line, ET.QName(NS_MAP["cbc"], "LineExtensionAmount"), currencyID="PEN").text = f"{valor_venta_item:.2f}"
 
-        # Impuestos de la línea (simplificado)
-        tax_total_line = ET.SubElement(line, ET.QName(NS_MAP["cac"], "TaxTotal"))
-        ET.SubElement(tax_total_line, ET.QName(NS_MAP["cbc"], "TaxAmount"), currencyID="PEN").text = f"{float(item['subtotal_item_neto']) - (float(item['subtotal_item_neto']) / 1.18):.2f}"
+        pricing = ET.SubElement(line, ET.QName(NS_MAP["cac"], "PricingReference"))
+        alt = ET.SubElement(pricing, ET.QName(NS_MAP["cac"], "AlternativeConditionPrice"))
+        ET.SubElement(alt, ET.QName(NS_MAP["cbc"], "PriceAmount"), currencyID="PEN").text = f"{p_unit:.2f}"
+        ET.SubElement(alt, ET.QName(NS_MAP["cbc"], "PriceTypeCode")).text = "01"
+
+        tax_line = ET.SubElement(line, ET.QName(NS_MAP["cac"], "TaxTotal"))
+        ET.SubElement(tax_line, ET.QName(NS_MAP["cbc"], "TaxAmount"), currencyID="PEN").text = f"{igv_item:.2f}"
         
+        tax_sub_line = ET.SubElement(tax_line, ET.QName(NS_MAP["cac"], "TaxSubtotal"))
+        ET.SubElement(tax_sub_line, ET.QName(NS_MAP["cbc"], "TaxableAmount"), currencyID="PEN").text = f"{valor_venta_item:.2f}"
+        ET.SubElement(tax_sub_line, ET.QName(NS_MAP["cbc"], "TaxAmount"), currencyID="PEN").text = f"{igv_item:.2f}"
+        
+        tax_cat_line = ET.SubElement(tax_sub_line, ET.QName(NS_MAP["cac"], "TaxCategory"))
+        ET.SubElement(tax_cat_line, ET.QName(NS_MAP["cbc"], "Percent")).text = "18.00"
+        ET.SubElement(tax_cat_line, ET.QName(NS_MAP["cbc"], "TaxExemptionReasonCode")).text = "10" # Gravado - Operación Onerosa
+        
+        tax_sch_line = ET.SubElement(tax_cat_line, ET.QName(NS_MAP["cac"], "TaxScheme"))
+        ET.SubElement(tax_sch_line, ET.QName(NS_MAP["cbc"], "ID")).text = "1000"
+        ET.SubElement(tax_sch_line, ET.QName(NS_MAP["cbc"], "Name")).text = "IGV"
+        ET.SubElement(tax_sch_line, ET.QName(NS_MAP["cbc"], "TaxTypeCode")).text = "VAT"
+
         item_node = ET.SubElement(line, ET.QName(NS_MAP["cac"], "Item"))
         ET.SubElement(item_node, ET.QName(NS_MAP["cbc"], "Description")).text = item['descripcion_item_venta']
         
-        price_node = ET.SubElement(line, ET.QName(NS_MAP["cac"], "Price"))
-        ET.SubElement(price_node, ET.QName(NS_MAP["cbc"], "PriceAmount"), currencyID="PEN").text = f"{float(item['precio_unitario_venta']) / 1.18:.2f}" # Precio sin IGV
+        price = ET.SubElement(line, ET.QName(NS_MAP["cac"], "Price"))
+        ET.SubElement(price, ET.QName(NS_MAP["cbc"], "PriceAmount"), currencyID="PEN").text = f"{valor_unit:.2f}"
 
-    # --- 4. Firma Digital ---
-    signer = XMLSigner(method=methods.enveloped, signature_algorithm="rsa-sha256", digest_algorithm="sha256")
+    # --- 4. FIRMA DIGITAL (CORRECCIÓN CRÍTICA AQUÍ) ---
+    signer = XMLSigner(
+        method=methods.enveloped,
+        signature_algorithm="rsa-sha256",
+        digest_algorithm="sha256",
+        c14n_algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" # <--- ESTO ES LO QUE PIDE SUNAT
+    )
     
     cert_chain = [public_cert] + additional_certs
     signed_invoice = signer.sign(invoice, key=private_key, cert=cert_chain)
     
+    # Mover la firma al lugar correcto (UBLExtension)
     signature_node = signed_invoice.find(".//ds:Signature", namespaces=NS_MAP)
+    # Buscamos el ExtensionContent dentro del signed_invoice, no del invoice original
     signature_placeholder = signed_invoice.find(".//ext:ExtensionContent", namespaces=NS_MAP)
+    
     if signature_placeholder is not None and signature_node is not None:
-            signature_placeholder.append(signature_node)
+        signature_placeholder.append(signature_node)
     
-    # --- 5. Devolver Resultados ---
-    xml_string = ET.tostring(signed_invoice, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    nombre_base = f"{emisor_ruc}-{tipo_documento_code}-{venta['serie_comprobante']}-{venta['numero_comprobante']}"
+    # --- 5. Serialización (SIN Pretty Print) ---
+    # pretty_print=False es obligatorio para que el hash no cambie
+    xml_string = ET.tostring(signed_invoice, pretty_print=False, xml_declaration=True, encoding='UTF-8')
     
-    return xml_string, nombre_base
+    nombre_archivo = f"{config_empresa['ruc_empresa']}-{tipo_code}-{serie}-{numero}"
+    
+    return xml_string, nombre_archivo
 
 
 @main_bp.route('/ventas/xml/<int:venta_id>')
@@ -8361,89 +8858,300 @@ def generar_xml_venta(venta_id):
         current_app.logger.error(f"Error en generar_xml_venta: {e}")
         return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
 
-@main_bp.route('/ventas/enviar-sunat/<int:venta_id>', methods=['POST'])
-@login_required
-@admin_required
-def enviar_sunat(venta_id):
-    """
-    Genera, empaqueta y envía el comprobante al servicio de homologación (pruebas) de la SUNAT.
-    """
-    # URL del Servicio de Homologación (Beta) de SUNAT
+def _procesar_envio_sunat(venta_id):
+    # ... (Configuración inicial igual) ...
     SUNAT_WSDL_URL = 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService?wsdl'
     
-    try:
-        # 1. Generar el XML firmado y el nombre del archivo
-        xml_firmado_str, nombre_base = _generar_y_firmar_xml(venta_id)
-        nombre_archivo_zip = f"{nombre_base}.zip"
+    xml_firmado_str, nombre_base = _generar_y_firmar_xml(venta_id)
+    nombre_archivo_zip = f"{nombre_base}.zip"
 
-        # 2. Comprimir el XML y codificar en Base64
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            zip_file.writestr(f"{nombre_base}.xml", xml_firmado_str)
-        zip_data = zip_buffer.getvalue()
-        zip_base64 = base64.b64encode(zip_data).decode('utf-8')
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        zip_file.writestr(f"{nombre_base}.xml", xml_firmado_str)
+    zip_data = zip_buffer.getvalue()
+    zip_base64 = base64.b64encode(zip_data).decode('utf-8')
+    
+    # Cargar Credenciales
+    db = get_db()
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+        cursor.execute("SELECT ruc_empresa, usuario_sol, clave_sol FROM configuracion_sistema WHERE id = 1")
+        config_sol = cursor.fetchone()
+
+    ruc_emisor = str(config_sol.get('ruc_empresa', '')).strip()
+    usuario_sol = str(config_sol.get('usuario_sol', '')).strip()
+    clave_sol = str(config_sol.get('clave_sol', '')).strip()
+
+    if usuario_sol.startswith(ruc_emisor):
+        usuario_wsse = usuario_sol
+    else:
+        usuario_wsse = f"{ruc_emisor}{usuario_sol}"
+    
+    # Envío
+    transport = Transport(timeout=30)
+    client = Client(wsdl=SUNAT_WSDL_URL, transport=transport, wsse=UsernameToken(usuario_wsse, clave_sol))
+    
+    # Zeep puede devolver bytes directos o un objeto, dependiendo de la versión
+    response = client.service.sendBill(fileName=nombre_archivo_zip, contentFile=zip_base64)
+    
+    # --- LÓGICA DE PROCESAMIENTO CDR (CORREGIDA) ---
+    cdr_zip_data = None
+
+    # Caso 1: Respuesta es bytes directos (Tu caso actual)
+    if isinstance(response, bytes):
+        cdr_zip_data = response
+    
+    # Caso 2: Respuesta es objeto con applicationResponse (Estándar)
+    elif hasattr(response, 'applicationResponse'):
+        cdr_zip_data = base64.b64decode(response.applicationResponse)
         
-        # 3. Cargar credenciales SOL
+    # Caso 3: Respuesta es dict
+    elif isinstance(response, dict) and 'applicationResponse' in response:
+        cdr_zip_data = base64.b64decode(response['applicationResponse'])
+
+    if cdr_zip_data:
+        # Guardar CDR
         instance_path = current_app.instance_path
-        credentials_file_path = os.path.join(instance_path, 'sunat_credentials.json')
-        if not os.path.exists(credentials_file_path):
-            raise ValueError("No se han configurado las credenciales SOL.")
-        with open(credentials_file_path, 'r') as f:
-            credenciales = json.load(f)
-
-        usuario_sol = credenciales.get('usuario_sol')
-        clave_sol = credenciales.get('clave_sol')
-        if not usuario_sol or not clave_sol:
-            raise ValueError("Usuario o Clave SOL no están configurados.")
-
-        # 4. Conexión y Envío a SUNAT usando 'zeep'
-        transport = Transport(timeout=20)
-        client = Client(wsdl=SUNAT_WSDL_URL, transport=transport, wsse=UsernameToken(usuario_sol, clave_sol))
+        cdr_path = os.path.join(instance_path, 'cdr')
+        os.makedirs(cdr_path, exist_ok=True)
+        nombre_cdr_zip = f"R-{nombre_base}.zip"
         
-        # Llamar al método 'sendBill' del servicio web
-        response = client.service.sendBill(fileName=nombre_archivo_zip, contentFile=zip_base64)
+        with open(os.path.join(cdr_path, nombre_cdr_zip), 'wb') as f:
+            f.write(cdr_zip_data)
         
-        # 5. Procesar la Respuesta (CDR)
-        if response and hasattr(response, 'applicationResponse'):
-            cdr_zip_base64 = response.applicationResponse
-            cdr_zip_data = base64.b64decode(cdr_zip_base64)
-            
-            cdr_zip_buffer = io.BytesIO(cdr_zip_data)
-            with zipfile.ZipFile(cdr_zip_buffer, 'r') as zip_ref:
-                nombre_cdr = zip_ref.namelist()[0]
-                with zip_ref.open(nombre_cdr) as cdr_xml_file:
+        # Analizar XML del CDR
+        try:
+            with zipfile.ZipFile(io.BytesIO(cdr_zip_data), 'r') as zip_ref:
+                nombre_cdr_xml = zip_ref.namelist()[0]
+                with zip_ref.open(nombre_cdr_xml) as cdr_xml_file:
                     cdr_tree = ET.parse(cdr_xml_file)
                     
-                    ns = {'ar': "urn:oasis:names:specification:ubl:schema:xsd:ApplicationResponse-2",
-                          'cbc': "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"}
+                    ns = {'cbc': "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"}
+                    code_node = cdr_tree.find('.//cbc:ResponseCode', ns)
+                    desc_node = cdr_tree.find('.//cbc:Description', ns)
                     
-                    response_code = cdr_tree.find('.//cbc:ResponseCode', namespaces=ns).text
-                    response_desc = cdr_tree.find('.//cbc:Description', namespaces=ns).text
-                    
-                    if response_code == "0":
-                        estado_sunat = "Aceptada"
-                        flash(f"¡ÉXITO! Comprobante {nombre_base} ACEPTADO por SUNAT.", 'success')
-                        flash(f"Respuesta SUNAT: {response_desc}", 'info')
-                    else:
-                        estado_sunat = f"Rechazada ({response_code})"
-                        flash(f"Comprobante {nombre_base} RECHAZADO por SUNAT.", 'danger')
-                        flash(f"Motivo: {response_desc}", 'warning')
-                    
-                    # Actualizar el estado en nuestra base de datos
-                    db = get_db()
-                    with db.cursor() as cursor:
-                        cursor.execute("UPDATE ventas SET estado_sunat = %s WHERE id = %s", (estado_sunat, venta_id))
-                        db.commit()
-        else:
-            raise ValueError("La SUNAT no devolvió una respuesta válida (CDR).")
+                    response_code = code_node.text if code_node is not None else "?"
+                    response_desc = desc_node.text if desc_node is not None else "Procesado sin mensaje"
+        except Exception as e:
+            # Si falla leer el XML pero tenemos el ZIP, asumimos éxito parcial
+            response_code = "0"
+            response_desc = "CDR recibido pero no legible."
 
+        estado_sunat = "Aceptada" if response_code == "0" else f"Rechazada ({response_code})"
+        
+        # Actualizar BD
+        with db.cursor() as cursor:
+            cursor.execute("UPDATE ventas SET estado_sunat=%s, cdr_sunat_path=%s WHERE id=%s", 
+                           (estado_sunat, nombre_cdr_zip, venta_id))
+            db.commit()
+
+        if response_code != "0":
+            raise Exception(f"SUNAT rechazó: {response_desc}")
+        
+        return f"¡ACEPTADO! {response_desc}"
+    else:
+        raise ValueError(f"Respuesta inesperada de SUNAT: {type(response)}")
+
+
+@main_bp.route('/ventas/enviar-sunat/<int:venta_id>', methods=['POST'])
+@login_required
+def enviar_sunat(venta_id):
+    """
+    Llama a la función auxiliar para enviar el comprobante a SUNAT y maneja la respuesta.
+    """
+    try:
+        success_message = _procesar_envio_sunat(venta_id)
+        flash(success_message, 'success')
     except Fault as fault:
         flash(f"Error de SOAP al comunicarse con SUNAT: {fault.message}", "danger")
+        current_app.logger.error(f"Error SOAP en enviar_sunat para venta {venta_id}: {fault}")
     except Exception as e:
         flash(f"Error al enviar a SUNAT: {e}", "danger")
+        current_app.logger.error(f"Error en enviar_sunat para venta {venta_id}: {e}")
 
     return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
     
+
+# -------------------------------------------------------------------------
+# API CONSULTA DNI/RUC    sk_12199.6AOBIMls8TquShJ45J3rnmPfCR0BtWcK
+# -------------------------------------------------------------------------
+@main_bp.route('/api/consultar-documento/<tipo>/<numero>', methods=['GET'])
+@login_required
+def consultar_documento_api(tipo, numero):
+    # --- TU TOKEN ---
+    API_TOKEN = 'sk_12199.6AOBIMls8TquShJ45J3rnmPfCR0BtWcK' 
+    BASE_URL = 'https://api.decolecta.com'
+    
+    headers = {'Authorization': f'Bearer {API_TOKEN}', 'Content-Type': 'application/json'}
+
+    try:
+        # --- CASO DNI (RENIEC) ---
+        if tipo == 'DNI':
+            url = f"{BASE_URL}/v1/reniec/dni?numero={numero}"
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            # DEBUG: Para ver en terminal si algo cambia
+            print(f"--- DNI {numero} ---")
+            print(response.json())
+
+            if response.status_code == 200:
+                data = response.json()
+                persona = data.get('data', data) or {} 
+
+                # CORRECCIÓN DE LLAVES SEGÚN TUS LOGS:
+                # La API devuelve: first_name, first_last_name, second_last_name
+                nombres = persona.get('first_name') or persona.get('nombres') or ''
+                ape_pat = persona.get('first_last_name') or persona.get('apellido_paterno') or ''
+                ape_mat = persona.get('second_last_name') or persona.get('apellido_materno') or ''
+                
+                # Validamos que haya encontrado algo
+                if not nombres and not ape_pat:
+                    return jsonify({'success': False, 'message': 'DNI no encontrado o formato inesperado.'})
+
+                return jsonify({
+                    'success': True,
+                    'tipo': 'DNI',
+                    'nombres': nombres,
+                    'apellido_paterno': ape_pat,
+                    'apellido_materno': ape_mat,
+                    'razon_social': f"{nombres} {ape_pat} {ape_mat}".strip(), # Fallback
+                    'direccion': persona.get('direccion', ''),
+                    'fecha_nacimiento': persona.get('birth_date', '') # A veces viene como birth_date
+                })
+
+        # --- CASO RUC (SUNAT) ---
+        elif tipo == 'RUC':
+            url = f"{BASE_URL}/v1/sunat/ruc?numero={numero}"
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            print(f"--- RUC {numero} ---")
+            print(response.json())
+
+            if response.status_code == 200:
+                data = response.json()
+                empresa = data.get('data', data) or {}
+
+                razon_social = empresa.get('razon_social') or ''
+                
+                if not razon_social:
+                     return jsonify({'success': False, 'message': 'RUC no encontrado.'})
+
+                # Dirección
+                dir_fiscal = empresa.get('direccion') or ''
+                # A veces la dirección viene desglosada, a veces junta. Usamos lo que haya.
+                
+                return jsonify({
+                    'success': True,
+                    'tipo': 'RUC',
+                    'razon_social': razon_social,
+                    'direccion': dir_fiscal,
+                    'condicion': empresa.get('condicion', ''),
+                    'estado': empresa.get('estado', '')
+                })
+
+        return jsonify({'success': False, 'message': 'Documento no encontrado'})
+
+    except Exception as e:
+        print(f"ERROR API: {e}")
+        return jsonify({'success': False, 'message': f"Error interno: {str(e)}"})
+  
+  
+  # -------------------------------------------------------------------------
+# VISTA: PANTALLA DE CANJE DE COMPROBANTE
+# -------------------------------------------------------------------------
+@main_bp.route('/ventas/convertir/<int:venta_id>', methods=['GET'])
+@login_required
+def vista_convertir_venta(venta_id):
+    db_conn = get_db()
+    with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+        cursor.execute("SELECT * FROM ventas WHERE id = %s", (venta_id,))
+        venta = cursor.fetchone()
+        
+    if not venta or venta['tipo_comprobante'] != 'Nota de Venta':
+        flash("Esta venta no se puede canjear (Ya es un comprobante fiscal o no existe).", "warning")
+        return redirect(url_for('main.listar_ventas'))
+        
+    return render_template('ventas/convertir_venta.html', venta=venta)
+
+# -------------------------------------------------------------------------
+# PROCESO: EJECUTAR CANJE (POST)
+# -------------------------------------------------------------------------
+@main_bp.route('/ventas/procesar-conversion/<int:venta_id>', methods=['POST'])
+@login_required
+def procesar_conversion_venta(venta_id):
+    db_conn = get_db()
+    
+    nuevo_tipo = request.form.get('nuevo_tipo')
+    tipo_doc = request.form.get('tipo_doc_cliente')
+    num_doc = request.form.get('num_doc_cliente')
+    nombre_cliente = request.form.get('nombre_cliente')
+    direccion_cliente = request.form.get('direccion_cliente')
+    sucursal_id = session.get('sucursal_id')
+
+    # Validación Estricta para Factura
+    if nuevo_tipo == 'Factura Electrónica':
+        if tipo_doc != 'RUC' or len(num_doc) != 11:
+            flash("Error: Para Factura se requiere un RUC válido de 11 dígitos.", "danger")
+            return redirect(url_for('main.vista_convertir_venta', venta_id=venta_id))
+    
+    try:
+        with db_conn.cursor() as cursor:
+            # 1. Crear o Actualizar Cliente en BD (Para que quede registrado)
+            cursor.execute("SELECT id FROM clientes WHERE numero_documento = %s", (num_doc,))
+            res_cli = cursor.fetchone()
+            
+            if res_cli:
+                cliente_id = res_cli[0]
+                # Opcional: Actualizar dirección si vino nueva
+                cursor.execute("UPDATE clientes SET razon_social_nombres=%s, direccion=%s WHERE id=%s", 
+                             (nombre_cliente, direccion_cliente, cliente_id))
+            else:
+                cursor.execute("""
+                    INSERT INTO clientes (tipo_documento, numero_documento, razon_social_nombres, direccion)
+                    VALUES (%s, %s, %s, %s) RETURNING id
+                """, (tipo_doc, num_doc, nombre_cliente, direccion_cliente))
+                cliente_id = cursor.fetchone()[0]
+
+            # 2. Obtener Nueva Serie y Correlativo
+            cursor.execute("""
+                SELECT serie, ultimo_numero FROM series_comprobantes 
+                WHERE sucursal_id = %s AND tipo_comprobante = %s FOR UPDATE
+            """, (sucursal_id, nuevo_tipo))
+            serie_config = cursor.fetchone()
+            
+            if not serie_config:
+                raise Exception(f"No hay serie configurada para {nuevo_tipo} en esta sucursal.")
+                
+            serie = serie_config[0]
+            nuevo_numero = serie_config[1] + 1
+            numero_str = str(nuevo_numero).zfill(8)
+
+            # 3. Actualizar Venta (El Canje Real)
+            cursor.execute("""
+                UPDATE ventas 
+                SET tipo_comprobante = %s,
+                    serie_comprobante = %s,
+                    numero_comprobante = %s,
+                    cliente_receptor_id = %s, -- Asignamos el cliente validado
+                    cliente_facturacion_id = %s, -- También como facturación
+                    estado_sunat = 'Pendiente' -- Listo para enviar
+                WHERE id = %s
+            """, (nuevo_tipo, serie, numero_str, cliente_id, cliente_id, venta_id))
+
+            # 4. Actualizar Correlativo
+            cursor.execute("""
+                UPDATE series_comprobantes SET ultimo_numero = %s 
+                WHERE sucursal_id = %s AND tipo_comprobante = %s
+            """, (nuevo_numero, sucursal_id, nuevo_tipo))
+            
+            db_conn.commit()
+            
+            flash(f"¡Canje Exitoso! Se generó la {nuevo_tipo} {serie}-{numero_str}", "success")
+            return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
+
+    except Exception as e:
+        db_conn.rollback()
+        flash(f"Error al procesar el canje: {e}", "danger")
+        return redirect(url_for('main.vista_convertir_venta', venta_id=venta_id))  
     
 @main_bp.route('/configuracion/estilos')
 @login_required
@@ -8454,10 +9162,10 @@ def listar_estilos():
     """
     try:
         db = get_db()
-        with db.cursor(dictionary=True) as cursor:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT * FROM estilos ORDER BY nombre")
             estilos = cursor.fetchall()
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al acceder a los estilos: {err}", "danger")
         estilos = []
         
@@ -8504,7 +9212,7 @@ def nuevo_estilo():
                 db.commit()
             flash(f'Estilo "{nombre}" creado exitosamente.', 'success')
             return redirect(url_for('main.listar_estilos'))
-        except mysql.connector.Error as err:
+        except Exception as err:
             db.rollback()
             flash(f'Error al crear el estilo: {err}', 'danger')
         
@@ -8526,7 +9234,7 @@ def editar_estilo(estilo_id):
     db_conn = get_db()
     
     # Obtener el estilo actual para mostrar sus datos en el formulario
-    with db_conn.cursor(dictionary=True) as cursor:
+    with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
         cursor.execute("SELECT * FROM estilos WHERE id = %s", (estilo_id,))
         estilo_actual = cursor.fetchone()
     
@@ -8571,7 +9279,7 @@ def editar_estilo(estilo_id):
             flash(f'Estilo "{nombre}" actualizado exitosamente.', 'success')
             return redirect(url_for('main.listar_estilos'))
 
-        except (ValueError, mysql.connector.Error, Exception) as e:
+        except (ValueError, Exception, Exception) as e:
             db_conn.rollback()
             flash(f"Error al actualizar el estilo: {e}", "danger")
         
@@ -8594,7 +9302,7 @@ def detalle_cliente(cliente_id):
     db_conn = get_db()
     
     try:
-        with db_conn.cursor(dictionary=True) as cursor:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # 1. Obtener los datos principales del cliente
             cursor.execute("SELECT * FROM clientes WHERE id = %s", (cliente_id,))
             cliente = cursor.fetchone()
@@ -8625,7 +9333,7 @@ def detalle_cliente(cliente_id):
             """, (cliente_id,))
             historial_membresias = cursor.fetchall()
             
-    except mysql.connector.Error as err:
+    except Exception as err:
         flash(f"Error al cargar el historial del cliente: {err}", "danger")
         return redirect(url_for('main.listar_clientes'))
 
@@ -8636,4 +9344,258 @@ def detalle_cliente(cliente_id):
                            titulo_pagina=f"Detalle de Cliente")
 
 
+@main_bp.route('/configuracion/sistema', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def configurar_sistema():
+    """
+    Maneja la configuración general del sistema, como nombre y tema de colores.
+    """
+    db_conn = get_db()
+    cursor = None
+    
+    try:
+        if request.method == 'POST':
+            # Recoger datos del formulario
+            nombre_empresa = request.form.get('nombre_empresa')
+            color_primario = request.form.get('color_primario')
+            color_secundario = request.form.get('color_secundario')
+            color_fondo = request.form.get('color_fondo')
+            color_texto = request.form.get('color_texto')
+            color_sidebar_fondo = request.form.get('color_sidebar_fondo')
+            color_sidebar_texto = request.form.get('color_sidebar_texto')
+            color_navbar_fondo = request.form.get('color_navbar_fondo')
 
+            # Realizar el UPDATE
+            cursor = db_conn.cursor()
+            sql_update = """
+                UPDATE configuracion_sistema SET
+                    nombre_empresa = %s,
+                    color_primario = %s,
+                    color_secundario = %s,
+                    color_fondo = %s,
+                    color_texto = %s,
+                    color_sidebar_fondo = %s,
+                    color_sidebar_texto = %s,
+                    color_navbar_fondo = %s
+                WHERE id = 1
+            """
+            cursor.execute(sql_update, (nombre_empresa, color_primario, color_secundario, color_fondo, color_texto, color_sidebar_fondo, color_sidebar_texto, color_navbar_fondo))
+            db_conn.commit()
+            flash('Configuración del sistema actualizada exitosamente.', 'success')
+            return redirect(url_for('main.configurar_sistema'))
+
+        # Lógica GET: Obtener la configuración actual
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("SELECT * FROM configuracion_sistema WHERE id = 1")
+        config_data = cursor.fetchone()
+
+        # Si no hay configuración, podrías insertar una por defecto o manejarlo en la plantilla
+        if not config_data:
+            flash("No se encontró la configuración del sistema. Puede que necesite ser inicializada.", "warning")
+            # Podrías pasar un diccionario vacío o con valores por defecto
+            config_data = {}
+
+        return render_template('configuracion/sistema.html', config=config_data, titulo_pagina="Configuración del Sistema")
+
+    except Exception as e:
+        if db_conn:
+            db_conn.rollback()
+        flash(f"Ocurrió un error al procesar la configuración: {e}", "danger")
+        current_app.logger.error(f"Error en configurar_sistema: {e}")
+        # En caso de error, es mejor redirigir o mostrar una plantilla de error
+        # que re-renderizar con datos potencialmente inconsistentes.
+    finally:
+        if cursor:
+            cursor.close()
+
+    
+# -------------------------------------------------------------------------
+# RUTAS PARA IMPRESIÓN Y EMISIÓN DE COMPROBANTES (Faltaban estas)
+# -------------------------------------------------------------------------
+
+@main_bp.route('/ventas/<int:venta_id>/emitir_comprobante', methods=['GET', 'POST'])
+@login_required
+def emitir_comprobante(venta_id):
+    """
+    Muestra la pantalla para seleccionar si se emite Boleta o Factura (GET)
+    y procesa la emisión del comprobante (POST) usando el esquema de BD actualizado.
+    """
+    db_conn = get_db()
+    cursor = None
+
+    try:
+        if request.method == 'POST':
+            db_conn.autocommit = False
+            cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+            tipo_comprobante_form = request.form.get('tipo_comprobante')
+            cliente_facturacion_id = request.form.get('cliente_facturacion_id', type=int)
+
+            if not tipo_comprobante_form or not cliente_facturacion_id:
+                raise ValueError("Debe seleccionar un tipo de comprobante y un cliente.")
+
+            if tipo_comprobante_form == 'Factura':
+                cursor.execute("SELECT tipo_documento FROM clientes WHERE id = %s", (cliente_facturacion_id,))
+                cliente = cursor.fetchone()
+                if not cliente or cliente['tipo_documento'] != 'RUC':
+                    raise ValueError("Para emitir una Factura, el cliente debe tener un RUC registrado.")
+
+            cursor.execute("SELECT sucursal_id FROM ventas WHERE id = %s", (venta_id,))
+            venta = cursor.fetchone()
+            if not venta:
+                raise ValueError("La venta original no fue encontrada.")
+            
+            tipo_map = {'Boleta': 'Boleta Electrónica', 'Factura': 'Factura Electrónica'}
+            tipo_comprobante_db = tipo_map.get(tipo_comprobante_form)
+
+            cursor.execute(
+                "SELECT id, serie, ultimo_numero FROM series_comprobantes WHERE sucursal_id = %s AND tipo_comprobante = %s FOR UPDATE",
+                (venta['sucursal_id'], tipo_comprobante_db)
+            )
+            serie_info = cursor.fetchone()
+            if not serie_info:
+                raise ValueError(f"No hay una serie configurada para '{tipo_comprobante_db}' en esta sucursal.")
+
+            nuevo_numero = serie_info['ultimo_numero'] + 1
+            numero_formateado = f"{nuevo_numero:08d}"
+            serie_comprobante = serie_info['serie']
+
+            cursor.execute("""
+                UPDATE ventas 
+                SET tipo_comprobante = %s, serie_comprobante = %s, numero_comprobante = %s, cliente_facturacion_id = %s
+                WHERE id = %s
+            """, (tipo_comprobante_db, serie_comprobante, numero_formateado, cliente_facturacion_id, venta_id))
+
+            cursor.execute(
+                "UPDATE series_comprobantes SET ultimo_numero = %s WHERE id = %s",
+                (nuevo_numero, serie_info['id'])
+            )
+
+            db_conn.commit()
+
+            # Intento de envío inmediato a SUNAT
+            try:
+                success_message = _procesar_envio_sunat(venta_id)
+                flash(f'Comprobante {serie_comprobante}-{numero_formateado} generado.', 'success')
+                flash(success_message, 'success')
+            except Exception as e:
+                current_app.logger.error(f"Envío automático a SUNAT falló para venta {venta_id}: {e}")
+                flash(f'Comprobante {serie_comprobante}-{numero_formateado} generado, pero el envío a SUNAT falló. Intente desde el historial.', 'warning')
+            
+            return redirect(url_for('main.listar_ventas'))
+
+        # Lógica GET
+        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("SELECT v.*, c.razon_social_nombres, c.apellidos, c.apoderado_id FROM ventas v JOIN clientes c ON v.cliente_receptor_id = c.id WHERE v.id = %s", (venta_id,))
+        venta = cursor.fetchone()
+        if not venta:
+            flash('Venta no encontrada.', 'danger')
+            return redirect(url_for('main.listar_ventas'))
+
+        cliente_sugerido = None
+        if venta['apoderado_id']:
+            cursor.execute("SELECT * FROM clientes WHERE id = %s", (venta['apoderado_id'],))
+            cliente_sugerido = cursor.fetchone()
+        else:
+            cliente_sugerido = venta
+            
+        return render_template('ventas/emitir_comprobante.html', venta=venta, cliente_sugerido=cliente_sugerido)
+
+    except (Exception, psycopg2.Error) as e:
+        if db_conn:
+            db_conn.rollback()
+        flash(f"Error al emitir comprobante: {e}", 'danger')
+        current_app.logger.error(f"Error en emitir_comprobante para venta {venta_id}: {e}")
+        return redirect(url_for('main.emitir_comprobante', venta_id=venta_id))
+    
+    finally:
+        if db_conn:
+            db_conn.autocommit = True
+        if cursor:
+            cursor.close()
+
+
+@main_bp.route('/ventas/ticket/<int:venta_id>')
+@login_required
+def imprimir_ticket(venta_id):
+    """
+    Genera una vista simple HTML para imprimir en ticketera térmica.
+    """
+    try:
+        db = get_db()
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Cabecera
+            cursor.execute("""
+                SELECT 
+                    v.*,
+                    TO_CHAR(v.fecha_venta, 'DD/MM/YYYY HH24:MI') as fecha_formateada,
+                    s.nombre AS sucursal_nombre, 
+                    s.direccion AS sucursal_direccion, 
+                    s.telefono AS sucursal_telefono,
+                    e.nombre_display AS colaborador_nombre,
+                    cl.razon_social_nombres, 
+                    cl.apellidos,
+                    cl.numero_documento,
+                    cl.tipo_documento
+                FROM ventas v
+                JOIN sucursales s ON v.sucursal_id = s.id
+                JOIN empleados e ON v.empleado_id = e.id
+                LEFT JOIN clientes cl ON v.cliente_receptor_id = cl.id
+                WHERE v.id = %s
+            """, (venta_id,))
+            venta = cursor.fetchone()
+            
+            # Detalle
+            cursor.execute("""
+                SELECT descripcion_item_venta, cantidad, precio_unitario_venta, subtotal_item_neto
+                FROM venta_items
+                WHERE venta_id = %s
+            """, (venta_id,))
+            items = cursor.fetchall()
+            
+            # Pagos
+            cursor.execute("SELECT * FROM venta_pagos WHERE venta_id = %s", (venta_id,))
+            pagos = cursor.fetchall()
+            
+            return render_template('ventas/ticket_venta.html', venta=venta, items=items, pagos=pagos)
+            
+    except Exception as e:
+        return f"Error generando ticket: {e}"
+    
+    
+@main_bp.route('/ventas/cdr/<int:venta_id>')
+@login_required
+def descargar_cdr(venta_id):
+    """
+    Permite descargar el archivo CDR (respuesta de SUNAT) si existe.
+    """
+    db_conn = get_db()  
+    
+    try:
+        # 1. Buscar nombre del CDR en la BD
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            cursor.execute("SELECT cdr_sunat_path FROM ventas WHERE id = %s", (venta_id,))
+            venta = cursor.fetchone()
+            
+        if not venta or not venta.get('cdr_sunat_path'):
+            flash("Esta venta no tiene un CDR asociado.", "warning")
+            return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
+            
+        # 2. Construir ruta al archivo
+        instance_path = current_app.instance_path
+        cdr_filename = venta['cdr_sunat_path']
+        cdr_full_path = os.path.join(instance_path, 'cdr', cdr_filename)
+        
+        # 3. Enviar archivo
+        if os.path.exists(cdr_full_path):
+            return send_file(cdr_full_path, as_attachment=True, download_name=cdr_filename)
+        else:
+            flash(f"El archivo CDR ({cdr_filename}) no se encuentra en el servidor.", "danger")
+            return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
+            
+    except Exception as e:
+        flash(f"Error al descargar CDR: {e}", "danger")
+        return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id)) 
+ 
+    

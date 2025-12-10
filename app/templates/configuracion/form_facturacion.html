@@ -4,55 +4,100 @@
 
 {% block content %}
 <div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-file-invoice-dollar me-2"></i>{{ titulo_pagina }}</h2>
-    </div>
+    <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-file-invoice-dollar me-2"></i>{{ titulo_pagina }}</h2>
+    <p class="text-muted mb-4">Centraliza aquí toda la configuración para la emisión de tus comprobantes electrónicos.</p>
 
-    {% include 'partials/_flash_messages.html' %}
+    
 
-    <div class="form-section-venta">
-        <h3>Credenciales SUNAT</h3>
-        <p class="text-muted">Sube tu Certificado Digital y las credenciales de tu Usuario Secundario SOL.</p>
-        
-        <form method="POST" enctype="multipart/form-data">
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="emisor_ruc" class="form-label">RUC de la Empresa</label>
-                    <input type="text" class="form-control" id="emisor_ruc" name="emisor_ruc" value="{{ credenciales.get('emisor_ruc', '') }}" required maxlength="11">
-                    <small class="form-text text-muted">El RUC de tu empresa que emitirá los comprobantes.</small>
+    <div class="card bg-dark text-white">
+        <div class="card-body">
+            <form method="POST" enctype="multipart/form-data">
+                
+                <!-- Datos de la Empresa -->
+                <h5 class="card-title text-primary">Datos de la Empresa</h5>
+                <hr class="bg-secondary">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="ruc_empresa" class="form-label">RUC de la Empresa</label>
+                        <input type="text" class="form-control" id="ruc_empresa" name="ruc_empresa" value="{{ config.get('ruc_empresa', '') }}" required maxlength="11" placeholder="20123456789">
+                    </div>
+                    <div class="col-md-8 mb-3">
+                        <label for="razon_social" class="form-label">Razón Social</label>
+                        <input type="text" class="form-control" id="razon_social" name="razon_social" value="{{ config.get('razon_social', '') }}" required placeholder="MI EMPRESA S.A.C.">
+                    </div>
                 </div>
-                <div class="col-md-6 mb-3">
-                    <label for="certificado_digital" class="form-label">Certificado Digital (.pfx)</label>
-                    {% if certificado_existente %}
-                        <div class="alert alert-success small p-2">
-                            <i class="fas fa-check-circle me-1"></i> Ya hay un certificado guardado. Sube uno nuevo solo si deseas reemplazarlo.
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        <label for="direccion_fiscal" class="form-label">Dirección Fiscal</label>
+                        <input type="text" class="form-control" id="direccion_fiscal" name="direccion_fiscal" value="{{ config.get('direccion_fiscal', '') }}" required placeholder="AV. SIEMPRE VIVA 123">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="ubigeo" class="form-label">Ubigeo</label>
+                        <input type="text" class="form-control" id="ubigeo" name="ubigeo" value="{{ config.get('ubigeo', '') }}" required maxlength="6" placeholder="150101">
+                    </div>
+                </div>
+
+                <!-- Credenciales SOL -->
+                <h5 class="card-title text-primary mt-4">Credenciales SOL</h5>
+                <hr class="bg-secondary">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="usuario_sol" class="form-label">Usuario SOL (Secundario)</label>
+                        <input type="text" class="form-control" id="usuario_sol" name="usuario_sol" value="{{ config.get('usuario_sol', '') }}" required placeholder="MODDATOS">
+                        <small class="form-text text-muted">Generalmente es el RUC + Usuario. Ej: 20123456789MODDATOS</small>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="clave_sol" class="form-label">Clave SOL (Secundaria)</label>
+                        <input type="password" class="form-control" id="clave_sol" name="clave_sol" value="">
+                        <small class="form-text text-muted">Deja en blanco para no cambiar la clave guardada.</small>
+                    </div>
+                </div>
+
+                <!-- Certificado y Entorno -->
+                <h5 class="card-title text-primary mt-4">Certificado y Entorno de Pruebas</h5>
+                <hr class="bg-secondary">
+                <div class="row align-items-center">
+                    <div class="col-md-5 mb-3">
+                        <label for="certificado_digital" class="form-label">Certificado Digital (.pfx)</label>
+                        {% if certificado_existente %}
+                            <div class="alert alert-success small p-2">
+                                <i class="fas fa-check-circle me-1"></i> Ya hay un certificado. Sube uno nuevo solo para reemplazarlo.
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning small p-2">
+                                <i class="fas fa-exclamation-triangle me-1"></i> No se ha subido un certificado.
+                            </div>
+                        {% endif %}
+                        <input class="form-control" type="file" id="certificado_digital" name="certificado_digital" accept=".pfx">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="password_certificado" class="form-label">Contraseña del Certificado</label>
+                        <input type="password" class="form-control" id="password_certificado" name="password_certificado" value="">
+                        <small class="form-text text-muted">Deja en blanco para no cambiar la contraseña.</small>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Entorno SUNAT</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="entorno_sunat" id="entorno_beta" value="beta" {% if config.get('entorno_sunat', 'beta') == 'beta' %}checked{% endif %}>
+                            <label class="form-check-label" for="entorno_beta">
+                                BETA (Pruebas)
+                            </label>
                         </div>
-                    {% endif %}
-                    <input class="form-control" type="file" id="certificado_digital" name="certificado_digital" accept=".pfx,.pem">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="entorno_sunat" id="entorno_prod" value="produccion" {% if config.get('entorno_sunat') == 'produccion' %}checked{% endif %}>
+                            <label class="form-check-label" for="entorno_prod">
+                                PRODUCCIÓN
+                            </label>
+                        </div>
+                    </div>
                 </div>
-                 <div class="col-md-6 mb-3">
-                    <label for="password_certificado" class="form-label">Contraseña del Certificado</label>
-                    <input type="password" class="form-control" id="password_certificado" name="password_certificado" value="{{ credenciales.get('password_certificado', '') }}">
-                    <small class="form-text text-muted">Deja en blanco para no cambiar la contraseña guardada.</small>
+
+                <!-- Botón Guardar -->
+                <div class="d-flex justify-content-end mt-4">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save me-2"></i>Guardar Configuración</button>
                 </div>
-            </div>
-             <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="usuario_sol" class="form-label">Usuario SOL (Secundario)</label>
-                    <input type="text" class="form-control" id="usuario_sol" name="usuario_sol" value="{{ credenciales.get('usuario_sol', '') }}">
-                    <small class="form-text text-muted">Ej: 20123456789MODDATOS</small>
-                </div>
-                 <div class="col-md-6 mb-3">
-                    <label for="clave_sol" class="form-label">Clave SOL (Secundaria)</label>
-                    <input type="password" class="form-control" id="clave_sol" name="clave_sol" value="{{ credenciales.get('clave_sol', '') }}">
-                </div>
-            </div>
-            
-            <hr class="my-4">
-            <div class="d-flex justify-content-end">
-                <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Guardar Configuración</button>
-            </div>
-        </form>
+            </form>
+        </div>
     </div>
 </div>
 {% endblock %}

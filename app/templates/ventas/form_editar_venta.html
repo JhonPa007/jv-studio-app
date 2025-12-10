@@ -4,19 +4,54 @@
 
 {% block head_extra %}
 <style>
-    .form-section-venta { background-color: #3a3a3a; padding: 25px; border-radius: 8px; margin-bottom:20px; }
-    .form-section-venta h2, .form-section-venta h3 { color: var(--color-acento-dorado); margin-bottom: 20px; border-bottom: 1px solid var(--color-secundario-gris); padding-bottom: 10px;}
-    .items-table th, .items-table td, .pagos-table th, .pagos-table td { vertical-align: middle; font-size:0.9em; color: #040404; }
-    .items-table thead th, .pagos-table thead th { color: var(--color-acento-dorado); }
-    .total-section { font-size: 1.0em; color: #f8f9fa; }
-    .total-section strong { font-size: 1.2em; color: var(--color-acento-dorado); }
-    .items-table-readonly td { background-color: #4f4f4f; }
-    .form-control-sm { background-color: #4f4f4f; color: #f8f9fa; border-color: var(--color-secundario-gris); }
+    .form-section-venta {
+        background-color: #3a3a3a;
+        padding: 25px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    .form-section-venta h2, .form-section-venta h3 {
+        color: var(--color-acento-dorado);
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--color-secundario-gris);
+        padding-bottom: 10px;
+    }
+    .items-table th, .items-table td, .pagos-table th, .pagos-table td {
+        vertical-align: middle;
+        font-size: 0.9rem;
+        color: #ffffff;
+    }
+    .items-table thead th, .pagos-table thead th {
+        color: var(--color-acento-dorado);
+        border-bottom: 2px solid var(--color-acento-dorado);
+    }
+    .items-table-readonly {
+        background-color: rgba(255,255,255,0.05);
+        border-radius: 5px;
+    }
+    .items-table-readonly td {
+        border-color: rgba(255,255,255,0.1);
+    }
+    .form-control-sm, .form-select-sm {
+        background-color: #fff !important;
+        color: #000 !important;
+        border: 1px solid #ced4da;
+    }
+    /* Estilo para el panel de búsqueda */
+    .search-panel {
+        background-color: #2c2c2c;
+        border: 1px solid var(--color-acento-dorado);
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        display: none; /* Oculto por defecto */
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
+<div class="container mt-4">
     <div class="form-section-venta">
         <h2><i class="fas fa-edit me-2"></i>{{ titulo_form }}</h2>
         
@@ -25,42 +60,210 @@
         {% set data_source = form_data if form_data else venta %}
 
         <form method="POST" action="{{ action_url }}" id="formEditarVenta">
-            {# SECCIÓN 1: DATOS GENERALES (EDITABLES) #}
-            <h3>Datos de la Venta</h3>
-            <div class="row">
-                 <div class="col-md-4 mb-3"><label for="sucursal_id" class="form-label">Sucursal</label><select class="form-select" id="sucursal_id" name="sucursal_id" required>{% for suc in sucursales %}<option value="{{ suc.id }}" {% if data_source.get('sucursal_id')|string == suc.id|string %}selected{% endif %}>{{ suc.nombre }}</option>{% endfor %}</select></div>
-                <div class="col-md-4 mb-3"><label for="cliente_id" class="form-label">Cliente</label><select class="form-select" id="cliente_id" name="cliente_id"><option value="0">Cliente Varios</option>{% for cli in clientes %}<option value="{{ cli.id }}" {% if data_source.get('cliente_id')|string == cli.id|string %}selected{% endif %}>{{ cli.nombres }} {{ cli.apellidos }}</option>{% endfor %}</select></div>
-                <div class="col-md-4 mb-3"><label for="empleado_id" class="form-label">Colaborador</label><select class="form-select" id="empleado_id" name="empleado_id" required><option value="">Seleccione...</option>{% for emp in empleados %}<option value="{{ emp.id }}" {% if data_source.get('empleado_id')|string == emp.id|string %}selected{% endif %}>{{ emp.nombres }} {{ emp.apellidos }}</option>{% endfor %}</select></div>
-                <div class="col-md-4 mb-3"><label for="fecha_venta" class="form-label">Fecha de Venta</label><input type="datetime-local" class="form-control" id="fecha_venta" name="fecha_venta" value="{{ data_source.get('fecha_venta_str') or data_source.get('fecha_venta') }}" required></div>
-                <div class="col-md-4 mb-3"><label for="tipo_comprobante" class="form-label">Tipo Comprobante</label><select class="form-select" id="tipo_comprobante" name="tipo_comprobante"><option value="">Seleccione tipo...</option>{% for tipo in tipos_comprobante %}<option value="{{ tipo }}" {% if data_source.get('tipo_comprobante') == tipo %}selected{% endif %}>{{ tipo }}</option>{% endfor %}</select></div>
-                <div class="col-md-4 mb-3"><label for="serie_comprobante" class="form-label">Serie-Número</label><input type="text" class="form-control" id="serie_comprobante" name="serie_comprobante" value="{{ data_source.get('serie_comprobante', '') }}-{{ data_source.get('numero_comprobante', '') }}" readonly></div>
+            
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="text-light mb-0"><i class="fas fa-info-circle me-2"></i>Datos Generales</h4>
+                <button type="button" class="btn btn-outline-info btn-sm" id="btnToggleBusqueda">
+                    <i class="fas fa-search me-1"></i> Buscar RUC/DNI (API)
+                </button>
             </div>
 
-            {# SECCIÓN 2: ÍTEMS DE LA VENTA (SOLO LECTURA) #}
-            <h3 class="mt-4">Ítems Vendidos (No editable)</h3>
-            <div class="table-responsive mt-2"><table class="table table-sm table-custom items-table-readonly"><thead><tr><th>Descripción</th><th class="text-center">Cant.</th><th class="text-end">P. Unit.</th><th class="text-end">Subtotal</th></tr></thead><tbody>{% for item in items_venta %}<tr><td>{{ item.descripcion_item_venta }} <small class="text-muted">({{ "Servicio" if item.servicio_id else "Producto" }})</small></td><td class="text-center">{{ item.cantidad }}</td><td class="text-end">{{ "%.2f"|format(item.precio_unitario_venta) }}</td><td class="text-end">{{ "%.2f"|format(item.subtotal_item_neto) }}</td></tr>{% endfor %}</tbody></table></div>
-
-            {# SECCIÓN 3: PAGOS (EDITABLE) #}
-            <h3 class="mt-4">Pagos</h3>
-            <div class="p-3 border rounded mb-3" style="border-color: var(--color-secundario-gris) !important;">
-                <h5 class="text-light">Añadir Pago:</h5>
-                <div class="row g-2 align-items-end"><div class="col-md-4"><label for="selectMetodoPago" class="form-label">Método</label><select id="selectMetodoPago" class="form-select form-select-sm"><option value="">Seleccione método...</option>{% for metodo in metodos_pago %}<option value="{{ metodo }}">{{ metodo }}</option>{% endfor %}</select></div><div class="col-md-3"><label for="inputMontoPago" class="form-label">Monto (S/)</label><input type="number" step="0.01" min="0.01" class="form-control form-control-sm" id="inputMontoPago"></div><div class="col-md-3"><label for="inputReferenciaPago" class="form-label">Referencia</label><input type="text" class="form-control form-control-sm" id="inputReferenciaPago" placeholder="Opcional"></div><div class="col-md-2"><button type="button" class="btn btn-info btn-sm w-100" id="btnAnadirPago"><i class="fas fa-plus"></i> Añadir</button></div></div>
+            <div id="panelBusquedaSunat" class="search-panel">
+                <h6 class="text-info mb-2">Consulta en Línea (Sunat/Reniec)</h6>
+                <div class="row align-items-end g-2">
+                    <div class="col-md-3">
+                        <label class="text-light small">Tipo Doc</label>
+                        <select id="api_tipo_doc" class="form-select form-select-sm">
+                            <option value="RUC">RUC</option>
+                            <option value="DNI">DNI</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="text-light small">Número</label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" id="api_numero_doc" class="form-control" placeholder="Ingrese número...">
+                            <button type="button" class="btn btn-info" id="btnConsultarApi">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="text-light small">Resultado</label>
+                        <input type="text" id="api_resultado_nombre" class="form-control form-control-sm bg-secondary text-white" readonly>
+                        <input type="hidden" id="api_resultado_direccion">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-success btn-sm w-100" id="btnUsarDatosApi">
+                            <i class="fas fa-check me-1"></i> Usar
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="table-responsive mt-2">
-                <table class="table table-sm table-custom pagos-table" id="tablaPagosAgregados">
-                    <thead><tr><th>Método</th><th>Monto (S/)</th><th>Referencia</th><th>Acción</th></tr></thead>
-                    <tbody><tr id="filaSinPagos"><td colspan="4" class="text-center text-muted">No hay pagos registrados.</td></tr></tbody>
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="sucursal_id" class="form-label">Sucursal</label>
+                    <select class="form-select" id="sucursal_id" name="sucursal_id" required>
+                        {% for suc in sucursales %}
+                        <option value="{{ suc.id }}" {% if data_source.get('sucursal_id')|string == suc.id|string %}selected{% endif %}>
+                            {{ suc.nombre }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-4">
+                    <label for="cliente_id" class="form-label">Cliente</label>
+                    <select class="form-select select2-cliente" id="cliente_id" name="cliente_id">
+                        <option value="">Cliente Varios</option>
+                        {% for cli in clientes %}
+                        <option value="{{ cli.id }}" {% if data_source.get('cliente_id')|string == cli.id|string %}selected{% endif %}>
+                            {{ cli.texto_busqueda }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <input type="hidden" name="nuevo_cliente_doc" id="nuevo_cliente_doc">
+                    <input type="hidden" name="nuevo_cliente_nombre" id="nuevo_cliente_nombre">
+                    <input type="hidden" name="nuevo_cliente_dir" id="nuevo_cliente_dir">
+                </div>
+
+                <div class="col-md-4">
+                    <label for="empleado_id" class="form-label">Colaborador</label>
+                    <select class="form-select" id="empleado_id" name="empleado_id" required>
+                        <option value="">Seleccione...</option>
+                        {% for emp in empleados %}
+                        <option value="{{ emp.id }}" {% if data_source.get('empleado_id')|string == emp.id|string %}selected{% endif %}>
+                            {{ emp.nombres }} {{ emp.apellidos }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label for="fecha_venta" class="form-label">Fecha de Venta</label>
+                    <input type="datetime-local" class="form-control" id="fecha_venta" name="fecha_venta" 
+                           value="{{ data_source.get('fecha_venta_str') or data_source.get('fecha_venta') }}" required>
+                </div>
+
+                <div class="col-md-4">
+                    <label for="tipo_comprobante" class="form-label text-warning">Tipo Comprobante</label>
+                    <select class="form-select border-warning" id="tipo_comprobante" name="tipo_comprobante" onchange="validarTipoComprobante()">
+                        {% for tipo in tipos_comprobante %}
+                        <option value="{{ tipo }}" {% if data_source.get('tipo_comprobante') == tipo %}selected{% endif %}>
+                            {{ tipo }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-4">
+                    <label class="form-label text-muted">Tipo Comprobante</label>
+                    <input type="text" class="form-control bg-secondary text-light border-secondary" 
+                           value="{{ data_source.get('tipo_comprobante') }}" readonly>
+                    <div class="form-text text-muted small">
+                        * Para cambiar el tipo (ej: canjear por Factura), use el botón "Canjear" en el listado.
+                    </div>
+                </div>
+            </div>
+
+            <hr class="border-secondary my-4">
+
+            <h4 class="text-light mb-3"><i class="fas fa-shopping-cart me-2"></i>Ítems Vendidos <small class="text-muted fs-6">(Solo Lectura)</small></h4>
+            <div class="table-responsive mb-4">
+                <table class="table table-dark table-striped table-hover items-table-readonly align-middle">
+                    <thead>
+                        <tr>
+                            <th>Descripción</th>
+                            <th class="text-center" width="100">Cant.</th>
+                            <th class="text-end" width="120">P. Unit.</th>
+                            <th class="text-end" width="120">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items_venta %}
+                        <tr>
+                            <td>
+                                {{ item.descripcion_item_venta }}
+                                <span class="badge bg-secondary ms-2">{{ "Servicio" if item.servicio_id else "Producto" }}</span>
+                            </td>
+                            <td class="text-center">{{ item.cantidad }}</td>
+                            <td class="text-end">S/ {{ "%.2f"|format(item.precio_unitario_venta) }}</td>
+                            <td class="text-end fw-bold">S/ {{ "%.2f"|format(item.subtotal_item_neto) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3" class="text-end fw-bold text-warning fs-5">TOTAL VENTA:</td>
+                            <td class="text-end fw-bold text-warning fs-5">S/ {{ "%.2f"|format(venta.monto_final_venta) }}</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
-             <div class="mt-3"><label for="notas_venta" class="form-label">Notas Adicionales</label><textarea class="form-control" id="notas_venta" name="notas_venta" rows="2">{{ data_source.get('notas_venta', '') }}</textarea></div>
-            
-             <input type="hidden" name="pagos_json" id="pagos_json">
-             <input type="hidden" name="estado_pago" id="hidden_estado_pago">
 
-            <div class="d-flex justify-content-end mt-4">
-                <a href="{{ url_for('main.ver_detalle_venta', venta_id=venta.id) }}" class="btn btn-secondary me-2"><i class="fas fa-times me-1"></i>Cancelar</a>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Guardar Cambios</button>
+            <h4 class="text-light mb-3"><i class="fas fa-money-bill-wave me-2"></i>Gestión de Pagos</h4>
+            <div class="card bg-secondary bg-opacity-10 border-info mb-3">
+                <div class="card-body py-3">
+                    <h6 class="text-info mb-2">Añadir Nuevo Pago:</h6>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label small">Método</label>
+                            <select id="selectMetodoPago" class="form-select form-select-sm">
+                                <option value="">Seleccione...</option>
+                                {% for metodo in metodos_pago %}
+                                <option value="{{ metodo }}">{{ metodo }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Monto (S/)</label>
+                            <input type="number" step="0.01" min="0.01" class="form-control form-control-sm" id="inputMontoPago">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Referencia</label>
+                            <input type="text" class="form-control form-control-sm" id="inputReferenciaPago" placeholder="Opcional">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-info btn-sm w-100 fw-bold" id="btnAnadirPago">
+                                <i class="fas fa-plus"></i> Añadir
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            <div class="table-responsive mb-4">
+                <table class="table table-dark table-sm align-middle" id="tablaPagosAgregados">
+                    <thead class="text-info">
+                        <tr>
+                            <th>Método</th>
+                            <th class="text-end">Monto (S/)</th>
+                            <th>Referencia</th>
+                            <th class="text-center">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        </tbody>
+                </table>
+            </div>
+
+            <div class="mb-4">
+                <label for="notas_venta" class="form-label">Notas Adicionales</label>
+                <textarea class="form-control" id="notas_venta" name="notas_venta" rows="2">{{ data_source.get('notas_venta', '') }}</textarea>
+            </div>
+            
+            <input type="hidden" name="pagos_json" id="pagos_json">
+            <input type="hidden" name="estado_pago" id="hidden_estado_pago">
+
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{{ url_for('main.ver_detalle_venta', venta_id=venta.id) }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </a>
+                <button type="submit" class="btn btn-success btn-lg px-4">
+                    <i class="fas fa-save me-1"></i>Guardar Cambios
+                </button>
+            </div>
+
         </form>
     </div>
 </div>
@@ -70,10 +273,9 @@
 {{ super() }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Inicializar la lista de pagos con los datos existentes pasados desde Flask
+    // --- LÓGICA DE PAGOS EXISTENTE ---
     let pagosEnVenta = JSON.parse('{{ pagos_venta_json | safe }}');
     
-    // Selectores DOM
     const selectMetodoPago = document.getElementById('selectMetodoPago');
     const inputMontoPago = document.getElementById('inputMontoPago');
     const inputReferenciaPago = document.getElementById('inputReferenciaPago');
@@ -83,7 +285,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const hiddenEstadoPagoInput = document.getElementById('hidden_estado_pago');
     const totalVenta = parseFloat('{{ venta.monto_final_venta }}');
 
-    // Listener para añadir un nuevo pago a la lista
     if (btnAnadirPago) {
         btnAnadirPago.addEventListener('click', function() {
             const metodo = selectMetodoPago.value;
@@ -106,45 +307,37 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Función para dibujar la tabla de pagos
     function renderizarPagosTabla() {
         tablaPagosAgregadosBody.innerHTML = '';
         if (pagosEnVenta.length === 0) {
             const filaVacia = tablaPagosAgregadosBody.insertRow();
             filaVacia.id = 'filaSinPagos';
-            const tdVacia = filaVacia.insertCell();
-            tdVacia.colSpan = 4;
-            tdVacia.className = 'text-center text-muted';
-            tdVacia.textContent = 'No hay pagos registrados.';
+            filaVacia.innerHTML = '<td colspan="4" class="text-center text-muted py-3">No hay pagos registrados.</td>';
         } else {
             pagosEnVenta.forEach((pago, index) => {
                 const fila = tablaPagosAgregadosBody.insertRow();
-                fila.insertCell().textContent = pago.metodo_pago;
-                fila.insertCell().textContent = parseFloat(pago.monto).toFixed(2);
-                fila.insertCell().textContent = pago.referencia_pago || '-';
-                
-                const cellAccion = fila.insertCell();
-                const btnEliminar = document.createElement('button');
-                btnEliminar.type = 'button';
-                btnEliminar.className = 'btn btn-danger btn-xs';
-                btnEliminar.innerHTML = '<i class="fas fa-trash-alt"></i>';
-                btnEliminar.title = 'Eliminar pago';
-                btnEliminar.onclick = function() {
-                    pagosEnVenta.splice(index, 1);
-                    renderizarPagosTabla();
-                };
-                cellAccion.appendChild(btnEliminar);
+                fila.innerHTML = `
+                    <td>${pago.metodo_pago}</td>
+                    <td class="text-end">S/ ${parseFloat(pago.monto).toFixed(2)}</td>
+                    <td>${pago.referencia_pago || '-'}</td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-danger btn-sm py-0" title="Eliminar pago" onclick="eliminarPago(${index})">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                `;
             });
         }
-        // Actualizar el campo oculto cada vez que se redibuja la tabla
         actualizarCamposOcultos();
     }
     
-    // Función para actualizar los campos ocultos que se enviarán
+    window.eliminarPago = function(index) {
+        pagosEnVenta.splice(index, 1);
+        renderizarPagosTabla();
+    };
+    
     function actualizarCamposOcultos() {
         pagosJsonInput.value = JSON.stringify(pagosEnVenta);
-
-        // Calcular y establecer el estado de pago
         let totalPagado = pagosEnVenta.reduce((sum, pago) => sum + parseFloat(pago.monto), 0);
         let estadoPagoCalculado = "Pendiente de Pago";
         if (totalVenta > 0 && (Math.abs(totalPagado - totalVenta) < 0.01 || totalPagado > totalVenta)) {
@@ -157,8 +350,111 @@ document.addEventListener('DOMContentLoaded', function() {
         hiddenEstadoPagoInput.value = estadoPagoCalculado;
     }
 
-    // Llamada inicial para mostrar los pagos existentes al cargar la página
     renderizarPagosTabla();
+
+    // --- NUEVA LÓGICA: BÚSQUEDA API (DECOLECTA) ---
+    
+    // 1. Mostrar/Ocultar Panel
+    const btnToggle = document.getElementById('btnToggleBusqueda');
+    const panelBusqueda = document.getElementById('panelBusquedaSunat');
+    
+    if(btnToggle) {
+        btnToggle.addEventListener('click', function() {
+            panelBusqueda.style.display = (panelBusqueda.style.display === 'none' || panelBusqueda.style.display === '') ? 'block' : 'none';
+        });
+    }
+
+    // 2. Botón Consultar
+    const btnConsultar = document.getElementById('btnConsultarApi');
+    const inputNumero = document.getElementById('api_numero_doc');
+    const inputResNombre = document.getElementById('api_resultado_nombre');
+    const inputResDir = document.getElementById('api_resultado_direccion');
+    
+    if(btnConsultar) {
+        btnConsultar.addEventListener('click', function() {
+            const tipo = document.getElementById('api_tipo_doc').value;
+            const numero = inputNumero.value.trim();
+            
+            if(!numero) { alert('Ingrese un número de documento'); return; }
+            
+            // UI Loading
+            btnConsultar.disabled = true;
+            btnConsultar.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            inputResNombre.value = "Consultando...";
+            
+            // Fetch a tu Backend Python (que conecta con Decolecta)
+            fetch(`/api/consultar-documento/${tipo}/${numero}`)
+                .then(response => response.json())
+                .then(data => {
+                    btnConsultar.disabled = false;
+                    btnConsultar.innerHTML = '<i class="fas fa-search"></i>';
+                    
+                    if(data.success) {
+                        inputResNombre.value = data.razon_social;
+                        inputResDir.value = data.direccion || '';
+                        // Auto-seleccionar RUC/Factura si aplica
+                        if(tipo === 'RUC') {
+                            document.getElementById('tipo_comprobante').value = 'Factura Electrónica';
+                        }
+                    } else {
+                        inputResNombre.value = '';
+                        alert(data.message || 'No encontrado');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    btnConsultar.disabled = false;
+                    btnConsultar.innerHTML = '<i class="fas fa-exclamation"></i>';
+                    inputResNombre.value = 'Error de conexión';
+                });
+        });
+    }
+
+    // 3. Botón Usar Datos
+    const btnUsar = document.getElementById('btnUsarDatosApi');
+    if(btnUsar) {
+        btnUsar.addEventListener('click', function() {
+            const nombre = inputResNombre.value;
+            const doc = inputNumero.value;
+            const dir = inputResDir.value;
+            
+            if(!nombre || nombre === 'Consultando...' || nombre === 'Error de conexión') {
+                alert('Primero realice una búsqueda válida.');
+                return;
+            }
+            
+            // Llenar campos ocultos para el backend
+            document.getElementById('nuevo_cliente_doc').value = doc;
+            document.getElementById('nuevo_cliente_nombre').value = nombre;
+            document.getElementById('nuevo_cliente_dir').value = dir;
+            
+            // Crear opción visual en el Select del cliente
+            const selectCliente = document.getElementById('cliente_id');
+            const nuevaOpcion = new Option(nombre + " (" + doc + ") [NUEVO]", "API_NEW", true, true);
+            selectCliente.add(nuevaOpcion);
+            
+            // Ocultar panel
+            panelBusqueda.style.display = 'none';
+            
+            // Confirmación visual
+            alert('Datos cargados correctamente. Al guardar se actualizará el cliente.');
+        });
+    }
 });
+
+// Función global para validar tipo (llamada desde onchange)
+window.validarTipoComprobante = function() {
+    const tipo = document.getElementById('tipo_comprobante').value;
+    if(tipo === 'Factura Electrónica') {
+        const doc = document.getElementById('nuevo_cliente_doc').value;
+        if(!doc) {
+            // Si no hay documento nuevo buscado, sugerir abrir el panel
+            if(confirm('Para emitir Factura se requiere un RUC válido. ¿Desea buscarlo ahora?')) {
+                document.getElementById('panelBusquedaSunat').style.display = 'block';
+                document.getElementById('api_tipo_doc').value = 'RUC';
+            }
+        }
+    }
+};
 </script>
 {% endblock %}

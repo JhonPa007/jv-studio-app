@@ -1,1105 +1,645 @@
 {% extends "base.html" %}
 
-{% block title %}{{ titulo_form | default('Nueva Venta') }} - JV Studio{% endblock %}
+{% block title %}Nueva Venta - JV Studio{% endblock %}
 
 {% block head_extra %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <style>
-    .form-section-venta { background-color: #3a3a3a; padding: 25px; border-radius: 8px; margin-bottom:20px; }
-    .form-section-venta h2, .form-section-venta h3 { 
-        color: var(--color-acento-dorado); 
-        margin-bottom: 20px; 
-        border-bottom: 1px solid var(--color-secundario-gris); 
-        padding-bottom: 10px;
+    .venta-header { background-color: var(--color-secundario); padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+    .venta-section { background-color: #2c2c2c; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #444; }
+    .total-display { font-size: 2rem; font-weight: bold; color: var(--color-primario); text-align: right; }
+    .balance-display { font-size: 1.2rem; text-align: right; }
+    .table-items th { background-color: #444; color: #fff; }
+    .btn-add { height: 100%; }
+    .select2-container .select2-selection--single { height: 38px; }
+    
+    /* CORRECCIÓN VISUAL PARA SELECT2 EN MODO OSCURO */
+    .select2-container--default .select2-selection--single {
+        background-color: #ffffff !important; 
+        color: #000000 !important;          
+        border: 1px solid #ced4da;
+        height: 38px; 
+        display: flex;
+        align-items: center;
     }
-    .items-table th, .items-table td, .pagos-table th, .pagos-table td { 
-        vertical-align: middle; 
-        font-size:0.9em; 
-        color: #000000; 
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        color: #000000 !important;
+        line-height: 36px;
     }
-    .items-table thead th, .pagos-table thead th {
-        color: var(--color-acento-dorado); 
+    .select2-dropdown {
+        background-color: #ffffff !important; 
+        color: #000000 !important;          
+        border: 1px solid #ced4da;
     }
-    .items-table .btn-xs, .pagos-table .btn-xs { 
-        padding: .1rem .3rem;
-        font-size: .75rem;
+    .select2-container--default .select2-results__option {
+        color: #000000 !important; 
+        background-color: #ffffff; 
     }
-    .total-section { font-size: 1.0em; color: #f8f9fa; } 
-    .total-section strong { font-size: 1.2em; color: var(--color-acento-dorado); }
-    .total-section .saldo-pendiente { color: #ffc107; }
-    .total-section .form-label { color: #f8f9fa; } 
-    .form-control-sm, .form-select-sm { 
-        background-color: #4f4f4f; 
-        color: #f8f9fa;
-        border-color: var(--color-secundario-gris);
+    .select2-container--default .select2-results__option--highlighted[aria-selected] {
+        background-color: var(--color-primario) !important; 
+        color: #000000 !important;
     }
-    .form-control-sm::placeholder { color: #aaa; }
-    select:disabled {
-        background-color: #6c757d;
-        opacity: 0.7;
+    .select2-search__field {
+        background-color: #ffffff !important;
+        color: #000000 !important;
     }
+
+    /* Estilos Modal Campaña */
+    .modal-campana .modal-content {
+        background-color: #2c2c2c;
+        border: 1px solid var(--color-primario);
+        color: #fff;
+    }
+    .modal-campana .btn-close { filter: invert(1); }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid mt-4">
-    <div class="form-section-venta">
-        <h2><i class="fas fa-cash-register me-2"></i>{{ titulo_form }}</h2>
+    
+    <form id="formVenta" method="POST" action="{{ url_for('main.nueva_venta') }}" onsubmit="return false;">
         
-        {% include 'partials/_flash_messages.html' %}
-        
-        {# ESTA LÍNEA ES LA CLAVE: Define de dónde se tomarán los datos para rellenar el formulario #}
-        {% set data_source = form_data if form_data else (prefill_data if prefill_data else {}) %}
-
-        <form method="POST" action="{{ action_url }}" id="formVenta">
-            <h3><i class="fas fa-file-invoice-dollar me-2"></i>Datos de la Venta</h3>
-            <div class="row">
-                <div class="col-lg-6 border-end pe-4" style="border-color: var(--color-secundario-gris) !important;">
-                    <h3><i class="fas fa-info-circle me-2"></i>Detalles del Servicio</h3>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="sucursal_id" class="form-label">Sucursal</label>
-                            <select class="form-select" id="sucursal_id" name="sucursal_id" required>
-                                {% for suc in sucursales %}<option value="{{ suc.id }}" {% if data_source.get('sucursal_id')|string == suc.id|string %}selected{% endif %}>{{ suc.nombre }}</option>{% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="fecha_venta" class="form-label">Fecha</label>
-                            <input type="datetime-local" class="form-control" id="fecha_venta" name="fecha_venta" value="{{ data_source.get('fecha_venta') }}" required>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="cliente_receptor_id" class="form-label">Cliente Atendido</label>
-                            <select class="form-select" id="cliente_receptor_id" name="cliente_receptor_id" required>
-                                {% for cli in clientes %}<option value="{{ cli.id }}" {% if data_source.get('cliente_receptor_id')|string == cli.id|string %}selected{% endif %}>{{ cli.razon_social_nombres }} {{ cli.apellidos or '' }}</option>{% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="empleado_id" class="form-label">Colaborador</label>
-                            <select class="form-select" id="empleado_id" name="empleado_id" required>
-                                <option value="">Seleccione...</option>
-                                {% for emp in empleados %}<option value="{{ emp.id }}" {% if data_source.get('empleado_id')|string == emp.id|string %}selected{% endif %}>{{ emp.nombres }} {{ emp.apellidos }}</option>{% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                     <div class="mb-3">
-                        <label for="campana_id" class="form-label">Campaña Aplicada (Opcional)</label>
-                        <select class="form-select" id="campana_id" name="campana_id">
-                            <option value="">Venta Regular (Sin Campaña)</option>
-                            {% for c in campanas_activas %}<option value="{{ c.id }}" {% if data_source.get('campana_id')|string == c.id|string %}selected{% endif %}>{{ c.nombre }}</option>{% endfor %}
-                        </select>
-                    </div>
-                </div>
-
-                <div class="col-lg-6 ps-4">
-                    <h3><i class="fas fa-file-invoice me-2"></i>Información de Facturación</h3>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="tipo_comprobante" class="form-label">Tipo de Comprobante</label>
-                            <select class="form-select" id="tipo_comprobante" name="tipo_comprobante">
-                                <option value="Nota de Venta">Nota de Venta</option>
-                                <option value="Boleta Electrónica">Boleta Electrónica</option>
-                                <option value="Factura Electrónica">Factura Electrónica</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="serie_comprobante" class="form-label">Serie</label>
-                            <select class="form-select" id="serie_comprobante" name="serie_comprobante"></select>
-                        </div>
-                    </div>
-
-                    <div class="row align-items-center">
-                        <div class="col-md-6 mb-3" id="seccion_facturacion" style="display: none;">
-                            <label for="inputDocumentoFactura" id="labelDocumentoFactura" class="form-label">DNI / RUC</label>
-                            <div class="input-group">
-                                <input type="text" class="form-control" id="inputDocumentoFactura" placeholder="Ingresa y busca...">
-                                <button class="btn btn-outline-info" type="button" id="btnBuscarDocFactura"><i class="fas fa-search"></i></button>
-                            </div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                             <label for="cliente_facturacion_id" class="form-label">Facturar a:</label>
-                             <select class="form-select form-select-sm" id="cliente_facturacion_id" name="cliente_facturacion_id">
-                                <option value="">-- Mismo Cliente Atendido --</option>
-                                {% for cli in clientes %}<option value="{{ cli.id }}" {% if data_source.get('cliente_facturacion_id')|string == cli.id|string %}selected{% endif %}>{{ cli.razon_social_nombres }} {{ cli.apellidos or '' }} ({{ cli.numero_documento or 'S/D' }})</option>{% endfor %}
-                            </select>
-                        </div>
-                    </div>
+        <div class="venta-header">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="mb-0"><i class="fas fa-cash-register me-2"></i>Nueva Venta</h2>
+                <div class="text-end">
+                    <small class="text-muted d-block">Fecha de Emisión</small>
+                    <span class="h5 text-white">{{ hoy }}</span>
                 </div>
             </div>
-            {# --- NUEVA SECCIÓN PARA VENDER MEMBRESÍA --- #}
-            <h3 class="mt-4"><i class="fas fa-id-card me-2"></i>Vender Membresía (Opcional)</h3>
-            <div class="p-3 border rounded mb-3" style="border-color: var(--color-secundario-gris) !important;">
-                <div class="row g-2 align-items-end">
-                    <div class="col-md-10">
-                        <label for="selectPlanMembresia" class="form-label text-light">Seleccione un Plan:</label>
-                        <select id="selectPlanMembresia" class="form-select form-select-sm">
-                            <option value="">Ninguna</option>
-                            {% for plan in planes_membresia_activos %}
-                            <option value="{{ plan.id }}" data-nombre="{{ plan.nombre }}" data-precio="{{ plan.precio }}">
-                                {{ plan.nombre }} (S/ {{ "%.2f"|format(plan.precio) }})
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="tipo_comprobante" class="form-label text-warning">Tipo de Comprobante</label>
+                    <select class="form-select form-select-lg" id="tipo_comprobante" name="tipo_comprobante">
+                        <option value="Nota de Venta">Nota de Venta</option>
+                        <option value="Boleta Electrónica">Boleta Electrónica</option>
+                        <option value="Factura Electrónica">Factura Electrónica</option>
+                    </select>
+                </div>
+
+                <div class="col-md-8 mb-3">
+                    <label for="cliente_id" class="form-label text-warning">Cliente Atendido</label>
+                    <div class="input-group">
+                        <select class="form-select form-select-lg select2-cliente" id="cliente_id" name="cliente_id" required>
+                            <option value="">Buscar Cliente...</option>
+                            {% for c in clientes %}
+                            <option value="{{ c.id }}" 
+                                    data-documento="{{ c.numero_documento }}"
+                                    data-fecha="{{ c.fecha_nac_str or '' }}"
+                                    data-validado="{{ 'true' if c.cumpleanos_validado else 'false' }}"
+                                    data-rechazo="{{ 'true' if c.rechazo_dato_cumpleanos else 'false' }}">
+                                {{ c.texto_busqueda }}
                             </option>
                             {% endfor %}
                         </select>
+                        <a href="{{ url_for('main.nuevo_cliente') }}" class="btn btn-outline-secondary" title="Nuevo Cliente"><i class="fas fa-plus"></i></a>
                     </div>
-                    <div class="col-md-2">
-                        <button type="button" class="btn btn-info btn-sm w-100" id="btnAnadirMembresia">
-                            <i class="fas fa-plus"></i> Añadir a la Venta
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="empleado_id" class="form-label text-warning">Colaborador Principal</label>
+                    <select class="form-select form-select-lg" id="empleado_id" name="empleado_id" required>
+                        <option value="">Seleccione Colaborador...</option>
+                        {% for e in empleados %}
+                        <option value="{{ e.id }}" {% if current_user.id == e.id %}selected{% endif %}>
+                            {{ e.nombre_display }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                     <label for="campana_id" class="form-label text-warning">Campaña / Promoción</label>
+                    <select class="form-select form-select-lg" name="campana_id">
+                        <option value="">-- Sin Campaña / Promoción --</option>
+                        {% for camp in campanas %}
+                        <option value="{{ camp.id }}">{{ camp.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="venta-section">
+                    <h4 class="text-warning mb-3"><i class="fas fa-shopping-cart me-2"></i>Ítems de la Venta</h4>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-9">
+                            <select class="form-select" id="select_servicio">
+                                <option value="">Agregar Servicio...</option>
+                                {% for s in servicios %}
+                                <option value="{{ s.id }}" data-precio="{{ s.precio }}" data-nombre="{{ s.nombre }}">
+                                    {{ s.nombre }} - S/ {{ "%.2f"|format(s.precio) }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                         <div class="col-md-3">
+                            <button type="button" class="btn btn-primary w-100" onclick="agregarItem('servicio')">
+                                <i class="fas fa-plus"></i> Servicio
+                            </button>
+                        </div>                        
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-9">
+                             <select class="form-select" id="select_producto">
+                                <option value="">Agregar Producto...</option>
+                                {% for p in productos %}
+                                <option value="{{ p.id }}" data-precio="{{ p.precio_venta }}" data-nombre="{{ p.nombre }}" data-stock="{{ p.stock_actual }}">
+                                    {{ p.nombre }} (Stock: {{ p.stock_actual }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">                                                        
+                            <button type="button" class="btn btn-primary w-100" onclick="agregarItem('producto')">
+                                <i class="fas fa-plus"></i> Producto
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive mt-3">
+                        <table class="table table-dark table-striped table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Descripción</th>
+                                    <th width="100">Cant.</th>
+                                    <th width="120">P. Unit</th>
+                                    <th width="120">Total</th>
+                                    <th width="50"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla_items_body">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="venta-section">
+                    <h4 class="text-warning mb-3"><i class="fas fa-coins me-2"></i>Resumen y Pagos</h4>
+                    
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Subtotal:</span>
+                        <span id="lbl_subtotal">S/ 0.00</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Descuento:</span>
+                        <input type="number" class="form-control form-control-sm w-25 text-end bg-dark text-white" id="descuento_global" name="descuento_global" value="0" min="0" step="0.10" oninput="calcularTotales()">
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="h4">TOTAL:</span>
+                        <span class="total-display" id="lbl_total_pagar">S/ 0.00</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="balance-display text-info">Pagado:</span>
+                        <span class="balance-display text-info" id="lbl_total_pagado">S/ 0.00</span>
+                    </div>
+                     <div class="d-flex justify-content-between align-items-center mb-4">
+                        <span class="balance-display fw-bold text-white">Faltante:</span>
+                        <span class="balance-display fw-bold text-white" id="lbl_faltante">S/ 0.00</span>
+                    </div>
+
+                    <h5 class="text-warning mt-4">Métodos de Pago</h5>
+                    <div id="pagos_container">
+                        </div>
+                    
+                    <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="agregarPago()">
+                        <i class="fas fa-plus me-1"></i>Añadir Método de Pago
+                    </button>
+                    
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="button" class="btn btn-success btn-lg" onclick="registrarVenta()">
+                            <i class="fas fa-check-circle me-2"></i>Registrar Venta
                         </button>
                     </div>
                 </div>
             </div>
-            <hr>
+        </div>
 
-            {# SECCIÓN 2: ÍTEMS DE LA VENTA #}
-            <h3 class="mt-4"><i class="fas fa-shopping-cart me-2"></i>Ítems de la Venta</h3>
-            <div class="p-3 border rounded mb-3" style="border-color: var(--color-secundario-gris) !important;">
-                <h5 class="text-light">Añadir Servicio:</h5>
-                <div class="row g-2 align-items-end">
-                    <div class="col-md-5">
-                        <select id="selectServicio" class="form-select form-select-sm">
-                        <option value="">Seleccione un servicio...</option>
-                        {% for srv in servicios %}
-                        <option value="{{ srv.id }}" data-nombre="{{ srv.nombre }}" data-precio="{{ "%.2f"|format(srv.precio) }}">{{ srv.nombre }} (S/ {{ "%.2f"|format(srv.precio) }})</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-1"><input type="number" id="cantidadServicio" class="form-control form-control-sm" value="1" min="1" placeholder="Cant."></div>
-                <div class="col-md-3"><input type="number" step="0.01" id="precioServicio" class="form-control form-control-sm" placeholder="Precio Unit."></div>
-                
-                <div class="col-auto">
-                        <div class="form-check">
-                          <input class="form-check-input" type="checkbox" id="checkServicioExtra">
-                          <label class="form-check-label text-light" for="checkServicioExtra">
-                            Extra
-                          </label>
-                        </div>
-                </div>
-                <div class="col-md-2"><button type="button" class="btn btn-info btn-sm w-100" id="btnAnadirServicio"><i class="fas fa-plus"></i> Añadir</button></div>
-            </div>
-            </div>
-            <div class="p-3 border rounded mb-3" style="border-color: var(--color-secundario-gris) !important;">
-                <h5 class="text-light">Añadir Producto:</h5>
-                <div class="row g-2 align-items-end"><div class="col-md-5">
-                    <select id="selectProducto" class="form-select form-select-sm">
-                            <option value="">Seleccione un producto...</option>
-                            {% for prod in productos %}
-                            <option value="{{ prod.id }}" data-nombre="{{ prod.nombre }}" data-precio="{{ "%.2f"|format(prod.precio_venta) }}" data-stock="{{ prod.stock_actual }}">
-                                {# Texto actualizado para mostrar producto y marca #}
-                                {{ prod.nombre }} - **{{ prod.marca_nombre if prod.marca_nombre else 'Sin Marca' }}** (S/ {{ "%.2f"|format(prod.precio_venta) }}) - Stock: {{ prod.stock_actual }}
-                            </option>
-                            {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-1"><input type="number" id="cantidadProducto" class="form-control form-control-sm" value="1" min="1" placeholder="Cant."></div><div class="col-md-3"><input type="number" step="0.01" id="precioProducto" class="form-control form-control-sm" placeholder="Precio Unit."></div><div class="col-md-2"><button type="button" class="btn btn-info btn-sm w-100" id="btnAnadirProducto"><i class="fas fa-plus"></i> Añadir</button></div></div>
-            </div>
-            <div class="table-responsive mt-2"><table class="table table-sm table-custom items-table" id="tablaItemsVenta"><thead><tr><th>Descripción</th><th>Cantidad</th><th>Precio Unit. (S/)</th><th>Subtotal (S/)</th><th>Acción</th></tr></thead><tbody><tr id="filaSinItems"><td colspan="5" class="text-center text-muted">No hay ítems añadidos a la venta.</td></tr></tbody></table></div>
+        <input type="hidden" name="items_lista" id="items_lista_json">
+        <input type="hidden" name="pagos_lista" id="pagos_lista_json">
+    </form>
+</div>
 
-            {# SECCIÓN 3: TOTALES Y PAGO #}
-            <h3 class="mt-4"><i class="fas fa-dollar-sign me-2"></i>Totales y Pago</h3>
-            <div class="row">
-                <div class="col-md-7">
-                    <div class="p-3 border rounded mb-3" style="border-color: var(--color-secundario-gris) !important;">
-                        <h5 class="text-light">Añadir Pago:</h5>
-                        <div class="row g-2 align-items-end"><div class="col-md-4"><label for="selectMetodoPago" class="form-label">Método</label><select id="selectMetodoPago" class="form-select form-select-sm"><option value="">Seleccione método...</option>{% for metodo in metodos_pago %}<option value="{{ metodo }}">{{ metodo }}</option>{% endfor %}</select></div><div class="col-md-3"><label for="inputMontoPago" class="form-label">Monto (S/)</label><input type="number" step="0.01" min="0.01" class="form-control form-control-sm" id="inputMontoPago"></div><div class="col-md-3"><label for="inputReferenciaPago" class="form-label">Referencia</label><input type="text" class="form-control form-control-sm" id="inputReferenciaPago" placeholder="Opcional"></div><div class="col-md-2"><button type="button" class="btn btn-info btn-sm w-100" id="btnAnadirPago"><i class="fas fa-plus"></i> Añadir</button></div></div>
-                    </div>
-                    <div class="table-responsive mt-2">
-                        <table class="table table-sm table-custom pagos-table" id="tablaPagosAgregados">
-                            <thead><tr><th>Método</th><th>Monto (S/)</th><th>Referencia</th><th>Acción</th></tr></thead>
-                            <tbody><tr id="filaSinPagos"><td colspan="4" class="text-center text-muted">No hay pagos registrados.</td></tr></tbody>
-                        </table>
-                    </div>
-                    <div class="mb-3"><label for="notas_venta" class="form-label">Notas Adicionales</label><textarea class="form-control" id="notas_venta" name="notas_venta" rows="2"></textarea></div>
-                </div>
-                
-                <div class="col-md-5 total-section">
-                    <div class="p-3 border rounded" style="background-color: #4f4f4f;">
-
-                        <div id="seccionCreditosMembresia" style="display: none;"> {# Oculto por defecto #}
-                            <p class="mb-1 small text-light">Beneficios de Membresía Activa:</p>
-                            <ul class="list-group list-group-flush small" id="listaCreditosDisponibles">
-                                </ul>
-                            <hr style="border-color: var(--color-secundario-gris);">
-                        </div>
-
-                        {# --- NUEVA SECCIÓN DE CANJE DE PUNTOS --- #}
-                        <div id="seccionPuntosFidelidad" style="display: none;"> {# Oculto por defecto #}
-                            <div class="mb-2">
-                                <small class="text-light">Cliente tiene: <strong id="puntosDisponiblesDisplay" class="text-warning">0</strong> puntos</small>
-                            </div>
-                            <label for="puntosACanjearInput" class="form-label small">Puntos a canjear:</label>
-                            <div class="input-group input-group-sm mb-2">
-                                <input type="number" class="form-control" id="puntosACanjearInput" min="0">
-                                <button class="btn btn-outline-info" type="button" id="btnAplicarPuntos">Aplicar</button>
-                            </div>
-                            <div id="infoCanjePuntos" class="small text-info"></div>
-                            <hr style="border-color: var(--color-secundario-gris);">
-                        </div>
-                        {# --- FIN DE LA NUEVA SECCIÓN --- #}
-
-                        <div class="d-flex justify-content-between mb-2"><span>Subtotal Servicios (Inc. IGV):</span><span id="displaySubtotalServicios">S/ 0.00</span></div>
-                        <div class="d-flex justify-content-between mb-2"><span>Subtotal Productos (Inc. IGV):</span><span id="displaySubtotalProductos">S/ 0.00</span></div>
-                        <div class="d-flex justify-content-between mb-2 align-items-center"><label for="descuento_monto" class="form-label mb-0 me-2">Descuento (S/):</label><input type="number" step="0.01" min="0" class="form-control form-control-sm d-inline-block" id="descuento_monto" name="descuento_monto" value="0.00" style="width: 100px;"></div>
-                        <hr style="border-color: var(--color-secundario-gris);">
-                        <div class="d-flex justify-content-between mb-2 fw-bold"><span>TOTAL VENTA:</span><strong id="displayMontoVenta">S/ 0.00</strong></div>
-                        <hr style="border-color: var(--color-secundario-gris);">
-                        <div class="d-flex justify-content-between mb-2"><span>Total Pagado:</span><span id="displayTotalPagado">S/ 0.00</span></div>
-                        <div class="d-flex justify-content-between fw-bold mt-2"><span class="saldo-pendiente">SALDO PENDIENTE:</span><strong class="saldo-pendiente" id="displaySaldoPendiente">S/ 0.00</strong></div>
-                        <hr style="border-color: var(--color-secundario-gris);">
-                        <div class="d-flex justify-content-between mb-1 small text-muted"><span>Base Imponible (Desglosada):</span><span id="displayBaseImponible">S/ 0.00</span></div>
-                        <div class="d-flex justify-content-between small text-muted"><span>IGV (18% Desglosado):</span><span id="displayIGV">S/ 0.00</span></div>
-                    </div>
-                </div>
-            </div>
-            
-            <input type="hidden" name="items_json" id="items_json">
-            <input type="hidden" name="pagos_json" id="pagos_json">
-            <input type="hidden" name="estado_pago" id="hidden_estado_pago">
-            <input type="hidden" name="comanda_origen_id" value="{{ comanda_origen_id or '' }}">
-            <input type="hidden" name="final_subtotal_servicios" id="final_subtotal_servicios"><input type="hidden" name="final_subtotal_productos" id="final_subtotal_productos"><input type="hidden" name="final_descuento_aplicado" id="final_descuento_aplicado"><input type="hidden" name="final_monto_impuestos" id="final_monto_impuestos"><input type="hidden" name="final_monto_total_venta" id="final_monto_total_venta">
-            <input type="hidden" name="reserva_id_origen" value="{{ reserva_origen_id if reserva_origen_id else '' }}">
-
-            <div class="d-flex justify-content-end mt-4">
-                <a href="{{ url_for('main.render_agenda_diaria') }}" class="btn btn-secondary me-2"><i class="fas fa-times me-1"></i>Cancelar Venta</a>
-                <button type="submit" class="btn btn-success"><i class="fas fa-check-circle me-1"></i>Finalizar y Guardar Venta</button>
-            </div>
-        </form>
+<template id="pago_template">
+    <div class="pago-row input-group mb-2">
+        <select class="form-select form-select-sm metodo-pago" onchange="calcularTotales()">
+            <option value="Efectivo">Efectivo</option>
+            <option value="Yape">Yape</option>
+            <option value="Plin">Plin</option>
+            <option value="Tarjeta">Tarjeta</option>
+            <option value="Transferencia">Transferencia</option>
+        </select>
+        <input type="number" class="form-control form-control-sm monto-pago" placeholder="Monto" step="0.10" min="0" oninput="calcularTotales()">
+        <input type="text" class="form-control form-control-sm referencia-pago" placeholder="Referencia (Opcional)">
+        <button type="button" class="btn btn-danger btn-sm" onclick="eliminarPago(this)"><i class="fas fa-trash"></i></button>
     </div>
-<div class="modal fade text-dark" id="modalRegistroRapidoCliente" tabindex="-1" aria-labelledby="modalRegistroRapidoLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content" style="background-color: #f8f9fa;">
-                <form id="formRegistroRapido" onsubmit="event.preventDefault();">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="modalRegistroRapidoLabel">Registrar Nuevo Cliente para Facturación</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="alert alert-danger" id="modalRegistroErrores" style="display: none;"></div>
-                        <div class="mb-3">
-                            <label for="registroRapidoDocumento" id="labelRegistroRapidoDocumento" class="form-label">DNI</label>
-                            <input type="text" class="form-control" id="registroRapidoDocumento" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label for="registroRapidoNombres" class="form-label">Nombres Completos / Razón Social</label>
-                            <input type="text" class="form-control" id="registroRapidoNombres" required>
-                        </div>
-                         <div class="mb-3" id="campoApellidosRapido">
-                            <label for="registroRapidoApellidos" class="form-label">Apellidos</label>
-                            <input type="text" class="form-control" id="registroRapidoApellidos">
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">Registrar Cliente</button>
-                    </div>
-                </form>
+</template>
+
+<div class="modal fade" id="modalExitoVenta" tabindex="-1" aria-labelledby="modalExitoVentaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-white">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="modalExitoVentaLabel">✅ Venta Registrada con Éxito</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Qué comprobante desea emitir?</p>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar / Solo Guardar</button>
+                <a href="#" id="btnImprimirTicket" class="btn btn-info" target="_blank">🖨️ Nota de Venta</a>
+                <a href="#" id="btnEmitirComprobante" class="btn btn-success">🧾 Emitir Boleta/Factura</a>
             </div>
         </div>
     </div>
-
 </div>
 
+<div class="modal fade modal-campana" id="modalCampanaDatos" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-warning">
+                    <i class="fas fa-birthday-cake me-2"></i>Actualización de Datos
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center p-4">
+                <h5 id="lblNombreClienteCampana" class="mb-3 fw-bold text-light"></h5>
+                
+                <div id="bloqueConfirmar" style="display:none;">
+                    <p class="mb-2">Tenemos registrado su cumpleaños el:</p>
+                    <h2 class="text-info fw-bold mb-4" id="lblFechaActual"></h2>
+                    <p>¿Es correcta esta fecha?</p>
+                    <div class="d-flex justify-content-center gap-2">
+                        <button class="btn btn-success" onclick="responderCampana('confirmar')">
+                            <i class="fas fa-check"></i> Sí
+                        </button>
+                        <button class="btn btn-outline-warning" onclick="mostrarInputFecha()">
+                            <i class="fas fa-edit"></i> No, corregir
+                        </button>
+                    </div>
+                </div>
 
+                <div id="bloqueSolicitar" style="display:none;">
+                    <p class="mb-3">¡Queremos engreírlo en su día!</p>
+                    <p class="text-muted small">¿Nos podría brindar su fecha de cumpleaños?</p>
+                    
+                    <div class="mb-3 mt-3">
+                        <input type="date" id="inputFechaCampana" class="form-control bg-secondary text-light border-info mx-auto" style="max-width: 200px;">
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-info fw-bold" onclick="responderCampana('actualizar')">
+                            <i class="fas fa-save"></i> Guardar Fecha
+                        </button>
+                        <button class="btn btn-link text-muted text-decoration-none btn-sm mt-2" onclick="responderCampana('rechazar')">
+                            El cliente prefiere no decirlo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
+    // Variables Globales
+    let listaItems = [];
+    let clienteIdCampana = null;
 
+    $(document).ready(function() {
+        // Inicializar Select2
+        $('.select2-cliente').select2({
+            placeholder: 'Buscar por nombre, DNI o teléfono...',
+            width: '100%'
+        });
 
-document.addEventListener('DOMContentLoaded', function() {   
+        // -----------------------------------------------------
+        // LÓGICA DE CAMPAÑA CUMPLEAÑOS (Detectar cambio cliente)
+        // -----------------------------------------------------
+        $('.select2-cliente').on('select2:select', function(e) {
+            // Acceder al elemento <option> real para leer atributos data-*
+            var element = e.params.data.element;
+            
+            // Validar existencia de datos (importante si es placeholder)
+            if (!element) return;
 
-      
- 
-    const estilosCatalogo = JSON.parse('{{ estilos_catalogo | tojson | safe }}');
+            var validado = element.dataset.validado === 'true';
+            var rechazo = element.dataset.rechazo === 'true';
+            var fecha = element.dataset.fecha;
+            var nombre = e.params.data.text.split('|')[0]; // Limpiar nombre visual
+            
+            clienteIdCampana = element.value;
 
-    const PUNTOS_POR_SOL_CANJE = 10;
+            // Si es un cliente válido y no ha sido procesado aun
+            if (clienteIdCampana && !validado && !rechazo) {
+                // Configurar Modal
+                document.getElementById('lblNombreClienteCampana').innerText = nombre;
+                
+                if (fecha && fecha !== 'None') {
+                    // Modo Confirmar
+                    document.getElementById('bloqueConfirmar').style.display = 'block';
+                    document.getElementById('bloqueSolicitar').style.display = 'none';
+                    
+                    // Formatear visualmente
+                    try {
+                        const [y, m, d] = fecha.split('-');
+                        document.getElementById('lblFechaActual').innerText = `${d}/${m}`;
+                        document.getElementById('inputFechaCampana').value = fecha;
+                    } catch(err) {
+                        console.error("Error formateando fecha:", err);
+                    }
+                } else {
+                    // Modo Solicitar
+                    document.getElementById('bloqueConfirmar').style.display = 'none';
+                    document.getElementById('bloqueSolicitar').style.display = 'block';
+                    document.getElementById('inputFechaCampana').value = '';
+                }
 
-    const selectorComprobante = document.getElementById('tipo_comprobante');
-    const seccionFacturacion = document.getElementById('seccion_facturacion');
-    const btnBuscarDocFactura = document.getElementById('btnBuscarDocFactura');
-    const inputDocumentoFactura = document.getElementById('inputDocumentoFactura');
-    const selectorClienteFacturacion = document.getElementById('cliente_facturacion_id');
-    
-    const selectorClienteReceptor = document.getElementById('cliente_receptor_id');
-    if ('{{ reserva_id_origen }}') {
-        selectorCliente.dispatchEvent(new Event('change'));
+                // Mostrar Modal
+                var myModal = new bootstrap.Modal(document.getElementById('modalCampanaDatos'));
+                myModal.show();
+            }
+        });
+    });
+
+    // --- FUNCIONES CAMPAÑA DATOS ---
+    function mostrarInputFecha() {
+        document.getElementById('bloqueConfirmar').style.display = 'none';
+        document.getElementById('bloqueSolicitar').style.display = 'block';
     }
-    // --- LISTENER DEL SELECTOR DE CLIENTE (CON ALERTAS PROACTIVAS) ---
-    selectorClienteReceptor?.addEventListener('change', async function() {
-        const clienteId = this.value;
+
+    async function responderCampana(accion) {
+        const fecha = document.getElementById('inputFechaCampana').value;
         
-        // Resetear secciones visuales
-        seccionPuntos.style.display = 'none';
-        seccionCreditos.style.display = 'none';
-        infoCanjePuntosDiv.textContent = '';
-        puntosACanjearInput.value = '';
-        listaCreditosDisplay.innerHTML = '';
-        creditosDisponiblesCliente = [];
-
-        if (!clienteId || clienteId === "0") return;
-
-        infoCanjePuntosDiv.textContent = 'Buscando beneficios...';
+        if (accion === 'actualizar' && !fecha) {
+            alert("Ingrese una fecha válida.");
+            return;
+        }
 
         try {
-            // Hacemos ambas llamadas a la API en paralelo
-            const [resPuntos, resCreditos] = await Promise.all([
-                fetch(`/api/clientes/${clienteId}/puntos`),
-                fetch(`/api/clientes/${clienteId}/creditos`)
-            ]);
-
-            // Procesar Puntos
-            if (resPuntos.ok) {
-                const dataPuntos = await resPuntos.json();
-                console.log("Respuesta de la API de Puntos:", dataPuntos); 
-                if (dataPuntos && dataPuntos.puntos_disponibles > 0) {
-                    const puntos = dataPuntos.puntos_disponibles;
-                    puntosDisponiblesCliente = puntos;
-                    const canjeValor = (puntos / PUNTOS_POR_SOL_CANJE).toFixed(2);
-                    
-                    seccionPuntos.style.display = 'block';
-                    puntosDisponiblesDisplay.textContent = puntos;
-
-                    if (confirm(`Este cliente tiene ${puntos} JV Puntos (equivale a S/ ${canjeValor} de descuento).\n\n¿Deseas canjear todos los puntos ahora?`)) {
-                        puntosACanjearInput.value = puntos;
-                        btnAplicarPuntos.click();
-                    }
+            const response = await fetch('/api/clientes/actualizar-campana', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    cliente_id: clienteIdCampana,
+                    accion: accion,
+                    fecha_nacimiento: fecha
+                })
+            });
+            
+            const res = await response.json();
+            
+            if (res.success) {
+                // Cerrar modal
+                const modalEl = document.getElementById('modalCampanaDatos');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                modal.hide();
+                
+                // Actualizar DOM del Select para que no vuelva a salir en esta sesión
+                // Buscamos la opción por su value
+                const option = document.querySelector(`.select2-cliente option[value="${clienteIdCampana}"]`);
+                if(option) {
+                    option.dataset.validado = 'true';
+                    if(accion === 'rechazar') option.dataset.rechazo = 'true';
+                    if(accion === 'actualizar') option.dataset.fecha = fecha;
                 }
+                
+                // alert(res.message); // Opcional: Mostrar mensaje de éxito
             } else {
-                console.error("Fallo al obtener puntos.");
+                alert('Error: ' + res.message);
             }
-
-            // Procesar Créditos
-            if (resCreditos.ok) {
-                const dataCreditos = await resCreditos.json();
-                if (dataCreditos && dataCreditos.length > 0) {
-                    creditosDisponiblesCliente = dataCreditos;
-                    let creditosTexto = "Este cliente tiene una membresía activa con los siguientes beneficios:\n\n";
-                    dataCreditos.forEach(c => {
-                        creditosTexto += `- ${c.cantidad_restante} x ${c.servicio_nombre}\n`;
-                        listaCreditosDisplay.innerHTML += `<li class="list-group-item bg-transparent text-light border-0 py-1"><i class="fas fa-cut me-2 text-info"></i> ${c.servicio_nombre} <span class="badge bg-info float-end">${c.cantidad_restante}</span></li>`;
-                    });
-                    seccionCreditos.style.display = 'block';
-                    alert(creditosTexto);
-                }
-            } else {
-                console.error("Fallo al obtener créditos.");
-            }
-
         } catch (error) {
-            console.error("Error al buscar beneficios:", error);
-            alert("No se pudieron cargar los beneficios del cliente en este momento.");
-        } finally {
-            infoCanjePuntosDiv.textContent = '';
-        }
-    });
-
-
-    selectorComprobante?.addEventListener('change', function() {
-        const tipo = this.value;
-        const labelFacturacion = document.getElementById('labelDocumentoFactura'); // La etiqueta de la sección
-
-        if (tipo === 'Boleta Electrónica') {
-            seccionFacturacion.style.display = 'block';
-            labelFacturacion.textContent = 'Emitir Boleta al DNI:'; // Nuevo texto
-        } else if (tipo === 'Factura Electrónica') {
-            seccionFacturacion.style.display = 'block';
-            labelFacturacion.textContent = 'Facturar al RUC:'; // Nuevo texto
-        } else {
-            seccionFacturacion.style.display = 'none';
-        }
-    });
-
-    const modalRegistroRapido = new bootstrap.Modal(document.getElementById('modalRegistroRapidoCliente'));
-
-    
-    btnBuscarDocFactura?.addEventListener('click', function() {
-        const numeroDoc = inputDocumentoFactura.value.trim();
-        if (!numeroDoc) {
-            alert("Por favor, ingrese un DNI o RUC para buscar.");
-            return;
-        }
-        
-        this.disabled = true; 
-        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-        fetch(`/api/clientes/buscar_por_documento?numero_doc=${numeroDoc}`)
-            .then(response => response.json().then(data => ({ok: response.ok, status: response.status, data})))
-            .then(result => {
-                if (result.ok) {
-                    selectorClienteFacturacion.value = result.data.id;
-                    alert(`Cliente "${result.data.razon_social_nombres} ${result.data.apellidos || ''}" encontrado y seleccionado.`);
-                } else if (result.status === 404) {
-                    if (confirm('Cliente no encontrado. ¿Desea registrarlo ahora?')) {
-                        // Obtenemos el tipo de documento directamente del selector principal
-                        const tipoDocSeleccionado = selectorComprobante.value;
-                        const tipoDocTexto = (tipoDocSeleccionado === 'Factura Electrónica') ? 'RUC' : 'DNI';
-                        
-                        // Rellenamos el modal con la información correcta
-                        document.getElementById('labelRegistroRapidoDocumento').textContent = tipoDocTexto;
-                        document.getElementById('registroRapidoDocumento').value = numeroDoc;
-                        document.getElementById('campoApellidosRapido').style.display = (tipoDocTexto === 'RUC') ? 'none' : 'block';
-                        
-                        // Limpiamos el formulario del modal
-                        document.getElementById('formRegistroRapido').reset();
-                        // Volvemos a poner el número de documento, porque reset() lo borra
-                        document.getElementById('registroRapidoDocumento').value = numeroDoc;
-
-                        modalRegistroRapido.show();
-                    }
-                } else { throw new Error(result.data.error || 'Error del servidor'); }
-            })
-            .catch(error => alert(`No se pudo completar la búsqueda. Motivo: ${error.message}`))
-            .finally(() => { this.disabled = false; this.innerHTML = '<i class="fas fa-search"></i>'; });
-    });
-
-    formRegistroRapido?.addEventListener('submit', function(event) {
-        event.preventDefault(); // Prevenir que la página se recargue
-        
-        const btnGuardar = document.getElementById('btnGuardarClienteRapido');
-        const modalErroresDiv = document.getElementById('modalRegistroErrores');
-        btnGuardar.disabled = true;
-        btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
-        modalErroresDiv.style.display = 'none';
-
-        const payload = {
-            documento: document.getElementById('registroRapidoDocumento').value,
-            tipo_documento: document.getElementById('labelRegistroRapidoDocumento').textContent,
-            razon_social_nombres: document.getElementById('registroRapidoNombres').value,
-            apellidos: document.getElementById('registroRapidoApellidos').value
-        };
-
-        fetch('/api/clientes/registro_rapido', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-            body: JSON.stringify(payload)
-        })
-        .then(response => response.json().then(data => ({ok: response.ok, data})))
-        .then(result => {
-            if (result.ok && result.data.success) {
-                const nuevoCliente = result.data.cliente;
-                // Crear la nueva opción para los desplegables
-                const textoOpcion = `${nuevoCliente.razon_social_nombres} ${nuevoCliente.apellidos || ''}`.trim();
-                const textoCompletoOpcion = `${textoOpcion} (${nuevoCliente.numero_documento || 'S/D'})`;
-                const nuevaOpcion = new Option(textoCompletoOpcion, nuevoCliente.id, true, true);
-               
-                // Añadir la nueva opción a AMBOS desplegables de cliente
-                selectorClienteReceptor.add(nuevaOpcion.cloneNode(true));
-                selectorClienteFacturacion.add(nuevaOpcion);
-                
-                // Seleccionar automáticamente al nuevo cliente
-                selectorClienteReceptor.value = nuevoCliente.id;
-                selectorClienteFacturacion.value = nuevoCliente.id;
-                
-                modalRegistroRapido.hide();
-                alert("Cliente registrado y seleccionado exitosamente.");
-            } else {
-                // Mostrar error dentro del modal
-                modalErroresDiv.textContent = result.data.message;
-                modalErroresDiv.style.display = 'block';
-            }
-        })
-        .catch(error => {
-            modalErroresDiv.innerHTML = `Error de conexión: ${error.message}`;
-            modalErroresDiv.style.display = 'block';
-        })
-        .finally(() => {
-            btnGuardar.disabled = false;
-            btnGuardar.textContent = 'Registrar Cliente';
-        });
-    });
-
-    document.getElementById('formRegistroRapido')?.addEventListener('submit', function() {
-        const payload = {
-            documento: document.getElementById('registroRapidoDocumento').value,
-            nombres: document.getElementById('registroRapidoNombres').value,
-            apellidos: document.getElementById('registroRapidoApellidos').value
-        };
-
-        fetch('/api/clientes/registro_rapido', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Éxito: Añadir el nuevo cliente al desplegable y seleccionarlo
-                const nuevoCliente = data.cliente;
-                const nuevaOpcion = new Option(`${nuevoCliente.nombres} ${nuevoCliente.apellidos} (${nuevoCliente.dni})`, nuevoCliente.id, true, true);
-                selectorClienteFacturacion.add(nuevaOpcion);
-                
-                modalRegistroRapido.hide();
-                alert("Cliente registrado y seleccionado exitosamente.");
-            } else {
-                // Mostrar error dentro del modal
-                document.getElementById('modalRegistroErrores').textContent = data.message;
-                document.getElementById('modalRegistroErrores').style.display = 'block';
-            }
-        });
-    });
-    
-    // --- LÓGICA DE JAVASCRIPT PARA EL FORMULARIO DE VENTA ---
-    
-    // --- Inicialización y Selectores DOM ---
-    let itemsEnVenta = JSON.parse('{{ prefill_items_json | safe }}');
-    
-    const fechaVentaInput = document.getElementById('fecha_venta');
-    const selectPlanMembresia = document.getElementById('selectPlanMembresia');
-    const btnAnadirMembresia = document.getElementById('btnAnadirMembresia');
-
-    if (fechaVentaInput && !fechaVentaInput.value) { 
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-        now.setSeconds(0); 
-        now.setMilliseconds(0);
-        fechaVentaInput.value = now.toISOString().slice(0,16);
-    }
-        
-    let pagosEnVenta = [];
-    let puntosDisponiblesCliente = 0;
-    let creditosDisponiblesCliente = []; // <-- NUEVA: para guardar los créditos del cliente
-
-    const IGV_TASA = 0.18;
-    const PUNTOS_POR_SOL = 10; // Regla de canje
-
-// Selectores para los nuevos elementos
-    const selectorCliente = document.getElementById('cliente_id');
-    const seccionPuntos = document.getElementById('seccionPuntosFidelidad');
-    const puntosDisponiblesDisplay = document.getElementById('puntosDisponiblesDisplay');
-    const puntosACanjearInput = document.getElementById('puntosACanjearInput');
-    const btnAplicarPuntos = document.getElementById('btnAplicarPuntos');
-    const infoCanjePuntosDiv = document.getElementById('infoCanjePuntos');
-    const puntosCanjeadosHiddenInput = document.createElement('input'); // Campo oculto para enviar los puntos
-    puntosCanjeadosHiddenInput.type = 'hidden';
-    puntosCanjeadosHiddenInput.name = 'puntos_canjeados';
-    puntosCanjeadosHiddenInput.value = '0';
-    document.getElementById('formVenta').appendChild(puntosCanjeadosHiddenInput);
-    const seccionCreditos = document.getElementById('seccionCreditosMembresia');
-    const listaCreditosDisplay = document.getElementById('listaCreditosDisponibles');
-
-    
-    // Selectores para Ítems
-    const selectServicio = document.getElementById('selectServicio');
-    const cantidadServicioInput = document.getElementById('cantidadServicio');
-    const precioServicioInput = document.getElementById('precioServicio');
-    const btnAnadirServicio = document.getElementById('btnAnadirServicio');
-    const selectProducto = document.getElementById('selectProducto');
-    const cantidadProductoInput = document.getElementById('cantidadProducto');
-    const precioProductoInput = document.getElementById('precioProducto');
-    const btnAnadirProducto = document.getElementById('btnAnadirProducto');
-    const tablaItemsVentaBody = document.querySelector('#tablaItemsVenta tbody');  
-
-    // Selectores para Pagos
-    const selectMetodoPago = document.getElementById('selectMetodoPago');
-    const inputMontoPago = document.getElementById('inputMontoPago');
-    const inputReferenciaPago = document.getElementById('inputReferenciaPago');
-    const btnAnadirPago = document.getElementById('btnAnadirPago');
-    const tablaPagosAgregadosBody = document.querySelector('#tablaPagosAgregados tbody');
-    
-    // Selectores para Totales y Campos Ocultos
-    const descuentoMontoInput = document.getElementById('descuento_monto');
-    const displaySubtotalServicios = document.getElementById('displaySubtotalServicios');
-    const displaySubtotalProductos = document.getElementById('displaySubtotalProductos');
-    const displayMontoVenta = document.getElementById('displayMontoVenta');
-    const displayTotalPagado = document.getElementById('displayTotalPagado');
-    const displaySaldoPendiente = document.getElementById('displaySaldoPendiente');
-    const displayBaseImponible = document.getElementById('displayBaseImponible');
-    const displayIGV = document.getElementById('displayIGV');
-    
-    const itemsJsonInput = document.getElementById('items_json');
-    const pagosJsonInput = document.getElementById('pagos_json');
-    const hiddenEstadoPagoInput = document.getElementById('hidden_estado_pago');
-    const finalSubtotalServiciosInput = document.getElementById('final_subtotal_servicios');
-    const finalSubtotalProductosInput = document.getElementById('final_subtotal_productos');
-    const finalDescuentoAplicadoInput = document.getElementById('final_descuento_aplicado');
-    const finalMontoImpuestosInput = document.getElementById('final_monto_impuestos');
-    const finalMontoTotalInput = document.getElementById('final_monto_total_venta');
-
-    // Selectores para lógica de series dinámicas
-    const selectorSucursal = document.getElementById('sucursal_id');
-    const selectorTipoComprobante = document.getElementById('tipo_comprobante');
-    const selectorSerieComprobante = document.getElementById('serie_comprobante');
-
-    // Listener para cuando se cambia el cliente
-    if (selectorCliente) {
-        selectorCliente.addEventListener('change', function() {
-            const clienteId = this.value;
-            infoCanjePuntosDiv.textContent = ''; // Limpiar mensajes
-            puntosACanjearInput.value = ''; // Limpiar input
-            seccionPuntos.style.display = 'none';
-            seccionCreditos.style.display = 'none';
-            listaCreditosDisplay.innerHTML = '';
-            creditosDisponiblesCliente = [];
-            
-            if (clienteId && clienteId !== "0") {
-                // Si es un cliente registrado, buscar sus puntos
-                fetch(`/api/clientes/${clienteId}/puntos`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.puntos_disponibles !== undefined) {
-                            puntosDisponiblesCliente = data.puntos_disponibles;
-                            puntosDisponiblesDisplay.textContent = puntosDisponiblesCliente;
-                            seccionPuntos.style.display = 'block'; // Mostrar la sección de puntos
-                        } else {
-                            seccionPuntos.style.display = 'none';
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error al obtener puntos del cliente:', error);
-                        seccionPuntos.style.display = 'none';
-                    });
-
-                fetch(`/api/clientes/${clienteId}/creditos`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data && data.length > 0) {
-                            creditosDisponiblesCliente = data; // Guardar los créditos
-                            // Dibujar la lista de créditos en pantalla
-                            data.forEach(credito => {
-                                const li = document.createElement('li');
-                                li.className = 'list-group-item bg-transparent text-light border-0 py-1';
-                                li.innerHTML = `<i class="fas fa-cut me-2 text-info"></i> ${credito.servicio_nombre} <span class="badge bg-info float-end">${credito.cantidad_restante}</span>`;
-                                listaCreditosDisplay.appendChild(li);
-                            });
-                            seccionCreditos.style.display = 'block'; // Mostrar la sección
-                        }
-                    })
-                    .catch(error => console.error('Error al obtener créditos:', error));
-
-
-            } else {
-                // Si es "Cliente Varios" o no hay selección, ocultar la sección
-                seccionPuntos.style.display = 'none';
-            }
-        });
-    }
-
-    // --- Lógica para Series Dinámicas ---
-    function cargarSeries() {
-        const sucursalId = selectorSucursal.value;
-        const tipoComprobante = selectorTipoComprobante.value;
-        selectorSerieComprobante.innerHTML = '<option value="">Cargando...</option>';
-        selectorSerieComprobante.disabled = true;
-
-        if (sucursalId && tipoComprobante) {
-            fetch(`/api/series_por_sucursal_y_tipo?sucursal_id=${sucursalId}&tipo_comprobante=${encodeURIComponent(tipoComprobante)}`)
-                .then(response => response.json())
-                .then(series => {
-                    selectorSerieComprobante.innerHTML = '<option value="">Seleccione una serie...</option>';
-                    if (series.length > 0) {
-                        series.forEach(serie => {
-                            const option = new Option(serie, serie);
-                            selectorSerieComprobante.add(option);
-                        });
-                        selectorSerieComprobante.disabled = false;
-                    } else {
-                        selectorSerieComprobante.innerHTML = '<option value="">No hay series configuradas</option>';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error al cargar series:', error);
-                    selectorSerieComprobante.innerHTML = '<option value="">Error al cargar</option>';
-                });
-        } else {
-            selectorSerieComprobante.innerHTML = '<option value="">Seleccione sucursal y tipo...</option>';
+            console.error(error);
+            alert('Error de conexión.');
         }
     }
-    if (selectorSucursal) selectorSucursal.addEventListener('change', cargarSeries);
-    if (selectorTipoComprobante) selectorTipoComprobante.addEventListener('change', cargarSeries);
 
-    if (btnAnadirMembresia) {
-        btnAnadirMembresia?.addEventListener('click', function() {
-            const selectedOption = selectPlanMembresia.options[selectPlanMembresia.selectedIndex];
-            if (!selectedOption || !selectedOption.value) {
-                alert("Por favor, seleccione un plan de membresía.");
+    // --- MANEJO DE ITEMS ---
+    function agregarItem(tipo) {
+        const select = document.getElementById(tipo === 'servicio' ? 'select_servicio' : 'select_producto');
+        const id = select.value;
+        if (!id) return;
+
+        const option = select.options[select.selectedIndex];
+        const nombre = option.getAttribute('data-nombre');
+        const precio = parseFloat(option.getAttribute('data-precio'));
+        const stock = tipo === 'producto' ? parseInt(option.getAttribute('data-stock')) : Infinity;
+
+        const existente = listaItems.find(i => i.id === id && i.tipo === tipo);
+        if (existente) {
+            if (tipo === 'producto' && existente.cantidad + 1 > stock) {
+                alert("No hay suficiente stock para añadir otra unidad.");
                 return;
             }
-
-            // Validar que no se añada más de una membresía por venta
-            if (itemsEnVenta.some(item => item.tipo_item === 'Membresía')) {
-                alert("Solo se puede vender una membresía por transacción.");
+            existente.cantidad++;
+        } else {
+            if (tipo === 'producto' && stock < 1) {
+                alert("Producto sin stock.");
                 return;
             }
-
-            const planId = selectedOption.value;
-            const planNombre = selectedOption.dataset.nombre;
-            const planPrecio = parseFloat(selectedOption.dataset.precio);
-
-            // Añadir la membresía como un tipo especial de ítem
-            itemsEnVenta.push({
-                tipo_item: 'Membresía',
-                item_id: planId,
-                descripcion_item_venta: `Membresía: ${planNombre}`,
-                cantidad: 1,
-                precio_unitario_venta: planPrecio,
-                es_trabajo_extra: false,
-                subtotal_item_neto: planPrecio,
-                subtotal_item_bruto: planPrecio
-            });
-
-            renderizarItemsTabla();
-            actualizarTotales();
-            
-            // Deshabilitar la sección para no añadir más de una
-            selectPlanMembresia.disabled = true;
-            this.disabled = true;
-        });
-    }
-
-    // --- Lógica para Ítems y Pagos (como antes) ---
-    // (Esta parte no necesita cambios)
-    if (selectServicio) {
-        selectServicio.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            precioServicioInput.value = (selectedOption && selectedOption.value) ? (selectedOption.dataset.precio || '') : '';
-        });
-    }
-
-    if (selectProducto) {
-        selectProducto.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            precioProductoInput.value = (selectedOption && selectedOption.value) ? (selectedOption.dataset.precio || '') : '';
-        });
-    }
-    
-    if (btnAplicarPuntos) {
-        btnAplicarPuntos.addEventListener('click', function() {
-            const puntosACanjear = parseInt(puntosACanjearInput.value) || 0;
-            if (puntosACanjear <= 0) { infoCanjePuntosDiv.textContent = "Ingrese una cantidad de puntos válida."; return; }
-            if (puntosACanjear > puntosDisponiblesCliente) { infoCanjePuntosDiv.textContent = `No tiene suficientes puntos. Disponibles: ${puntosDisponiblesCliente}.`; return; }
-            const descuentoPorPuntos = puntosACanjear / PUNTOS_POR_SOL;
-            descuentoMontoInput.value = descuentoPorPuntos.toFixed(2);
-            puntosCanjeadosHiddenInput.value = puntosACanjear;
-            infoCanjePuntosDiv.textContent = `${puntosACanjear} puntos aplicados como un descuento de S/ ${descuentoPorPuntos.toFixed(2)}.`;
-            actualizarTotales();
-        });
-    }
-
-    btnAnadirServicio?.addEventListener('click', function() {
-        const sel = document.getElementById('selectServicio');
-        const opt = sel.options[sel.selectedIndex];
-        if (!opt?.value) { alert("Seleccione un servicio."); return; }
-        
-        const servicioId = opt.value;
-        const servicioNombre = opt.dataset.nombre;
-        let precio = parseFloat(precioServicioInput.value);
-        let usarCredito = false;
-        let creditoIdUsado = null;
-
-        const creditoDisponible = creditosDisponiblesCliente.find(c => c.servicio_id == servicioId);
-
-        if (creditoDisponible) {
-            if (confirm(`Este cliente tiene ${creditoDisponible.cantidad_restante} crédito(s) para "${creditoDisponible.servicio_nombre}".\n\n¿Desea usar un crédito ahora? (El precio será S/ 0.00)`)) {
-                precio = 0.00;
-                usarCredito = true;
-                creditoIdUsado = creditoDisponible.credito_id;
-            }
+            listaItems.push({ id, tipo, descripcion: nombre, precio, cantidad: 1, stock });
         }
         
-        if (isNaN(precio) || precio < 0) { alert("Precio de servicio inválido."); return; }
-        
-        const nuevoItem = {
-            tipo_item: 'Servicio', 
-            item_id: servicioId,
-            descripcion_item_venta: servicioNombre, 
-            cantidad: 1, 
-            precio_unitario_venta: precio, 
-            es_trabajo_extra: checkServicioExtra.checked,
-            usado_como_beneficio: usarCredito, 
-            credito_id_usado: creditoIdUsado,
-            subtotal_item_neto: precio, // Para un servicio, el subtotal es el precio
-            subtotal_item_bruto: precio
-        };
-        itemsEnVenta.push(nuevoItem);
-        
-        renderizarItemsTabla(); 
-        actualizarTotales();
-        sel.value = ""; 
-        precioServicioInput.value = ""; 
-        checkServicioExtra.checked = false;
-    });
-        
-    if (btnAnadirProducto) {
-        btnAnadirProducto.addEventListener('click', function() {
-            const selectedOption = selectProducto.options[selectProducto.selectedIndex];
-            if (!selectedOption || !selectedOption.value) { alert("Seleccione un producto."); return; }
-            const itemId = selectedOption.value;
-            const itemName = selectedOption.dataset.nombre;
-            const stockActual = parseInt(selectedOption.dataset.stock) || 0;
-            const cantidad = parseInt(cantidadProductoInput.value) || 1;
-            const precioUnitario = parseFloat(precioProductoInput.value);
-            if (isNaN(precioUnitario) || precioUnitario < 0) { alert("Precio de producto inválido."); return; }
-            if (cantidad <= 0) { alert("Cantidad debe ser mayor a 0."); return; }
-            if (cantidad > stockActual) { alert(`Stock insuficiente para "${itemName}". Stock: ${stockActual}.`); return; }
-            itemsEnVenta.push({
-                tipo_item: 'Producto', item_id: itemId, descripcion_item_venta: itemName,
-                cantidad: cantidad, precio_unitario_venta: precioUnitario, descuento_item_monto: 0,
-                subtotal_item_bruto: cantidad * precioUnitario, subtotal_item_neto: cantidad * precioUnitario
-            });
-            renderizarItemsTabla(); actualizarTotales();
-            document.getElementById('checkServicioExtra').checked = false; // Resetear el checkbox
-            selectProducto.value = ""; cantidadProductoInput.value = "1"; precioProductoInput.value = "";
-        });
+        renderizarTabla();
+        select.value = "";
     }
 
-     if (btnAnadirPago) {
-        btnAnadirPago.addEventListener('click', function() {
-            const metodo = selectMetodoPago.value;
-            const monto = parseFloat(inputMontoPago.value);
-            const referencia = inputReferenciaPago.value.trim();
-            if (!metodo) { alert("Seleccione un método de pago."); return; }
-            if (isNaN(monto) || monto <= 0) { alert("Ingrese un monto de pago válido y positivo."); return; }
-            pagosEnVenta.push({ metodo_pago: metodo, monto: monto, referencia_pago: referencia });
-            renderizarPagosTabla();
-            actualizarTotales();
-            selectMetodoPago.value = ""; inputMontoPago.value = ""; inputReferenciaPago.value = "";
-        });
+    function eliminarItem(index) {
+        listaItems.splice(index, 1);
+        renderizarTabla();
     }
 
-    function renderizarItemsTabla() {
-        // Busca el cuerpo de la tabla de ítems
-        const tablaItemsVentaBody = document.querySelector('#tablaItemsVenta tbody');
-        
-        // Limpia cualquier contenido anterior
-        tablaItemsVentaBody.innerHTML = ''; 
-
-        // Si no hay ítems en la venta, muestra el mensaje por defecto y termina
-        if (itemsEnVenta.length === 0) {
-            tablaItemsVentaBody.innerHTML = '<tr id="filaSinItems"><td colspan="5" class="text-center text-muted">No hay ítems añadidos a la venta.</td></tr>';
+    function actualizarCantidad(index, nuevaCant) {
+        const item = listaItems[index];
+        const cant = parseInt(nuevaCant);
+        if (cant < 1) {
+            this.value = 1;
             return;
+        };
+
+        if (item.tipo === 'producto' && cant > item.stock) {
+            alert(`Stock máximo es ${item.stock}.`);
+            // Renderizar de nuevo para resetear el input
+            renderizarTabla();
+        } else {
+            item.cantidad = cant;
+            renderizarTabla();
         }
+    }
 
-        // Itera sobre cada ítem en el array 'itemsEnVenta' para crear una fila en la tabla
-        itemsEnVenta.forEach((item, index) => {
-            const subtotalItem = item.cantidad * item.precio_unitario_venta;
-            const fila = tablaItemsVentaBody.insertRow();
-            
-            // --- Lógica para la Descripción ---
-            let descripcionHtml = item.descripcion_item_venta;
-            // Añadir etiquetas distintivas según el tipo de ítem
-            if (item.tipo_item === 'Servicio' && item.es_trabajo_extra) {
-                descripcionHtml += ' <span class="badge bg-warning text-dark">Extra</span>';
-            } else if (item.tipo_item === 'Membresía') {
-                descripcionHtml += ' <span class="badge bg-info">Plan</span>';
-            }
-
-            // --- Crear las celdas de la fila ---
-            // Usamos innerHTML para la descripción para que renderice la etiqueta <span>
-            fila.insertCell().innerHTML = descripcionHtml; 
-            
-            const celdaCantidad = fila.insertCell();
-            celdaCantidad.textContent = item.cantidad;
-            celdaCantidad.className = 'text-center';
-
-            const celdaPrecio = fila.insertCell();
-            celdaPrecio.textContent = item.precio_unitario_venta.toFixed(2);
-            celdaPrecio.className = 'text-end';
-            
-            const celdaSubtotal = fila.insertCell();
-            celdaSubtotal.textContent = subtotalItem.toFixed(2);
-            celdaSubtotal.className = 'text-end';
-
-            // Celda para el botón de eliminar
-            const cellAccion = fila.insertCell();
-            cellAccion.className = 'text-center';
-            const btnEliminar = document.createElement('button');
-            btnEliminar.type = 'button';
-            btnEliminar.className = 'btn btn-danger btn-xs';
-            btnEliminar.innerHTML = '&times;'; // Un ícono de 'x' simple
-            btnEliminar.title = 'Eliminar ítem';
-            btnEliminar.dataset.index = index; // Guardamos el índice del ítem en el botón
-
-            btnEliminar.addEventListener('click', function() {
-                const indexToRemove = parseInt(this.dataset.index);
-                // Si se eliminó una membresía, volver a habilitar el selector
-                if (itemsEnVenta[indexToRemove].tipo_item === 'Membresía') {
-                    const selectPlanMembresia = document.getElementById('selectPlanMembresia');
-                    const btnAnadirMembresia = document.getElementById('btnAnadirMembresia');
-                    if(selectPlanMembresia) selectPlanMembresia.disabled = false;
-                    if(btnAnadirMembresia) btnAnadirMembresia.disabled = false;
-                }
-                
-                itemsEnVenta.splice(indexToRemove, 1); // Eliminar el ítem del array
-                renderizarItemsTabla(); // Volver a dibujar la tabla
-                actualizarTotales();    // Recalcular los totales
-            });
-
-            cellAccion.appendChild(btnEliminar);
-            // --- NUEVA LÓGICA: AÑADIR CAMPO DE NOTAS/ESTILO PARA SERVICIOS ---
-            if (item.tipo_item === 'Servicio') {
-                const filaNota = tablaItemsVentaBody.insertRow();
-                const celdaNota = filaNota.insertCell();
-                celdaNota.colSpan = 5;
-                celdaNota.className = 'pt-0 pb-3';
-
-                // Crear un datalist para las sugerencias del catálogo
-                let datalistHtml = '<datalist id="estilos-sugerencias">';
-                estilosCatalogo.forEach(estilo => {
-                    datalistHtml += `<option value="${estilo.nombre}">`;
-                });
-                datalistHtml += '</datalist>';
-
-                celdaNota.innerHTML = `
-                    <div class="input-group input-group-sm">
-                        <span class="input-group-text"><i class="fas fa-cut"></i></span>
-                        <input type="text" class="form-control form-control-sm nota-item-input" 
-                               list="estilos-sugerencias"
-                               data-index="${index}"
-                               value="${item.notas_item || ''}"
-                               placeholder="Añadir nota o seleccionar estilo (ej. Corte Americano, Taper Fade)...">
-                        ${datalistHtml}
-                    </div>
+    function renderizarTabla() {
+        const tbody = document.getElementById('tabla_items_body');
+        tbody.innerHTML = '';
+        if (listaItems.length === 0) {
+             tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Añade servicios o productos a la venta.</td></tr>';
+        } else {
+            listaItems.forEach((item, index) => {
+                const totalItem = item.cantidad * item.precio;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${item.descripcion} <small class="text-muted d-block">${item.tipo.toUpperCase()}</small></td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm text-center" 
+                               value="${item.cantidad}" min="1" ${item.tipo === 'producto' ? `max="${item.stock}"` : ''}
+                               onchange="actualizarCantidad(${index}, this.value)">
+                    </td>
+                    <td>S/ ${item.precio.toFixed(2)}</td>
+                    <td>S/ ${totalItem.toFixed(2)}</td>
+                    <td><button type="button" class="btn btn-sm btn-danger" onclick="eliminarItem(${index})"><i class="fas fa-times"></i></button></td>
                 `;
-            }
-        });
+                tbody.appendChild(tr);
+            });
+        }
+        calcularTotales();
     }
 
+    // --- MANEJO DE PAGOS ---
+    function agregarPago() {
+        const template = document.getElementById('pago_template');
+        const clone = template.content.cloneNode(true);
+        document.getElementById('pagos_container').appendChild(clone);
+        calcularTotales();
+    }
 
-    
-   // --- NUEVO LISTENER PARA LAS NOTAS DE ÍTEMS ---
-    document.querySelector('#tablaItemsVenta tbody').addEventListener('input', function(event) {
-        if (event.target && event.target.classList.contains('nota-item-input')) {
-            const index = parseInt(event.target.dataset.index, 10);
-            itemsEnVenta[index].notas_item = event.target.value;
-            // Actualizar el JSON que se enviará al backend
-            document.getElementById('items_json').value = JSON.stringify(itemsEnVenta);
+    function eliminarPago(btn) {
+        btn.closest('.pago-row').remove();
+        calcularTotales();
+    }
+
+    // --- CÁLCULOS GENERALES ---
+    function calcularTotales() {
+        const subtotal = listaItems.reduce((sum, item) => sum + (item.cantidad * item.precio), 0);
+        document.getElementById('lbl_subtotal').innerText = `S/ ${subtotal.toFixed(2)}`;
+        
+        const descuento = parseFloat(document.getElementById('descuento_global').value) || 0;
+        const totalPagar = subtotal - descuento > 0 ? subtotal - descuento : 0;
+        document.getElementById('lbl_total_pagar').innerText = `S/ ${totalPagar.toFixed(2)}`;
+
+        let totalPagado = 0;
+        document.querySelectorAll('.pago-row').forEach(row => {
+            const monto = parseFloat(row.querySelector('.monto-pago').value) || 0;
+            totalPagado += monto;
+        });
+        document.getElementById('lbl_total_pagado').innerText = `S/ ${totalPagado.toFixed(2)}`;
+
+        const faltante = totalPagar - totalPagado;
+        const lblFaltante = document.getElementById('lbl_faltante');
+        
+        if (faltante < -0.01) { // Vuelto (Negativo)
+            lblFaltante.classList.remove('text-danger', 'text-white');
+            lblFaltante.classList.add('text-success');
+            lblFaltante.innerText = `S/ ${Math.abs(faltante).toFixed(2)} (Vuelto)`;
+        } else if (faltante > 0.01) { // Falta pagar
+             lblFaltante.classList.remove('text-success', 'text-white');
+             lblFaltante.classList.add('text-danger');
+             lblFaltante.innerText = `S/ ${faltante.toFixed(2)}`;
+        } else { // Exacto
+             lblFaltante.classList.remove('text-success', 'text-danger');
+             lblFaltante.classList.add('text-white');
+             lblFaltante.innerText = `S/ 0.00`;
         }
-    });
-    
-    function renderizarPagosTabla() {
-        tablaPagosAgregadosBody.innerHTML = ''; 
-        if (pagosEnVenta.length === 0) {
-            const filaVacia = tablaPagosAgregadosBody.insertRow();
-            filaVacia.id = 'filaSinPagos';
-            const tdVacia = filaVacia.insertCell();
-            tdVacia.colSpan = 4;
-            tdVacia.className = 'text-center text-muted';
-            tdVacia.textContent = 'No hay pagos registrados.';
+    }
+
+    // --- ENVÍO DE FORMULARIO ---
+    function registrarVenta() {
+        if (listaItems.length === 0) {
+            alert("Debe agregar al menos un ítem a la venta.");
             return;
         }
-        pagosEnVenta.forEach((pago, index) => {
-            const fila = tablaPagosAgregadosBody.insertRow();
-            fila.insertCell().textContent = pago.metodo_pago;
-            fila.insertCell().textContent = pago.monto.toFixed(2);
-            fila.insertCell().textContent = pago.referencia_pago || '-';
-            const cellAccion = fila.insertCell();
-            const btnEliminar = document.createElement('button');
-            btnEliminar.type = 'button'; btnEliminar.className = 'btn btn-danger btn-xs';
-            btnEliminar.innerHTML = '<i class="fas fa-trash-alt"></i>';
-            btnEliminar.title = 'Eliminar pago';
-            btnEliminar.onclick = function() { pagosEnVenta.splice(index, 1); renderizarPagosTabla(); actualizarTotales(); };
-            cellAccion.appendChild(btnEliminar);
-        });
-    }
 
-    function actualizarTotales() {
-        // --- 1. Calcular Subtotales por Tipo ---
-        let subtotalServicios = 0;
-        let subtotalProductos = 0;
+        const tipoComprobante = document.getElementById('tipo_comprobante').value;
+        const clienteSelect = $('#cliente_id');
+        // Select2 usa jQuery para obtener datos
+        const clienteData = clienteSelect.select2('data')[0];
+        
+        if(!clienteData || !clienteData.element) {
+             alert("Seleccione un cliente.");
+             return;
+        }
 
-        itemsEnVenta.forEach(item => {
-            const subtotalItem = item.cantidad * item.precio_unitario_venta;
-            
-            // Tratamos la 'Membresía' como si fuera un servicio para la suma del subtotal
-            if (item.tipo_item === 'Servicio' || item.tipo_item === 'Membresía') {
-                subtotalServicios += subtotalItem;
-            } else if (item.tipo_item === 'Producto') {
-                subtotalProductos += subtotalItem;
+        const clienteDocumento = clienteData.element.dataset.documento;
+        const totalPagar = parseFloat(document.getElementById('lbl_total_pagar').innerText.replace('S/ ', ''));
+
+        if (tipoComprobante === 'Factura Electrónica') {
+            if (!clienteDocumento || clienteDocumento.length !== 11) {
+                alert("Para Factura Electrónica, el cliente debe tener un RUC de 11 dígitos.");
+                return;
+            }
+        }
+
+        if (tipoComprobante === 'Boleta Electrónica' && totalPagar > 700) {
+            if (!clienteDocumento || clienteDocumento.length !== 8) {
+                alert("Para Boletas mayores a S/ 700, el cliente debe tener un DNI de 8 dígitos.");
+                return;
+            }
+        }
+
+        // Recolectar pagos
+        const listaPagos = [];
+        const pagoRows = document.querySelectorAll('#pagos_container .pago-row');
+        pagoRows.forEach(row => {
+            const metodo = row.querySelector('.metodo-pago').value;
+            const monto = parseFloat(row.querySelector('.monto-pago').value) || 0;
+            const referencia = row.querySelector('.referencia-pago').value;
+            if (monto > 0) {
+                listaPagos.push({ metodo: metodo, monto: monto, referencia: referencia });
             }
         });
 
-        // --- 2. Calcular Montos Generales ---
-        const descuento = parseFloat(descuentoMontoInput.value) || 0;
-        const montoTotalVenta = (subtotalServicios + subtotalProductos) - descuento;
-
-        // --- 3. Calcular Desglose de IGV ---
-        const baseImponible = montoTotalVenta > 0 ? montoTotalVenta / (1 + IGV_TASA) : 0;
-        const montoIGV = montoTotalVenta - baseImponible;
-        
-        // --- 4. Calcular Totales de Pago y Saldo ---
-        const totalPagado = pagosEnVenta.reduce((sum, pago) => sum + parseFloat(pago.monto), 0);
-        const saldoPendiente = montoTotalVenta - totalPagado;
-
-        // --- 5. Determinar Estado del Pago ---
-        let estadoPagoCalculado = "Pendiente de Pago";
-        if (montoTotalVenta > 0 && (Math.abs(totalPagado - montoTotalVenta) < 0.01 || totalPagado > montoTotalVenta)) {
-            estadoPagoCalculado = "Pagado";
-        } else if (totalPagado > 0) {
-            estadoPagoCalculado = "Parcialmente Pagado";
-        } else if (montoTotalVenta <= 0) {
-            estadoPagoCalculado = "Pagado";
+        // Auto-pago efectivo si no hay pagos
+        if (listaPagos.length === 0 && totalPagar > 0) {
+            listaPagos.push({ metodo: 'Efectivo', monto: totalPagar, referencia: '' });
         }
         
-        // --- 6. Actualizar la Interfaz de Usuario (Displays) ---
-        // Usamos .toFixed(2) para asegurar que siempre se muestren dos decimales
-        document.getElementById('displaySubtotalServicios').textContent = `S/ ${subtotalServicios.toFixed(2)}`;
-        document.getElementById('displaySubtotalProductos').textContent = `S/ ${subtotalProductos.toFixed(2)}`;
-        document.getElementById('displayMontoVenta').textContent = `S/ ${montoTotalVenta.toFixed(2)}`;
-        document.getElementById('displayTotalPagado').textContent = `S/ ${totalPagado.toFixed(2)}`;
-        document.getElementById('displaySaldoPendiente').textContent = `S/ ${saldoPendiente.toFixed(2)}`;
-        document.getElementById('displayBaseImponible').textContent = `S/ ${baseImponible.toFixed(2)}`;
-        document.getElementById('displayIGV').textContent = `S/ ${montoIGV.toFixed(2)}`;
+        const totalPagado = listaPagos.reduce((sum, pago) => sum + pago.monto, 0);
 
-        // --- 7. Actualizar los Campos Ocultos para el Envío del Formulario ---
-        document.getElementById('items_json').value = JSON.stringify(itemsEnVenta);
-        document.getElementById('pagos_json').value = JSON.stringify(pagosEnVenta);
-        document.getElementById('hidden_estado_pago').value = estadoPagoCalculado;
-        document.getElementById('final_subtotal_servicios').value = subtotalServicios.toFixed(2);
-        document.getElementById('final_subtotal_productos').value = subtotalProductos.toFixed(2);
-        document.getElementById('final_descuento_aplicado').value = descuento.toFixed(2);
-        document.getElementById('final_monto_impuestos').value = montoIGV.toFixed(2);
-        document.getElementById('final_monto_total_venta').value = montoTotalVenta.toFixed(2);
-    }
+        if (totalPagado < totalPagar - 0.01) {
+            alert(`El monto pagado (S/ ${totalPagado.toFixed(2)}) es menor que el total (S/ ${totalPagar.toFixed(2)}).`);
+            return;
+        }
 
-    if (descuentoMontoInput) {
-        descuentoMontoInput.addEventListener('input', actualizarTotales);
-    }
-    if (btnBuscarDocumento) {
-        btnBuscarDocumento.addEventListener('click', function() {
-            const numeroDoc = inputDocumento.value.trim();
-            if (numeroDoc === '') return;
+        document.getElementById('items_lista_json').value = JSON.stringify(listaItems);
+        document.getElementById('pagos_lista_json').value = JSON.stringify(listaPagos);
 
-            // Mostrar un indicador de carga
-            btnBuscarDocumento.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            btnBuscarDocumento.disabled = true;
-
-            // Llamar a nuestra nueva API de búsqueda
-            fetch(`/api/clientes/buscar_por_documento?numero_doc=${numeroDoc}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.id) {
-                        // ¡Éxito! Cliente encontrado.
-                        // Seleccionamos al cliente en el desplegable principal.
-                        selectorCliente.value = data.id;
-
-                        // Disparamos un evento 'change' para que se carguen sus puntos y créditos.
-                        const event = new Event('change');
-                        selectorCliente.dispatchEvent(event);
-
-                        alert(`Cliente "${data.nombres} ${data.apellidos}" encontrado y seleccionado.`);
-                    } else {
-                        // Cliente no encontrado en nuestra BD.
-                        alert(data.error || "No se encontró ningún cliente con ese documento. Puede registrarlo como un cliente nuevo.");
-                    }
-                })
-                .catch(error => {
-                    console.error('Error al buscar cliente:', error);
-                    alert("Ocurrió un error de red al intentar buscar el cliente.");
-                })
-                .finally(() => {
-                    // Restaurar el botón de búsqueda a su estado original
-                    btnBuscarDocumento.innerHTML = '<i class="fas fa-search"></i>';
-                    btnBuscarDocumento.disabled = false;
-                });
-        });
+        document.getElementById('formVenta').submit();
     }
     
-    renderizarItemsTabla(); // <-- AÑADIR esta llamada para dibujar los ítems al inicio
-    renderizarPagosTabla();
-    actualizarTotales(); 
-});
+    document.addEventListener('DOMContentLoaded', () => {
+        renderizarTabla();
+        agregarPago(); 
+
+        {% if request.args.get('venta_guardada_id') %}
+        const ventaGuardadaId = {{ request.args.get('venta_guardada_id')|tojson }};
+        if (ventaGuardadaId) {
+            const successModal = new bootstrap.Modal(document.getElementById('modalExitoVenta'));
+            
+            let urlTicketBase = "{{ url_for('main.ver_ticket', venta_id=0) }}";
+            let urlTicket = urlTicketBase.replace('/0', '/' + ventaGuardadaId);
+            document.getElementById('btnImprimirTicket').href = urlTicket;
+
+            // Aquí podrías agregar lógica para Factura si tienes una ruta PDF diferente
+            document.getElementById('btnEmitirComprobante').href = urlTicket; 
+            
+            successModal.show();
+        }
+        {% endif %}
+    });
 </script>
 {% endblock %}

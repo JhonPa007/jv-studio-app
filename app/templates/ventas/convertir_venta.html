@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Canjear Comprobante - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card bg-dark text-light border-warning shadow-lg">
+                <div class="card-header border-warning">
+                    <h4 class="mb-0 text-warning"><i class="fas fa-exchange-alt me-2"></i>Canjear Nota de Venta #{{ venta.numero_comprobante }}</h4>
+                </div>
+                <div class="card-body">
+                    
+                    <div class="alert alert-info border-info d-flex align-items-center">
+                        <i class="fas fa-info-circle fa-2x me-3"></i>
+                        <div>
+                            <strong>Estás a punto de convertir una Nota Interna en un Comprobante SUNAT.</strong><br>
+                            Monto Total de la Venta: <strong class="fs-5">S/ {{ "%.2f"|format(venta.monto_final_venta) }}</strong>
+                        </div>
+                    </div>
+
+                    <form method="POST" action="{{ url_for('main.procesar_conversion_venta', venta_id=venta.id) }}" id="formConversion">
+                        
+                        <div class="mb-4">
+                            <label class="form-label text-warning">Seleccione el Nuevo Tipo de Comprobante:</label>
+                            <select class="form-select form-select-lg bg-dark text-light border-warning" id="nuevo_tipo" name="nuevo_tipo" required onchange="togglePanelCliente()">
+                                <option value="">-- Seleccione --</option>
+                                <option value="Boleta Electrónica">Boleta de Venta Electrónica</option>
+                                <option value="Factura Electrónica">Factura Electrónica</option>
+                            </select>
+                        </div>
+
+                        <div id="panelCliente" class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-4" style="display:none;">
+                            <h6 class="text-light border-bottom border-secondary pb-2 mb-3">Datos del Cliente para el Comprobante</h6>
+                            
+                            <div class="row g-2 align-items-end mb-3">
+                                <div class="col-md-4">
+                                    <label class="form-label small">Tipo Doc.</label>
+                                    <select id="tipo_doc_cliente" name="tipo_doc_cliente" class="form-select form-select-sm bg-dark text-light">
+                                        <option value="DNI">DNI</option>
+                                        <option value="RUC">RUC</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label small">Número</label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" id="num_doc_cliente" name="num_doc_cliente" class="form-control bg-dark text-light" placeholder="Ingrese número">
+                                        <button type="button" class="btn btn-warning" id="btnBuscarAPI"><i class="fas fa-search"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small">Razón Social / Nombres</label>
+                                <input type="text" id="nombre_cliente" name="nombre_cliente" class="form-control bg-dark text-light" readonly required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label small">Dirección</label>
+                                <input type="text" id="direccion_cliente" name="direccion_cliente" class="form-control bg-dark text-light" readonly>
+                            </div>
+                            
+                            <input type="hidden" id="api_validada" name="api_validada" value="0">
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{{ url_for('main.listar_ventas') }}" class="btn btn-secondary">Cancelar</a>
+                            <button type="submit" class="btn btn-success fw-bold" id="btnGuardar" disabled>
+                                <i class="fas fa-check-circle me-1"></i> Procesar Canje
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // 1. Controlar visibilidad y requerimientos según tipo
+    function togglePanelCliente() {
+        const tipo = document.getElementById('nuevo_tipo').value;
+        const panel = document.getElementById('panelCliente');
+        const selectDoc = document.getElementById('tipo_doc_cliente');
+        const btnGuardar = document.getElementById('btnGuardar');
+        
+        // Resetear validación al cambiar
+        document.getElementById('api_validada').value = "0";
+        btnGuardar.disabled = true;
+
+        if (tipo === 'Factura Electrónica') {
+            panel.style.display = 'block';
+            selectDoc.value = 'RUC';
+            // Bloquear cambio a DNI si es Factura (Factura exige RUC)
+            // selectDoc.disabled = true; // Opcional: Bloquear select
+            
+            // Lógica: Si es factura, exigimos buscar RUC
+            alert("Para Factura Electrónica es OBLIGATORIO validar un RUC activo.");
+            
+        } else if (tipo === 'Boleta Electrónica') {
+            panel.style.display = 'block';
+            selectDoc.value = 'DNI';
+            selectDoc.disabled = false;
+            // Para boleta, podríamos permitir cliente varios si monto < 700, 
+            // pero para ser ordenados, pedimos buscar o llenar.
+        } else {
+            panel.style.display = 'none';
+        }
+    }
+
+    // 2. Búsqueda API (Reutilizando tu lógica Decolecta)
+    document.getElementById('btnBuscarAPI').addEventListener('click', async function() {
+        const tipo = document.getElementById('tipo_doc_cliente').value;
+        const num = document.getElementById('num_doc_cliente').value;
+        const btn = this;
+        
+        if(!num) return alert("Ingrese número");
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        try {
+            const res = await fetch(`/api/consultar-documento/${tipo}/${num}`);
+            const data = await res.json();
+
+            if(data.success) {
+                document.getElementById('nombre_cliente').value = data.razon_social;
+                document.getElementById('direccion_cliente').value = data.direccion || '';
+                
+                // Validar éxito
+                document.getElementById('api_validada').value = "1";
+                document.getElementById('btnGuardar').disabled = false;
+                
+                if(tipo === 'RUC' && data.estado !== 'ACTIVO') {
+                    alert(`Advertencia: El RUC figura como ${data.estado}`);
+                }
+            } else {
+                alert(data.message || "No encontrado");
+                document.getElementById('api_validada').value = "0";
+                document.getElementById('btnGuardar').disabled = true;
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Error de conexión");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-search"></i>';
+        }
+    });
+</script>
+{% endblock %}

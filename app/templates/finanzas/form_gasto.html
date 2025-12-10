@@ -10,22 +10,17 @@
             {{ titulo_form }}
         </h2>
         
-        {% include 'partials/_flash_messages.html' %}
-
         {% set data_source = form_data if form_data else (gasto if gasto else {}) %}
 
         <form method="POST" action="{{ action_url }}">
             <div class="row">
                 <div class="col-md-4 mb-3">
                     <label for="fecha" class="form-label">Fecha del Gasto <span class="text-danger">*</span></label>
-                    <input type="date" class="form-control" id="fecha" name="fecha" value="{{ data_source.get('fecha', '') }}" required>
+                    <input type="date" class="form-control" id="fecha" name="fecha" value="{{ hoy or data_source.get('fecha')|string|slice(0,10) }}" required>
                 </div>
                 <div class="col-md-4 mb-3">
-                    <label for="sucursal_id" class="form-label">Sucursal <span class="text-danger">*</span></label>
-                    <select class="form-select" id="sucursal_id" name="sucursal_id" required>
-                        <option value="">Seleccione...</option>
-                        {% for suc in sucursales %}<option value="{{ suc.id }}" {% if data_source.get('sucursal_id')|string == suc.id|string %}selected{% endif %}>{{ suc.nombre }}</option>{% endfor %}
-                    </select>
+                    <label for="sucursal_nombre" class="form-label">Sucursal</label>
+                    <input type="text" class="form-control" id="sucursal_nombre" value="{{ session.get('sucursal_nombre', 'No asignada') }}" readonly disabled>
                 </div>
                 <div class="col-md-4 mb-3">
                     <label for="categoria_gasto_id" class="form-label">Categoría del Gasto <span class="text-danger">*</span></label>
@@ -34,6 +29,15 @@
                         {% for cat in categorias_gastos %}<option value="{{ cat.id }}" {% if data_source.get('categoria_gasto_id')|string == cat.id|string %}selected{% endif %}>{{ cat.nombre }}</option>{% endfor %}
                     </select>
                 </div>
+            </div>
+            
+            <!-- REQUERIMIENTO: Bloque dinámico para el beneficiario -->
+            <div id="bloque_beneficiario" class="mb-3" style="display:none;">
+                <label for="empleado_beneficiario_id" class="form-label">Colaborador (Beneficiario)</label>
+                <select class="form-select" id="empleado_beneficiario_id" name="empleado_beneficiario_id">
+                    <option value="">Seleccione un colaborador...</option>
+                    {% for colab in colaboradores %}<option value="{{ colab.id }}" {% if data_source.get('empleado_beneficiario_id')|string == colab.id|string %}selected{% endif %}>{{ colab.nombres }} {{ colab.apellidos }}</option>{% endfor %}
+                </select>
             </div>
 
             <div class="mb-3">
@@ -50,7 +54,7 @@
                     <label for="metodo_pago" class="form-label">Método de Pago <span class="text-danger">*</span></label>
                     <select class="form-select" id="metodo_pago" name="metodo_pago" required>
                         <option value="">Seleccione...</option>
-                        <option value="Efectivo de Caja" {% if data_source.get('metodo_pago') == 'Efectivo de Caja' %}selected{% endif %}>Efectivo de Caja</option>
+                        <option value="Efectivo" {% if data_source.get('metodo_pago') == 'Efectivo' %}selected{% endif %}>Efectivo</option>
                         <option value="Cuenta Bancaria" {% if data_source.get('metodo_pago') == 'Cuenta Bancaria' %}selected{% endif %}>Cuenta Bancaria</option>
                         <option value="Tarjeta Empresa" {% if data_source.get('metodo_pago') == 'Tarjeta Empresa' %}selected{% endif %}>Tarjeta Empresa</option>
                         <option value="Yape/Plin" {% if data_source.get('metodo_pago') == 'Yape/Plin' %}selected{% endif %}>Yape/Plin</option>
@@ -59,7 +63,6 @@
                 </div>
             </div>
             
-            {# --- NUEVA SECCIÓN PARA COMPROBANTE DE GASTO --- #}
             <div class="form-check mb-2">
                 <input class="form-check-input" type="checkbox" id="checkRegistrarComprobante" data-bs-toggle="collapse" data-bs-target="#collapseComprobante" aria-expanded="false" aria-controls="collapseComprobante">
                 <label class="form-check-label" for="checkRegistrarComprobante">
@@ -103,15 +106,6 @@
                     </div>
                 </div>
             </div>
-            {# --- FIN DE LA NUEVA SECCIÓN --- #}
-
-             <div class="mb-3 mt-3">
-                <label for="registrado_por_colaborador_id" class="form-label">Registrado por <span class="text-danger">*</span></label>
-                <select class="form-select" id="registrado_por_colaborador_id" name="registrado_por_colaborador_id" required>
-                    <option value="">Seleccione colaborador...</option>
-                    {% for colab in colaboradores %}<option value="{{ colab.id }}" {% if data_source.get('registrado_por_colaborador_id')|string == colab.id|string %}selected{% endif %}>{{ colab.nombres }} {{ colab.apellidos }}</option>{% endfor %}
-                </select>
-            </div>
             
             <div class="d-flex justify-content-end mt-4">
                 <a href="{{ url_for('main.listar_gastos') }}" class="btn btn-secondary me-2"><i class="fas fa-times me-1"></i>Cancelar</a>
@@ -120,4 +114,37 @@
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const categoriaSelect = document.getElementById('categoria_gasto_id');
+    const bloqueBeneficiario = document.getElementById('bloque_beneficiario');
+    const selectBeneficiario = document.getElementById('empleado_beneficiario_id');
+
+    function toggleBeneficiario() {
+        const selectedOption = categoriaSelect.options[categoriaSelect.selectedIndex];
+        if (!selectedOption) return; // Salir si no hay nada seleccionado
+
+        const categoriaTexto = selectedOption.text.toLowerCase();
+
+        if (categoriaTexto.includes('adelanto') || categoriaTexto.includes('comisi')) { // 'comisi' para cubrir comisión/comisiones
+            bloqueBeneficiario.style.display = 'block';
+            selectBeneficiario.required = true;
+        } else {
+            bloqueBeneficiario.style.display = 'none';
+            selectBeneficiario.required = false;
+            selectBeneficiario.value = '';
+        }
+    }
+
+    // Listener para el cambio en el select de categoría
+    categoriaSelect.addEventListener('change', toggleBeneficiario);
+
+    // Llamada inicial para establecer el estado correcto al cargar la página (para el caso de edición)
+    toggleBeneficiario();
+});
+</script>
 {% endblock %}

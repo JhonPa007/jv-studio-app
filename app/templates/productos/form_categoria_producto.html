@@ -26,7 +26,7 @@
             {{ titulo_form | default(('Registrar Nueva Categoría' if es_nueva else 'Editar Categoría') + ' de Producto') }}
         </h2>
         
-        {% include 'partials/_flash_messages.html' %}
+        
         {# O si no, el bloque with messages = get_flashed_messages... directo aquí #}
 
         {# data_source será form_data si hay error de validación, o categoria_prod si estamos editando #}

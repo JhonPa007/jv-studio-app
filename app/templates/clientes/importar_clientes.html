@@ -1,40 +1,119 @@
 {% extends "base.html" %}
 
-{% block title %}{{ titulo_pagina }} - JV Studio{% endblock %}
+{% block title %}Importar Clientes - JV Studio{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-file-import me-2"></i>{{ titulo_pagina }}</h2>
-        <a href="{{ url_for('main.listar_clientes') }}" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left me-1"></i>Volver a la Lista de Clientes
-        </a>
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2 class="text-light mb-4">
+                <i class="fas fa-file-import text-warning me-2"></i>Importar Clientes desde Excel
+            </h2>
+            <a href="{{ url_for('main.listar_clientes') }}" class="btn btn-outline-secondary mb-3">
+                <i class="fas fa-arrow-left me-1"></i>Volver a la Lista
+            </a>
+        </div>
     </div>
 
-    {% include 'partials/_flash_messages.html' %}
-
-    <div class="card bg-dark text-light">
-        <div class="card-body">
-            <h5 class="card-title">Instrucciones para la Importación</h5>
-            <p>Sube un archivo de Excel (.xlsx) con los datos de tus clientes. El archivo debe tener las siguientes columnas en la primera fila (los nombres deben ser exactos):</p>
-            <ul>
-                <li><strong>TipoDocumento</strong> (Obligatorio. Escribir "DNI" o "RUC")</li>
-                <li><strong>NumeroDocumento</strong> (Obligatorio)</li>
-                <li><strong>RazonSocialNombres</strong> (Obligatorio. Para RUC, la Razón Social; para DNI, los nombres)</li>
-                <li><strong>Apellidos</strong> (Obligatorio para DNI, dejar en blanco para RUC)</li>
-                <li><strong>Direccion</strong> (Opcional)</li>
-                <li><strong>Email</strong> (Opcional)</li>
-                <li><strong>Telefono</strong> (Opcional)</li>
-                <li><strong>FechaNacimiento</strong> (Opcional, formato AAAA-MM-DD)</li>
-            </ul>
-            <p class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i><strong>Importante:</strong> Los nombres de las columnas en tu archivo Excel deben coincidir exactamente como se muestran arriba (respetando mayúsculas y minúsculas).</p>
-            <hr>
-            <form method="post" enctype="multipart/form-data">
-                <div class="mb-3">
-                    <label for="archivo_excel" class="form-label">Seleccionar Archivo de Excel</label>
-                    <input class="form-control" type="file" id="archivo_excel" name="archivo_excel" accept=".xlsx, .xls" required>
+    {# --- SECCIÓN DE RESULTADOS (aparece después de subir un archivo) --- #}
+    {% if procesado %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-secondary text-white">
+                    <h4 class="mb-0">Resultados de la Importación</h4>
                 </div>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-upload me-2"></i>Importar Clientes</button>
+                <div class="card-body">
+                    {% if resultados.insertados > 0 %}
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>Éxito:</strong> Se importaron <strong>{{ resultados.insertados }}</strong> clientes nuevos.
+                        </div>
+                    {% endif %}
+
+                    {% if resultados.errores %}
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Se encontraron {{ resultados.errores|length }} errores:</strong>
+                        </div>
+                        <ul class="list-group" style="max-height: 200px; overflow-y: auto;">
+                            {% for error in resultados.errores %}
+                                <li class="list-group-item list-group-item-dark">{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% elif resultados.insertados == 0 %}
+                         <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            No se encontraron clientes nuevos para importar en el archivo.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+
+    <div class="card bg-dark text-light border-secondary">
+        <div class="card-body p-4">
+            <h4 class="card-title text-warning mb-3">Instrucciones para la Importación</h4>
+            <p>Sube un archivo de Excel (<b>.xlsx</b> o <b>.xls</b>). La primera fila debe contener los siguientes nombres de columnas exactos (el orden no importa):</p>
+            
+            <ul class="list-group list-group-flush bg-transparent mb-4">
+                <li class="list-group-item bg-transparent text-light border-secondary">
+                    <i class="fas fa-check-circle text-success me-2"></i><b>RAZONSOCIALNOMBRES</b> (Obligatorio)
+                </li>
+                <li class="list-group-item bg-transparent text-light border-secondary">
+                    <i class="fas fa-check-circle text-success me-2"></i><b>TELEFONO</b> (Obligatorio - Se puede repetir para clientes con nombres diferentes, ej: familiares)
+                </li>
+                <li class="list-group-item bg-transparent text-light border-secondary">
+                    <i class="fas fa-info-circle text-info me-2"></i><b>APELLIDOS</b> (Opcional)
+                </li>
+                <li class="list-group-item bg-transparent text-light border-secondary">
+                    <i class="fas fa-id-card text-info me-2"></i><b>NUMERODOCUMENTO</b> (Opcional - Debe ser <b>único</b> en todo el sistema si se proporciona)
+                </li>
+                <li class="list-group-item bg-transparent text-light border-secondary">
+                    <i class="fas fa-info-circle text-muted me-2"></i><b>TIPODOCUMENTO</b> (Opcional - Ej: DNI, RUC)
+                </li>
+                <li class="list-group-item bg-transparent text-light border-secondary">
+                    <i class="fas fa-envelope text-muted me-2"></i><b>EMAIL</b> (Opcional)
+                </li>
+                <li class="list-group-item bg-transparent text-light border-secondary">
+                    <i class="fas fa-map-marker-alt text-muted me-2"></i><b>DIRECCION</b> (Opcional)
+                </li>
+                <li class="list-group-item bg-transparent text-light border-secondary">
+                    <i class="fas fa-venus-mars text-muted me-2"></i><b>GENERO</b> (Opcional - Ej: Masculino, Femenino)
+                </li>
+                <li class="list-group-item bg-transparent text-light border-secondary">
+                    <i class="fas fa-cut text-muted me-2"></i><b>PREFERENCIASERVICIO</b> (Opcional - Ej: Barberia, Salon, Ambos)
+                </li>
+                <li class="list-group-item bg-transparent text-light border-secondary">
+                    <i class="fas fa-birthday-cake text-muted me-2"></i><b>FECHANACIMIENTO</b> (Opcional - Formato recomendado: AAAA-MM-DD)
+                </li>
+                <li class="list-group-item bg-transparent text-light border-secondary">
+                    <i class="fas fa-calendar-check text-muted me-2"></i><b>FECHAREGISTRO</b> (Opcional - Si se deja vacío, se usará la fecha de hoy)
+                </li>
+            </ul>
+
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Reglas de Duplicados:</strong> El sistema omitirá cualquier fila que cumpla alguna de estas condiciones:
+                <ul class="mb-0">
+                    <li>El <strong>NUMERODOCUMENTO</strong> (si se proporciona) ya existe en la base de datos.</li>
+                    <li>La combinación de <strong>TELEFONO</strong> y <strong>RAZONSOCIALNOMBRES</strong> (ignorando mayúsculas/minúsculas) ya existe.</li>
+                </ul>
+            </div>
+
+            <form method="POST" enctype="multipart/form-data" class="mt-4">
+                <div class="mb-3">
+                    <label for="archivo" class="form-label">Seleccionar Archivo de Excel</label>
+                    <input class="form-control form-control-lg bg-secondary text-light border-.secondary" type="file" id="archivo" name="archivo" accept=".xlsx, .xls" required>
+                </div>
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-warning btn-lg">
+                        <i class="fas fa-upload me-2"></i>Importar Clientes
+                    </button>
+                </div>
             </form>
         </div>
     </div>

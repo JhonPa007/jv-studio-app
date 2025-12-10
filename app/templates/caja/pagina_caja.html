@@ -1,0 +1,41 @@
+<div class="card bg-dark border-secondary mt-4">
+    <div class="card-header border-secondary">
+        <h5 class="text-warning"><i class="fas fa-hand-holding-usd me-2"></i>Comisiones Pendientes</h5>
+    </div>
+    <div class="card-body">
+        {% if comisiones_pendientes %}
+        <div class="table-responsive">
+            <table class="table table-dark table-hover">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Colaborador</th>
+                        <th>Concepto</th>
+                        <th class="text-end">Monto</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for com in comisiones_pendientes %}
+                    <tr>
+                        <td>{{ com.fecha_fmt }}</td>
+                        <td>{{ com.colaborador }}</td>
+                        <td>{{ com.concepto }}</td>
+                        <td class="text-end text-success fw-bold">S/ {{ "%.2f"|format(com.monto_comision) }}</td>
+                        <td>
+                            <form action="{{ url_for('main.pagar_comision_caja', comision_id=com.id) }}" method="POST" onsubmit="return confirm('¿Pagar esta comisión con dinero de caja?');">
+                                <button type="submit" class="btn btn-sm btn-outline-success">
+                                    <i class="fas fa-money-bill-wave"></i> Pagar
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <p class="text-muted text-center">No hay comisiones pendientes en esta sucursal.</p>
+        {% endif %}
+    </div>
+</div>

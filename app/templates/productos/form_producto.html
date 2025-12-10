@@ -17,7 +17,7 @@
             {{ titulo_form | default('Gestionar Producto') }}
         </h2>
         
-        {% include 'partials/_flash_messages.html' %}
+        
 
         {# data_source será form_data si hay error de validación, o producto si estamos editando #}
         {% set data_source = form_data if form_data else (producto if producto else {}) %}

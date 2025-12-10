@@ -26,7 +26,7 @@
             {{ titulo_form | default('Gestionar Proveedor') }}
         </h2>
         
-        {% include 'partials/_flash_messages.html' %}
+        
 
         {% set data_source = form_data if form_data else (proveedor if proveedor else {}) %}
 

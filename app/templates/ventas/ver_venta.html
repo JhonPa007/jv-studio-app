@@ -8,6 +8,34 @@
     .info-card dt { font-weight: bold; color: var(--color-secundario-gris); }
     .info-card dd { margin-bottom: .5rem; color: #f8f9fa; }
     .items-table th { color: var(--color-acento-dorado); }
+    
+    /* Estilos para el Modal Oscuro */
+    .modal-content.bg-dark {
+        border: 1px solid var(--color-acento-dorado);
+        color: #fff;
+    }
+    .btn-print-option {
+        width: 100%;
+        margin-bottom: 10px;
+        padding: 15px;
+        text-align: left;
+        font-size: 1.1rem;
+        border: 1px solid #555;
+        background-color: #2c2c2c;
+        color: #fff;
+        transition: all 0.2s;
+    }
+    .btn-print-option:hover {
+        background-color: #444;
+        border-color: var(--color-acento-dorado);
+        color: var(--color-acento-dorado);
+    }
+    .btn-print-option i {
+        font-size: 1.5rem;
+        margin-right: 15px;
+        width: 30px;
+        text-align: center;
+    }
 </style>
 {% endblock %}
 
@@ -17,26 +45,41 @@
         <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-file-invoice me-2"></i>{{ titulo_pagina }}</h2>
         
         <div class="ms-auto">
-            <a href="{{ url_for('main.listar_ventas') }}" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left me-1"></i>Volver</a>
+            <a href="{{ url_for('main.listar_ventas') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left me-1"></i>Volver
+            </a>
             
-            <a href="{{ url_for('main.imprimir_ticket_venta', venta_id=venta.venta_id) }}" target="_blank" class="btn btn-outline-light btn-sm ms-2"><i class="fas fa-print me-1"></i>Ticket</a>
+            <button type="button" class="btn btn-warning btn-sm ms-2 fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#modalImpresion">
+                <i class="fas fa-print me-1"></i> Imprimir
+            </button>
             
-            <a href="{{ url_for('main.generar_xml_venta', venta_id=venta.venta_id) }}" class="btn btn-outline-info btn-sm ms-2"><i class="fas fa-code me-1"></i>XML</a>
-            
-            <form class="d-inline" method="POST" action="{{ url_for('main.enviar_sunat', venta_id=venta.venta_id) }}" onsubmit="return confirm('¿Enviar este comprobante a SUNAT?');">
-                <button type="submit" class="btn btn-primary btn-sm ms-2"><i class="fas fa-paper-plane me-1"></i>Enviar a SUNAT</button>
-            </form>
+            {# --- Lógica de botones de SUNAT --- #}
+            {% if venta.tipo_comprobante != 'Nota de Venta' %}
+                
+                <a href="{{ url_for('main.generar_xml_venta', venta_id=venta.id) }}" class="btn btn-outline-info btn-sm ms-2">
+                    <i class="fas fa-code me-1"></i> XML
+                </a>
 
-            {% if venta.estado_pago != 'Anulado' %}
-            <a href="{{ url_for('main.editar_venta', venta_id=venta.venta_id) }}" class="btn btn-warning btn-sm ms-2"><i class="fas fa-edit me-1"></i>Editar</a>
-            <form class="d-inline" method="POST" action="{{ url_for('main.anular_venta', venta_id=venta.venta_id) }}" onsubmit="return confirm('¿Seguro que deseas ANULAR esta venta?');">
-                <button type="submit" class="btn btn-danger btn-sm ms-2"><i class="fas fa-times-circle me-1"></i>Anular</button>
-            </form>
+                {% if venta.estado_sunat == 'Aceptada' %}
+                    <a href="{{ url_for('main.descargar_cdr', venta_id=venta.id) }}" class="btn btn-info btn-sm ms-2 text-white">
+                        <i class="fas fa-download me-1"></i> Descargar CDR
+                    </a>
+                {% else %}
+                    <form class="d-inline" method="POST" action="{{ url_for('main.enviar_sunat', venta_id=venta.id) }}" onsubmit="return confirm('¿Confirmas el envío a SUNAT?');">
+                        <button type="submit" class="btn btn-primary btn-sm ms-2">
+                            <i class="fas fa-paper-plane me-1"></i> Enviar a SUNAT
+                        </button>
+                    </form>
+                {% endif %}
             {% endif %}
+            
+            {% if venta.estado_pago != 'Anulado' %}
+                <a href="{{ url_for('main.editar_venta', venta_id=venta.id) }}" class="btn btn-secondary btn-sm ms-2">
+                    <i class="fas fa-edit me-1"></i> Editar
+                </a>
+                {% endif %}
         </div>
     </div>
-
-    {% include 'partials/_flash_messages.html' %}
 
     <div class="row">
         <div class="col-lg-7 mb-4">
@@ -45,30 +88,39 @@
                 <hr>
                 <dl class="row">
                     <dt class="col-sm-4">Comprobante:</dt>
-                    <dd class="col-sm-8">{{ venta.tipo_comprobante or 'N/A' }} - <strong>{{ venta.serie_comprobante }}-{{ venta.numero_comprobante }}</strong></dd>
+                    <dd class="col-sm-8">
+                        {{ venta.tipo_comprobante or 'N/A' }} - 
+                        <strong>{{ venta.serie_comprobante }}-{{ venta.numero_comprobante }}</strong>
+                    </dd>
 
                     <dt class="col-sm-4">Fecha:</dt>
-                    <dd class="col-sm-8">{{ venta.fecha_venta.strftime('%d/%m/%Y %H:%M') }}</dd>
+                    <dd class="col-sm-8">
+                        {% if venta.fecha_venta %}
+                            {{ venta.fecha_venta.strftime('%d/%m/%Y %H:%M') }}
+                        {% else %} - {% endif %}
+                    </dd>
 
                     <dt class="col-sm-4">Sucursal:</dt>
                     <dd class="col-sm-8">{{ venta.sucursal_nombre }}</dd>
 
                     <dt class="col-sm-4">Colaborador:</dt>
-                    <dd class="col-sm-8">{{ venta.colaborador_nombre }}</dd>
+                    <dd class="col-sm-8">{{ venta.empleado_nombre or venta.colaborador_nombre }}</dd>
 
                     <dt class="col-sm-4">Cliente Atendido:</dt>
-                    <dd class="col-sm-8">{{ venta.cliente_receptor_nombre or 'Cliente Varios' }}</dd>
-
-                    {% if venta.cliente_facturacion_id and venta.cliente_facturacion_id != venta.cliente_receptor_id %}
-                    <dt class="col-sm-4">Facturado a:</dt>
-                    <dd class="col-sm-8">{{ venta.cliente_factura_nombre }}</dd>
-                    {% endif %}
+                    <dd class="col-sm-8">{{ venta.cliente_nombre or venta.cliente_receptor_nombre or 'Cliente Varios' }}</dd>
 
                     <dt class="col-sm-4">Estado SUNAT:</dt>
                     <dd class="col-sm-8">
-                        {% if venta.estado_sunat == 'Aceptada' %}<span class="badge bg-success">{{ venta.estado_sunat }}</span>
-                        {% elif venta.estado_sunat == 'Rechazada' %}<span class="badge bg-danger">{{ venta.estado_sunat }}</span>
-                        {% else %}<span class="badge bg-secondary">{{ venta.estado_sunat or 'Pendiente' }}</span>
+                        {% if venta.tipo_comprobante == 'Nota de Venta' %}
+                            <span class="badge bg-secondary">INTERNO</span>
+                        {% else %}
+                             {% if venta.estado_sunat == 'Aceptada' %}
+                                <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Aceptada</span>
+                            {% elif 'Rechazada' in (venta.estado_sunat or '') %}
+                                <span class="badge bg-danger"><i class="fas fa-times-circle me-1"></i> Rechazada</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">Por Enviar</span>
+                            {% endif %}
                         {% endif %}
                     </dd>
                 </dl>
@@ -91,12 +143,12 @@
                 <h5 class="mt-3">Pagos Realizados</h5>
                 <ul class="list-group list-group-flush">
                 {% for pago in pagos %}
-                    <li class="list-group-item bg-transparent text-light d-flex justify-content-between">
+                    <li class="list-group-item bg-transparent text-light d-flex justify-content-between px-0">
                         <span>{{ pago.metodo_pago }}</span>
                         <span>S/ {{ "%.2f"|format(pago.monto) }}</span>
                     </li>
                 {% else %}
-                    <li class="list-group-item bg-transparent text-muted">No se registraron pagos.</li>
+                    <li class="list-group-item bg-transparent text-muted px-0">No se registraron pagos detallados.</li>
                 {% endfor %}
                 </ul>
             </div>
@@ -106,10 +158,10 @@
     <div class="info-card mt-2">
         <h4><i class="fas fa-box-open me-2"></i>Ítems de la Venta</h4>
         <div class="table-responsive">
-            <table class="table table-sm table-custom items-table">
+            <table class="table table-sm table-custom items-table text-light">
                 <thead>
                     <tr>
-                        <th>Cant.</th>
+                        <th class="text-center">Cant.</th>
                         <th>Descripción</th>
                         <th class="text-end">P. Unitario</th>
                         <th class="text-end">Subtotal</th>
@@ -118,7 +170,7 @@
                 <tbody>
                     {% for item in items %}
                     <tr>
-                        <td class="text-center">{{ item.cantidad }}</td>
+                        <td class="text-center">{{ item.cantidad|int }}</td>
                         <td>
                             {{ item.descripcion_item_venta }}
                             {% if item.notas_item %}
@@ -131,6 +183,38 @@
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalImpresion" tabindex="-1" aria-labelledby="modalImpresionLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-warning" id="modalImpresionLabel">
+                    <i class="fas fa-print me-2"></i>Seleccione Formato
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted mb-3">¿Qué formato desea imprimir para este comprobante?</p>
+                
+                <a href="{{ url_for('main.ver_ticket', venta_id=venta.id) }}" target="_blank" class="btn btn-print-option text-decoration-none d-flex align-items-center">
+                    <i class="fas fa-receipt text-info"></i>
+                    <div>
+                        <div class="fw-bold">Ticket / Voucher (80mm)</div>
+                        <small class="text-muted">Para impresora térmica estándar.</small>
+                    </div>
+                </a>
+
+                <a href="{{ url_for('main.ver_ticket', venta_id=venta.id) }}?formato=a4" target="_blank" class="btn btn-print-option text-decoration-none d-flex align-items-center">
+                    <i class="fas fa-file-pdf text-danger"></i>
+                    <div>
+                        <div class="fw-bold">Hoja Completa (A4)</div>
+                        <small class="text-muted">Formato factura/boleta estándar.</small>
+                    </div>
+                </a>
+            </div>
         </div>
     </div>
 </div>

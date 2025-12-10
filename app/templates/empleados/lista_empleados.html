@@ -12,8 +12,7 @@
         </a>
     </div>
 
-    {% include 'partials/_flash_messages.html' %}
-
+    
     {% if empleados %}
     <div class="table-responsive">
         <table class="table table-hover table-custom table-sm">
@@ -36,7 +35,7 @@
                         <small class="d-block text-muted">{{ emp.nombres }} {{ emp.apellidos }}</small>
                     </td>
                     <td>{{ emp.dni if emp.dni else '-' }}</td>
-                    <td>{{ emp.sucursal_nombre if emp.sucursal_nombre else '-' }}</td>
+                    <td>{{ emp.sucursales_nombres if emp.sucursales_nombres else '-' }}</td>
                     <td>{{ emp.rol_nombre if emp.rol_nombre else 'Sin Rol' }}</td>
                     <td>{{ "%.2f"|format(emp.sueldo_base) if emp.sueldo_base is not none else '-' }}</td>
                     <td>

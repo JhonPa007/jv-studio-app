@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+
+{% block title %}Nueva Venta{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Nueva Venta</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Dashboard</a></li>
+        <li class="breadcrumb-item active">Nueva Venta</li>
+    </ol>
+
+    <div class="card bg-dark text-light">
+        <div class="card-header">
+            <h5 class="mb-0">Registro de Venta</h5>
+        </div>
+        <div class="card-body">
+            <form id="form-venta" method="POST" action="{{ url_for('main.nueva_venta') }}">
+                <!-- Fila de Cliente y Comprobante -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="cliente_id" class="form-label">Cliente</label>
+                        <select id="cliente_id" name="cliente_id" class="form-select" required>
+                            <option value="" disabled selected>Seleccione un cliente...</option>
+                            {% for cli in clientes %}
+                                <option value="{{ cli.id }}" 
+                                        data-fecha="{{ cli.fecha_nac_str }}" 
+                                        data-validado="{{ 'true' if cli.cumpleanos_validado else 'false' }}" 
+                                        data-rechazo="{{ 'true' if cli.rechazo_dato_cumpleanos else 'false' }}">
+                                    {{ cli.razon_social_nombres }} {{ cli.apellidos or '' }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="tipo_comprobante" class="form-label">Tipo de Comprobante</label>
+                        <select id="tipo_comprobante" name="tipo_comprobante" class="form-select">
+                            <option value="BOLETA">Boleta</option>
+                            <option value="FACTURA">Factura</option>
+                            <option value="NOTA_VENTA">Nota de Venta</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Sección de Servicios -->
+                <div class="card mb-4 bg-secondary text-light">
+                    <div class="card-header">
+                        <h6 class="mb-0">Servicios</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="servicios-container">
+                            <!-- Filas de servicios se añadirán aquí dinámicamente -->
+                        </div>
+                        <button type="button" class="btn btn-outline-light btn-sm" id="btn-agregar-servicio">
+                            <i class="fas fa-plus"></i> Agregar Servicio
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sección de Productos -->
+                <div class="card mb-4 bg-secondary text-light">
+                    <div class="card-header">
+                        <h6 class="mb-0">Productos</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="productos-container">
+                            <!-- Filas de productos se añadirán aquí dinámicamente -->
+                        </div>
+                        <button type="button" class="btn btn-outline-light btn-sm" id="btn-agregar-producto">
+                            <i class="fas fa-plus"></i> Agregar Producto
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Totales y Pago -->
+                <div class="row justify-content-end">
+                    <div class="col-md-4">
+                        <ul class="list-group">
+                            <li class="list-group-item bg-dark text-light d-flex justify-content-between align-items-center">
+                                Subtotal Servicios: <span id="subtotal-servicios">S/ 0.00</span>
+                            </li>
+                            <li class="list-group-item bg-dark text-light d-flex justify-content-between align-items-center">
+                                Subtotal Productos: <span id="subtotal-productos">S/ 0.00</span>
+                            </li>
+                            <li class="list-group-item bg-dark text-light d-flex justify-content-between align-items-center h5">
+                                <strong>Total:</strong> <strong id="total-venta">S/ 0.00</strong>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                 <div class="mt-4 text-end">
+                    <button type="submit" class="btn btn-primary">Registrar Venta</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Campaña Cumpleaños -->
+<div class="modal fade" id="modalCumpleanos" tabindex="-1" aria-labelledby="modalCumpleanosLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-dark bg-dark text-light">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="modalCumpleanosLabel">🎉 ¡Ayúdanos a completar los datos! 🎉</h5>
+            </div>
+            <div class="modal-body">
+                <!-- Vista 1: Confirmar Fecha -->
+                <div id="vista-confirmar">
+                    <p>Hemos encontrado una fecha de cumpleaños para este cliente:</p>
+                    <h4 class="text-center text-info" id="fecha-existente"></h4>
+                    <p class="mt-3">¿Es correcta esta fecha?</p>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" class="btn btn-outline-danger" id="btn-corregir-fecha">No, corregir</button>
+                        <button type="button" class="btn btn-success" id="btn-confirmar-fecha">Sí, es correcta</button>
+                    </div>
+                </div>
+                <!-- Vista 2: Solicitar Fecha -->
+                <div id="vista-solicitar" style="display: none;">
+                    <p>No tenemos la fecha de cumpleaños de este cliente. ¿Podrías registrarla?</p>
+                    <div class="mb-3">
+                        <label for="input-fecha-nacimiento" class="form-label">Fecha de Nacimiento</label>
+                        <input type="date" class="form-control" id="input-fecha-nacimiento">
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" class="btn btn-outline-secondary" id="btn-no-decir">Prefiero no decirlo</button>
+                        <button type="button" class="btn btn-primary" id="btn-guardar-fecha">Guardar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+
+    // Inicializar Select2
+    const clienteSelect = $('#cliente_id').select2({
+        theme: "bootstrap-5",
+        placeholder: 'Seleccione un cliente...',
+        language: "es"
+    });
+
+    // --- LÓGICA CAMPAÑA CUMPLEAÑOS ---
+    const modalEl = document.getElementById('modalCumpleanos');
+    const modalCumpleanos = new bootstrap.Modal(modalEl);
+    
+    let selectedClienteOption = null;
+
+    clienteSelect.on('select2:select', function(e) {
+        const selectedOption = e.params.data.element;
+        selectedClienteOption = selectedOption;
+        
+        const validado = selectedOption.dataset.validado === 'true';
+        const rechazo = selectedOption.dataset.rechazo === 'true';
+        const fecha = selectedOption.dataset.fecha;
+
+        if (!validado && !rechazo) {
+            if (fecha) {
+                // Vista Confirmar
+                document.getElementById('fecha-existente').textContent = new Date(fecha + 'T00:00:00').toLocaleDateString();
+                document.getElementById('vista-confirmar').style.display = 'block';
+                document.getElementById('vista-solicitar').style.display = 'none';
+            } else {
+                // Vista Solicitar
+                document.getElementById('vista-confirmar').style.display = 'none';
+                document.getElementById('vista-solicitar').style.display = 'block';
+                document.getElementById('input-fecha-nacimiento').value = '';
+            }
+            modalCumpleanos.show();
+        }
+    });
+
+    // --- MANEJADORES DE EVENTOS DEL MODAL ---
+    
+    // Vista Confirmar: Botón 'Sí, es correcta'
+    document.getElementById('btn-confirmar-fecha').addEventListener('click', function() {
+        enviarActualizacion(true, null, false);
+    });
+
+    // Vista Confirmar: Botón 'No, corregir'
+    document.getElementById('btn-corregir-fecha').addEventListener('click', function() {
+        document.getElementById('vista-confirmar').style.display = 'none';
+        document.getElementById('vista-solicitar').style.display = 'block';
+        document.getElementById('input-fecha-nacimiento').value = selectedClienteOption.dataset.fecha || '';
+    });
+
+    // Vista Solicitar: Botón 'Guardar'
+    document.getElementById('btn-guardar-fecha').addEventListener('click', function() {
+        const nuevaFecha = document.getElementById('input-fecha-nacimiento').value;
+        if (nuevaFecha) {
+            enviarActualizacion(true, nuevaFecha, false);
+        } else {
+            // Opcional: mostrar un pequeño error si no se ingresa fecha
+            alert('Por favor, ingrese una fecha.');
+        }
+    });
+
+    // Vista Solicitar: Botón 'Prefiero no decirlo'
+    document.getElementById('btn-no-decir').addEventListener('click', function() {
+        enviarActualizacion(false, null, true);
+    });
+
+
+    function enviarActualizacion(validado, fecha, rechazo) {
+        const clienteId = selectedClienteOption.value;
+        const payload = {
+            cliente_id: clienteId,
+            cumpleanos_validado: validado,
+            fecha_nacimiento: fecha, // puede ser null
+            rechazo_dato_cumpleanos: rechazo
+        };
+
+        fetch('/api/clientes/actualizar-campana', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                // Incluir CSRF token si es necesario en tu app
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Actualizar el DOM para no volver a preguntar
+                if (selectedClienteOption) {
+                    selectedClienteOption.dataset.validado = validado.toString();
+                    selectedClienteOption.dataset.rechazo = rechazo.toString();
+                    if (fecha) {
+                       selectedClienteOption.dataset.fecha = fecha;
+                    }
+                }
+                modalCumpleanos.hide();
+                // Opcional: mostrar un toast de éxito
+            } else {
+                // Opcional: mostrar un toast de error
+                alert(data.message || 'Hubo un error al actualizar los datos.');
+            }
+        })
+        .catch(error => {
+            console.error('Error en la API:', error);
+            alert('Error de conexión al intentar actualizar los datos.');
+        });
+    }
+
+});
+</script>
+{% endblock %}

@@ -16,7 +16,7 @@
         {#<span class="text-light">{{ "now"|strftime('%A, %d de %B de %Y') }}</span>#}
     </div>
 
-    {% include 'partials/_flash_messages.html' %}
+    
 
     {# --- VISTA PARA EL ROL DE ADMINISTRADOR --- #}
     {% if current_user.rol == 'Administrador' %}

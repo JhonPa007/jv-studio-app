@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Configuración Visual & Marca - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .form-section { background-color: var(--color-secundario, #3a3a3a); padding: 25px; border-radius: 8px; margin-bottom: 20px; }
+    .form-section h2 { color: var(--color-primario, #ffc107); margin-bottom: 20px; border-bottom: 1px solid var(--color-primario, #ffc107); padding-bottom: 10px; }
+    .color-picker-wrapper { display: flex; align-items: center; gap: 10px; }
+    .color-picker-wrapper input[type="color"] { min-width: 40px; height: 40px; border-radius: 5px; border: 1px solid #555; padding: 2px; cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="form-section mx-auto" style="max-width: 900px;">
+        <h2><i class="fas fa-palette me-2"></i>Configuración Visual & Marca</h2>
+        
+
+        <form method="POST" action="{{ url_for('main.configurar_sistema') }}">
+            
+            <div class="mb-4">
+                <label for="nombre_empresa" class="form-label">Nombre de la Empresa</label>
+                <input type="text" class="form-control" id="nombre_empresa" name="nombre_empresa" value="{{ config.get('nombre_empresa', 'JV Studio') }}" required>
+            </div>
+
+            <hr class="my-4">
+            <h4>Paleta de Colores del Sistema</h4>
+
+            <div class="row">
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <label for="color_primario" class="form-label">Color Primario</label>
+                    <small class="d-block text-muted mb-1">Botones, énfasis</small>
+                    <div class="color-picker-wrapper">
+                        <input type="color" id="color_primario" name="color_primario" value="{{ config.get('color_primario', '#ffc107') }}">
+                        <input type="text" class="form-control" value="{{ config.get('color_primario', '#ffc107') }}">
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <label for="color_secundario" class="form-label">Color Secundario</label>
+                     <small class="d-block text-muted mb-1">Tarjetas, menús</small>
+                    <div class="color-picker-wrapper">
+                        <input type="color" id="color_secundario" name="color_secundario" value="{{ config.get('color_secundario', '#3a3a3a') }}">
+                        <input type="text" class="form-control" value="{{ config.get('color_secundario', '#3a3a3a') }}">
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <label for="color_fondo" class="form-label">Color de Fondo</label>
+                    <small class="d-block text-muted mb-1">Fondo general</small>
+                    <div class="color-picker-wrapper">
+                        <input type="color" id="color_fondo" name="color_fondo" value="{{ config.get('color_fondo', '#212529') }}">
+                        <input type="text" class="form-control" value="{{ config.get('color_fondo', '#212529') }}">
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <label for="color_texto" class="form-label">Color de Texto</label>
+                    <small class="d-block text-muted mb-1">Texto principal</small>
+                    <div class="color-picker-wrapper">
+                        <input type="color" id="color_texto" name="color_texto" value="{{ config.get('color_texto', '#ffffff') }}">
+                        <input type="text" class="form-control" value="{{ config.get('color_texto', '#ffffff') }}">
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <label for="color_sidebar_fondo" class="form-label">Fondo Menú Lateral</label>
+                    <div class="color-picker-wrapper">
+                        <input type="color" id="color_sidebar_fondo" name="color_sidebar_fondo" value="{{ config.get('color_sidebar_fondo', '#ffffff') }}">
+                        <input type="text" class="form-control" value="{{ config.get('color_sidebar_fondo', '#ffffff') }}">
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <label for="color_sidebar_texto" class="form-label">Texto Menú Lateral</label>
+                    <div class="color-picker-wrapper">
+                        <input type="color" id="color_sidebar_texto" name="color_sidebar_texto" value="{{ config.get('color_sidebar_texto', '#3a3a3a') }}">
+                        <input type="text" class="form-control" value="{{ config.get('color_sidebar_texto', '#3a3a3a') }}">
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <label for="color_navbar_fondo" class="form-label">Fondo Barra Superior</label>
+                    <div class="color-picker-wrapper">
+                        <input type="color" id="color_navbar_fondo" name="color_navbar_fondo" value="{{ config.get('color_navbar_fondo', '#1a1a1a') }}">
+                        <input type="text" class="form-control" value="{{ config.get('color_navbar_fondo', '#1a1a1a') }}">
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-info mt-3">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>Nota:</strong> Los cambios de color se previsualizan en esta página. Al guardar, afectarán a todos los usuarios en todo el sitio.
+            </div>
+
+            <div class="text-end mt-4">
+                <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Objeto para mapear IDs de inputs a variables CSS
+    const colorMap = {
+        'color_primario': '--color-primario',
+        'color_secundario': '--color-secundario',
+        'color_fondo': '--color-fondo',
+        'color_texto': '--color-texto'
+    };
+
+    const wrappers = document.querySelectorAll('.color-picker-wrapper');
+    
+    wrappers.forEach(wrapper => {
+        const colorInput = wrapper.querySelector('input[type="color"]');
+        const textInput = wrapper.querySelector('input[type="text"]');
+        const cssVar = colorMap[colorInput.id];
+
+        // Sincronizar texto -> color y previsualizar
+        textInput.addEventListener('input', function() {
+            colorInput.value = this.value;
+            if (cssVar) {
+                document.documentElement.style.setProperty(cssVar, this.value);
+            }
+        });
+        
+        // Sincronizar color -> texto y previsualizar
+        colorInput.addEventListener('input', function() {
+            textInput.value = this.value;
+             if (cssVar) {
+                document.documentElement.style.setProperty(cssVar, this.value);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

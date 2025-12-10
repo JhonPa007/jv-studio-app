@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Historial de Cajas - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-light"><i class="fas fa-history text-warning me-2"></i>Historial de Cajas</h2>
+        <a href="{{ url_for('main.gestionar_caja') }}" class="btn btn-outline-info">
+            <i class="fas fa-calculator me-1"></i> Caja Actual
+        </a>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0 align-middle">
+                    <thead class="bg-secondary text-white">
+                        <tr>
+                            <th>Estado</th>
+                            <th>Apertura / Cierre</th>
+                            <th>Cajero</th>
+                            <th class="text-end">Inicial</th>
+                            <th class="text-end">Ventas</th>
+                            <th class="text-end text-warning">Final</th>
+                            <th class="text-center">Destino</th>
+                            <th class="text-center">Recepción</th>
+                            <th class="text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in sesiones %}
+                        <tr>
+                            <td>
+                                {% if s.estado == 'Abierta' %}
+                                    <span class="badge bg-success">Abierta</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Cerrada</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div><i class="fas fa-door-open text-success me-1"></i>{{ s.inicio_fmt }}</div>
+                                {% if s.fin_fmt %}
+                                <div class="small text-muted"><i class="fas fa-door-closed text-danger me-1"></i>{{ s.fin_fmt }}</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="fw-bold">{{ s.cajero_nombre }}</div>
+                                <small class="text-muted">{{ s.sucursal_nombre }}</small>
+                            </td>
+                            <td class="text-end">S/ {{ "%.2f"|format(s.monto_inicial) }}</td>
+                            <td class="text-end text-success">+{{ "%.2f"|format((s.total_ventas_efectivo or 0) + (s.total_ventas_digital or 0)) }}</td>
+                            <td class="text-end fw-bold text-warning">
+                                {% if s.monto_final_real is not none %}S/ {{ "%.2f"|format(s.monto_final_real) }}{% else %}-{% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if s.destino_remanente == 'Gerencia' %}
+                                    <span class="badge bg-warning text-dark">Gerencia</span>
+                                {% elif s.destino_remanente == 'Caja' %}
+                                    <span class="badge bg-info text-dark">En Caja</span>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if s.destino_remanente == 'Gerencia' %}
+                                    {% if s.estado_entrega == 'Conforme' %}
+                                        <span class="text-success fw-bold"><i class="fas fa-check-double"></i> Recibido</span>
+                                    {% else %}
+                                        {% if current_user.rol_nombre == 'Administrador' %}
+                                            <form action="{{ url_for('main.confirmar_recepcion_caja', sesion_id=s.id) }}" method="POST" class="d-inline">
+                                                <button type="submit" class="btn btn-sm btn-outline-success" title="Confirmar Recepción" onclick="return confirm('¿Confirmas que has recibido el dinero físico?');">
+                                                    <i class="fas fa-hand-holding-usd"></i> Recibir
+                                                </button>
+                                            </form>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Pendiente</span>
+                                        {% endif %}
+                                    {% endif %}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <a href="{{ url_for('main.ver_detalle_caja', sesion_id=s.id) }}" class="btn btn-sm btn-info" title="Ver Detalle">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="9" class="text-center py-5 text-muted">No hay historial.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

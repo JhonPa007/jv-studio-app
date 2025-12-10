@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}Emitir Comprobante - JV Studio{% endblock %}
+
+{% block head_extra %}
+<style>
+    .comprobante-card {
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 2px solid transparent;
+    }
+    .comprobante-card:hover {
+        transform: translateY(-2px);
+        border-color: var(--color-acento-dorado);
+    }
+    .comprobante-card.selected {
+        background-color: rgba(255, 193, 7, 0.1);
+        border-color: var(--color-acento-dorado);
+    }
+    .comprobante-card.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card bg-dark border-secondary shadow-lg">
+                <div class="card-header border-secondary bg-transparent">
+                    <h3 class="text-light mb-0"><i class="fas fa-file-invoice-dollar text-warning me-2"></i>Emitir Comprobante Electrónico</h3>
+                </div>
+                <div class="card-body p-4">
+                    
+                    <div class="alert alert-dark border-secondary d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <small class="text-muted d-block">Venta #{{ venta.id }} - {{ venta.fecha_venta }}</small>
+                            <h4 class="mb-0 text-success fw-bold">Total: S/ {{ "%.2f"|format(venta.monto_final_venta) }}</h4>
+                        </div>
+                        <div class="text-end">
+                            <small class="text-muted d-block">Cliente Atendido</small>
+                            <span class="text-light">{{ venta.razon_social_nombres }} {{ venta.apellidos or '' }}</span>
+                        </div>
+                    </div>
+
+                    <form method="POST" action="{{ url_for('main.emitir_comprobante', venta_id=venta.id) }}" id="formEmision">
+                        
+                        <div class="mb-4">
+                            <label class="form-label text-warning mb-2">1. Datos de Facturación</label>
+                            
+                            <div class="input-group mb-2">
+                                <span class="input-group-text bg-secondary border-secondary text-light"><i class="fas fa-search"></i></span>
+                                <input type="text" class="form-control bg-dark text-light border-secondary" 
+                                       id="buscar_cliente" list="lista_clientes" 
+                                       placeholder="Buscar otro cliente (RUC/DNI)..." autocomplete="off">
+                                
+                                <button type="button" class="btn btn-outline-warning" onclick="resetearCliente()">
+                                    <i class="fas fa-undo"></i> Restaurar
+                                </button>
+                            </div>
+                            
+                            <div class="card bg-secondary bg-opacity-25 border-secondary p-3">
+                                <div class="row g-2">
+                                    <div class="col-md-8">
+                                        <label class="small text-muted">Razón Social / Nombre</label>
+                                        <input type="text" class="form-control-plaintext text-light fw-bold" 
+                                               id="nombre_cliente" readonly 
+                                               value="{{ cliente_sugerido.razon_social_nombres }} {{ cliente_sugerido.apellidos or '' }}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="small text-muted">Documento</label>
+                                        <input type="text" class="form-control-plaintext text-warning fw-bold" 
+                                               id="doc_cliente" readonly 
+                                               value="{{ cliente_sugerido.numero_documento or 'Sin Documento' }}">
+                                        <input type="hidden" id="tipo_doc_cliente" value="{{ cliente_sugerido.tipo_documento }}">
+                                        <input type="hidden" name="cliente_facturacion_id" id="cliente_facturacion_id" value="{{ cliente_sugerido.id }}">
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="text-danger mt-1 d-none" id="error_documento">⚠️ Este cliente no tiene documento válido para comprobantes.</small>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label text-warning mb-3">2. Tipo de Comprobante</label>
+                            <div class="row g-3">
+                                
+                                <div class="col-md-6">
+                                    <label class="card bg-secondary bg-opacity-10 border-secondary p-3 w-100 comprobante-card" id="card_boleta">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="tipo_comprobante" id="radio_boleta" value="Boleta" checked>
+                                            <span class="form-check-label ms-2 fw-bold text-light">Boleta de Venta</span>
+                                        </div>
+                                        <small class="text-muted d-block ms-4 mt-1">Para consumidor final (DNI o Sin Doc &lt; S/700)</small>
+                                    </label>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="card bg-secondary bg-opacity-10 border-secondary p-3 w-100 comprobante-card" id="card_factura">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="tipo_comprobante" id="radio_factura" value="Factura">
+                                            <span class="form-check-label ms-2 fw-bold text-light">Factura Electrónica</span>
+                                        </div>
+                                        <small class="text-muted d-block ms-4 mt-1">Solo para RUC válido (11 dígitos)</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{{ url_for('main.listar_ventas') }}" class="btn btn-outline-secondary me-md-2">Cancelar</a>
+                            <button type="submit" class="btn btn-success btn-lg px-5" id="btn_emitir">
+                                <i class="fas fa-paper-plane me-2"></i>Emitir Comprobante
+                            </button>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<datalist id="lista_clientes"></datalist>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // Datos iniciales (Backup para restaurar)
+    const clienteOriginal = {
+        id: "{{ cliente_sugerido.id }}",
+        nombre: "{{ cliente_sugerido.razon_social_nombres }} {{ cliente_sugerido.apellidos or '' }}",
+        doc: "{{ cliente_sugerido.numero_documento or '' }}",
+        tipoDoc: "{{ cliente_sugerido.tipo_documento or '' }}"
+    };
+
+    function validarOpciones() {
+        const tipoDoc = document.getElementById('tipo_doc_cliente').value;
+        const numDoc = document.getElementById('doc_cliente').value;
+        const cardFactura = document.getElementById('card_factura');
+        const radioFactura = document.getElementById('radio_factura');
+        const cardBoleta = document.getElementById('card_boleta');
+        const radioBoleta = document.getElementById('radio_boleta');
+        const btnEmitir = document.getElementById('btn_emitir');
+        const errorDoc = document.getElementById('error_documento');
+
+        // Reset visual
+        cardFactura.classList.remove('disabled');
+        radioFactura.disabled = false;
+        btnEmitir.disabled = false;
+        errorDoc.classList.add('d-none');
+
+        // Lógica de Validación SUNAT
+        const esRUC = (tipoDoc === 'RUC' || (numDoc && numDoc.length === 11));
+        const tieneDoc = (numDoc && numDoc.length >= 8);
+
+        if (!esRUC) {
+            // Si no es RUC, deshabilitar Factura
+            cardFactura.classList.add('disabled');
+            radioFactura.disabled = true;
+            
+            // Si estaba seleccionada Factura, cambiar a Boleta
+            if (radioFactura.checked) {
+                radioBoleta.checked = true;
+                actualizarSeleccion();
+            }
+        }
+
+        // Si es Boleta > 700 soles, exige DNI (Validación extra opcional)
+        // ...
+    }
+
+    function actualizarSeleccion() {
+        document.querySelectorAll('.comprobante-card').forEach(c => c.classList.remove('selected'));
+        if (document.getElementById('radio_boleta').checked) document.getElementById('card_boleta').classList.add('selected');
+        if (document.getElementById('radio_factura').checked) document.getElementById('card_factura').classList.add('selected');
+    }
+
+    function resetearCliente() {
+        document.getElementById('cliente_facturacion_id').value = clienteOriginal.id;
+        document.getElementById('nombre_cliente').value = clienteOriginal.nombre;
+        document.getElementById('doc_cliente').value = clienteOriginal.doc || 'Sin Documento';
+        document.getElementById('tipo_doc_cliente').value = clienteOriginal.tipoDoc;
+        document.getElementById('buscar_cliente').value = '';
+        validarOpciones();
+    }
+
+    // Inicialización
+    document.querySelectorAll('input[name="tipo_comprobante"]').forEach(el => {
+        el.addEventListener('change', actualizarSeleccion);
+    });
+    
+    validarOpciones();
+    actualizarSeleccion();
+
+    // TODO: Aquí agregarías la lógica AJAX para buscar otro cliente en el datalist si lo deseas
+</script>
+{% endblock %}

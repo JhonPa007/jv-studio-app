@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Detalle de Gasto</h1>
+
+    <div class="card">
+        <div class="card-header">
+            Información del Gasto
+        </div>
+        <div class="card-body">
+            <p><strong>ID de Gasto:</strong> {{ gasto.id }}</p>
+            <p><strong>Descripción:</strong> {{ gasto.descripcion }}</p>
+            <p><strong>Monto:</strong> {{ gasto.monto }}</p>
+            <p><strong>Método de Pago:</strong> {{ gasto.metodo_pago }}</p>
+            <p><strong>Fecha:</strong> {{ gasto.fecha.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+            <p><strong>Usuario:</strong> {{ gasto.usuario.nombre }}</p>
+            <p><strong>Sucursal:</strong> {{ gasto.sucursal.nombre }}</p>
+            {% if gasto.caja_sesion_id %}
+            <p><strong>Sesión de Caja ID:</strong> {{ gasto.caja_sesion_id }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <a href="{{ url_for('routes.historial_caja') }}" class="btn btn-secondary mt-3">Volver</a>
+</div>
+{% endblock %}

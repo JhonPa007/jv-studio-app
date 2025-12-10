@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Ticket #{{ venta.numero_comprobante }}</title>
+    <style>
+        /* Estilos para Impresora Térmica (80mm) */
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            width: 76mm; /* Ajustado un poco menos de 80mm para márgenes físicos */
+            margin: 0 auto;
+            padding: 2px;
+            color: #000;
+            background-color: #fff;
+            font-size: 12px;
+            line-height: 1.2;
+        }
+        .header, .footer { text-align: center; margin-bottom: 10px; }
+        .header h2 { margin: 5px 0; font-size: 16px; font-weight: bold; text-transform: uppercase; }
+        .info { margin-bottom: 10px; border-bottom: 1px dashed #000; padding-bottom: 5px; }
+        .info p { margin: 2px 0; }
+        
+        table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+        th { text-align: left; border-bottom: 1px solid #000; font-size: 11px; }
+        td { padding: 4px 0; vertical-align: top; }
+        
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .fw-bold { font-weight: bold; }
+        
+        .totales { border-top: 1px dashed #000; padding-top: 5px; }
+        .totales p { margin: 3px 0; text-align: right; }
+        
+        .pagos { margin-top: 10px; font-size: 11px; border-top: 1px dashed #000; padding-top: 5px; }
+        
+        /* Botones de control */
+        .no-print { 
+            margin-bottom: 20px; 
+            text-align: center; 
+            background: #eee; 
+            padding: 10px; 
+            border-bottom: 1px solid #ccc; 
+        }
+        button {
+            padding: 8px 16px; 
+            cursor: pointer; 
+            font-size: 14px; 
+            border: 1px solid #999; 
+            border-radius: 4px;
+            background: #fff;
+        }
+        button:hover { background: #ddd; }
+
+        @media print {
+            .no-print { display: none; }
+            body { margin: 0; padding: 0; }
+        }
+    </style>
+</head>
+<body onload="window.print()">
+
+    <div class="no-print">
+        <button onclick="window.print()">🖨️ Imprimir</button>
+        <button onclick="window.close()">Cerrar Pestaña</button>
+    </div>
+
+    <div class="header">
+        <h2>{{ venta.sucursal_nombre }}</h2>
+        <p>{{ venta.sucursal_direccion }}</p>
+        </div>
+
+    <div class="info">
+        <div class="text-center fw-bold mb-2">
+            {{ venta.tipo_comprobante }}<br>
+            {{ venta.serie_comprobante }}-{{ venta.numero_comprobante }}
+        </div>
+        
+        <p>Fecha: {{ venta.fecha_venta.strftime('%d/%m/%Y %H:%M') }}</p>
+        
+        <p>Atendido por: {{ venta.empleado_nombre }}</p>
+        <p>Cliente: {{ venta.cliente_nombre }}</p>
+        
+        {% if venta.cliente_doc %}
+        <p>Doc: {{ venta.cliente_doc }}</p>
+        {% endif %}
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 10%;">Cant.</th>
+                <th style="width: 60%;">Descripción</th>
+                <th class="text-right" style="width: 30%;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td class="text-center">{{ item.cantidad|int }}</td>
+                <td>{{ item.descripcion_item_venta }}</td>
+                <td class="text-right">{{ "%.2f"|format(item.subtotal_item_neto) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="totales">
+        {% if venta.descuento_monto > 0 %}
+        <p>Subtotal: S/ {{ "%.2f"|format(venta.monto_total_venta + venta.descuento_monto) }}</p>
+        <p>Descuento: - S/ {{ "%.2f"|format(venta.descuento_monto) }}</p>
+        {% endif %}
+        <p class="fw-bold" style="font-size: 14px;">TOTAL: S/ {{ "%.2f"|format(venta.monto_final_venta) }}</p>
+    </div>
+
+    <div class="pagos">
+        <p class="fw-bold">Pagos:</p>
+        {% for pago in pagos %}
+        <div style="display:flex; justify-content:space-between;">
+            <span>{{ pago.metodo_pago }}</span>
+            <span>S/ {{ "%.2f"|format(pago.monto) }}</span>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="footer">
+        <p>*** Gracias por su preferencia ***</p>
+        <p>Vuelva Pronto</p>
+    </div>
+
+</body>
+</html>
