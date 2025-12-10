@@ -4654,7 +4654,7 @@ def nueva_venta():
                 c['texto_busqueda'] = f"{nombre_full} | Doc: {doc} | Tel: {tel}"
 
             # 2. Empleados Activos
-            cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE ORDER BY nombres")
+            cursor.execute("SELECT id, nombre_display FROM empleados WHERE activo = TRUE AND realiza_servicios = TRUE ORDER BY nombres")
             empleados = cursor.fetchall()
             
             # 3. Servicios Activos
