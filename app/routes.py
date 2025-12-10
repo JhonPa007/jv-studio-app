@@ -4626,8 +4626,8 @@ def nueva_venta():
 
         except Exception as e:
             if db_conn: db_conn.rollback()
-            import traceback
-            traceback.print_exc()
+            # import traceback
+            # traceback.print_exc()
             flash(f"Error al procesar la venta: {e}", "danger")
             return redirect(url_for('main.nueva_venta'))
         finally:
@@ -4636,7 +4636,7 @@ def nueva_venta():
     # --- LÓGICA GET (CARGAR FORMULARIO) ---
     try:
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # 1. Clientes (Actualizado con campos de campaña cumpleaños)
+            # 1. Clientes (Actualizado con campos de campaña)
             cursor.execute("""
                 SELECT id, razon_social_nombres, apellidos, telefono, numero_documento,
                        TO_CHAR(fecha_nacimiento, 'YYYY-MM-DD') as fecha_nac_str,
@@ -4646,33 +4646,41 @@ def nueva_venta():
             """)
             clientes = cursor.fetchall()
             
+            # Procesar texto de búsqueda (Asegúrate de que este 'for' esté alineado con 'clientes = ...')
             for c in clientes:
                 nombre_full = f"{c['razon_social_nombres']} {c['apellidos'] or ''}".strip()
                 doc = c['numero_documento'] or 'S/D'
                 tel = c['telefono'] or ''
                 c['texto_busqueda'] = f"{nombre_full} | Doc: {doc} | Tel: {tel}"
 
-            # Empleados, Servicios, Productos, Campañas
-            cursor.execute("SELECT id, nombre_display FROM empleados WHERE activo = TRUE AND realiza_servicios = TRUE ORDER BY nombres")
+            # 2. Empleados Activos
+            cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE ORDER BY nombres")
             empleados = cursor.fetchall()
+            
+            # 3. Servicios Activos
             cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY nombre")
             servicios = cursor.fetchall()
+            
+            # 4. Productos Activos (con stock)
             cursor.execute("SELECT id, nombre, precio_venta, stock_actual FROM productos WHERE activo = TRUE ORDER BY nombre")
             productos = cursor.fetchall()
+            
+            # 5. Campañas Vigentes
             cursor.execute("SELECT id, nombre FROM campanas WHERE activo = TRUE AND CURRENT_DATE BETWEEN fecha_inicio AND fecha_fin")
             campanas = cursor.fetchall()
             
-            # Nota: Asegúrate de que el nombre del template sea correcto. 
-            # En tu código anterior era 'ventas/form_venta.html' pero en nuestros pasos previos usamos 'ventas/nueva_venta.html'.
-            # Usaré el que tenías en tu código original para no romper nada.
             return render_template('ventas/form_venta.html',
-                                   clientes=clientes, empleados=empleados,
-                                   servicios=servicios, productos=productos,
-                                   campanas=campanas, hoy=date.today().strftime('%d/%m/%Y'))
+                                   clientes=clientes, 
+                                   empleados=empleados,
+                                   servicios=servicios, 
+                                   productos=productos,
+                                   campanas=campanas, 
+                                   hoy=date.today().strftime('%d/%m/%Y'))
                                    
     except Exception as e:
         flash(f"Error cargando formulario: {e}", "danger")
-        return redirect(url_for('main.index'))    
+        return redirect(url_for('main.index'))
+  
         
 @main_bp.route('/ventas/editar/<int:venta_id>', methods=['GET', 'POST'])
 @login_required

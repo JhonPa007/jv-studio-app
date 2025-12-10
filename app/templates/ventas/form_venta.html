@@ -4,64 +4,47 @@
 
 {% block head_extra %}
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+
 <style>
+    /* Estilos Generales Venta */
     .venta-header { background-color: var(--color-secundario); padding: 20px; border-radius: 8px; margin-bottom: 20px; }
     .venta-section { background-color: #2c2c2c; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #444; }
     .total-display { font-size: 2rem; font-weight: bold; color: var(--color-primario); text-align: right; }
     .balance-display { font-size: 1.2rem; text-align: right; }
     .table-items th { background-color: #444; color: #fff; }
-    .btn-add { height: 100%; }
-    .select2-container .select2-selection--single { height: 38px; }
     
-    /* CORRECCIÓN VISUAL PARA SELECT2 EN MODO OSCURO */
-    .select2-container--default .select2-selection--single {
-        background-color: #ffffff !important; 
-        color: #000000 !important;          
-        border: 1px solid #ced4da;
-        height: 38px; 
-        display: flex;
-        align-items: center;
-    }
-    .select2-container--default .select2-selection--single .select2-selection__rendered {
-        color: #000000 !important;
-        line-height: 36px;
-    }
-    .select2-dropdown {
-        background-color: #ffffff !important; 
-        color: #000000 !important;          
+    /* Corrección Select2 Modo Oscuro */
+    .select2-container--bootstrap-5 .select2-selection {
+        background-color: #fff;
+        color: #000;
         border: 1px solid #ced4da;
     }
-    .select2-container--default .select2-results__option {
-        color: #000000 !important; 
-        background-color: #ffffff; 
+    .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+        color: #000;
     }
-    .select2-container--default .select2-results__option--highlighted[aria-selected] {
-        background-color: var(--color-primario) !important; 
-        color: #000000 !important;
+    .select2-results__option { color: #000; }
+    
+    /* Estilos Modals */
+    .modal-content.bg-dark {
+        border: 1px solid var(--color-acento-dorado);
     }
-    .select2-search__field {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-    }
-
-    /* Estilos Modal Campaña */
-    .modal-campana .modal-content {
-        background-color: #2c2c2c;
-        border: 1px solid var(--color-primario);
-        color: #fff;
-    }
-    .modal-campana .btn-close { filter: invert(1); }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid mt-4">
     
+    <div id="server-data" 
+         data-venta-guardada-id="{{ request.args.get('venta_guardada_id') or '' }}"
+         data-url-ticket="{{ url_for('main.ver_ticket', venta_id=0) }}">
+    </div>
+
     <form id="formVenta" method="POST" action="{{ url_for('main.nueva_venta') }}" onsubmit="return false;">
         
         <div class="venta-header">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h2 class="mb-0"><i class="fas fa-cash-register me-2"></i>Nueva Venta</h2>
+                <h2 class="mb-0 text-white"><i class="fas fa-cash-register me-2"></i>Nueva Venta</h2>
                 <div class="text-end">
                     <small class="text-muted d-block">Fecha de Emisión</small>
                     <span class="h5 text-white">{{ hoy }}</span>
@@ -70,7 +53,7 @@
 
             <div class="row">
                 <div class="col-md-4 mb-3">
-                    <label for="tipo_comprobante" class="form-label text-warning">Tipo de Comprobante</label>
+                    <label class="form-label text-warning">Tipo de Comprobante</label>
                     <select class="form-select form-select-lg" id="tipo_comprobante" name="tipo_comprobante">
                         <option value="Nota de Venta">Nota de Venta</option>
                         <option value="Boleta Electrónica">Boleta Electrónica</option>
@@ -79,7 +62,7 @@
                 </div>
 
                 <div class="col-md-8 mb-3">
-                    <label for="cliente_id" class="form-label text-warning">Cliente Atendido</label>
+                    <label class="form-label text-warning">Cliente Atendido</label>
                     <div class="input-group">
                         <select class="form-select form-select-lg select2-cliente" id="cliente_id" name="cliente_id" required>
                             <option value="">Buscar Cliente...</option>
@@ -100,9 +83,8 @@
 
             <div class="row">
                 <div class="col-md-6 mb-3">
-                    <label for="empleado_id" class="form-label text-warning">Colaborador Principal</label>
-                    <select class="form-select form-select-lg" id="empleado_id" name="empleado_id" required>
-                        <option value="">Seleccione Colaborador...</option>
+                    <label class="form-label text-warning">Colaborador</label>
+                    <select class="form-select form-select-lg" name="empleado_id" required>
                         {% for e in empleados %}
                         <option value="{{ e.id }}" {% if current_user.id == e.id %}selected{% endif %}>
                             {{ e.nombre_display }}
@@ -110,11 +92,10 @@
                         {% endfor %}
                     </select>
                 </div>
-                
                 <div class="col-md-6 mb-3">
-                     <label for="campana_id" class="form-label text-warning">Campaña / Promoción</label>
+                     <label class="form-label text-warning">Campaña / Promoción</label>
                     <select class="form-select form-select-lg" name="campana_id">
-                        <option value="">-- Sin Campaña / Promoción --</option>
+                        <option value="">-- Ninguna --</option>
                         {% for camp in campanas %}
                         <option value="{{ camp.id }}">{{ camp.nombre }}</option>
                         {% endfor %}
@@ -126,12 +107,12 @@
         <div class="row">
             <div class="col-lg-8">
                 <div class="venta-section">
-                    <h4 class="text-warning mb-3"><i class="fas fa-shopping-cart me-2"></i>Ítems de la Venta</h4>
+                    <h4 class="text-warning mb-3"><i class="fas fa-shopping-cart me-2"></i>Ítems</h4>
                     
-                    <div class="row mb-3">
-                        <div class="col-md-9">
+                    <div class="row mb-3 g-2">
+                        <div class="col-md-10">
                             <select class="form-select" id="select_servicio">
-                                <option value="">Agregar Servicio...</option>
+                                <option value="">-- Agregar Servicio --</option>
                                 {% for s in servicios %}
                                 <option value="{{ s.id }}" data-precio="{{ s.precio }}" data-nombre="{{ s.nombre }}">
                                     {{ s.nombre }} - S/ {{ "%.2f"|format(s.precio) }}
@@ -139,27 +120,27 @@
                                 {% endfor %}
                             </select>
                         </div>
-                         <div class="col-md-3">
+                         <div class="col-md-2">
                             <button type="button" class="btn btn-primary w-100" onclick="agregarItem('servicio')">
-                                <i class="fas fa-plus"></i> Servicio
+                                <i class="fas fa-plus"></i>
                             </button>
                         </div>                        
                     </div>
 
-                    <div class="row mb-3">
-                        <div class="col-md-9">
+                    <div class="row mb-3 g-2">
+                        <div class="col-md-10">
                              <select class="form-select" id="select_producto">
-                                <option value="">Agregar Producto...</option>
+                                <option value="">-- Agregar Producto --</option>
                                 {% for p in productos %}
                                 <option value="{{ p.id }}" data-precio="{{ p.precio_venta }}" data-nombre="{{ p.nombre }}" data-stock="{{ p.stock_actual }}">
-                                    {{ p.nombre }} (Stock: {{ p.stock_actual }})
+                                    {{ p.nombre }} (Stock: {{ p.stock_actual }}) - S/ {{ "%.2f"|format(p.precio_venta) }}
                                 </option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-3">                                                        
-                            <button type="button" class="btn btn-primary w-100" onclick="agregarItem('producto')">
-                                <i class="fas fa-plus"></i> Producto
+                        <div class="col-md-2">                                                        
+                            <button type="button" class="btn btn-warning w-100" onclick="agregarItem('producto')">
+                                <i class="fas fa-box"></i>
                             </button>
                         </div>
                     </div>
@@ -169,14 +150,13 @@
                             <thead>
                                 <tr>
                                     <th>Descripción</th>
-                                    <th width="100">Cant.</th>
-                                    <th width="120">P. Unit</th>
-                                    <th width="120">Total</th>
+                                    <th width="100" class="text-center">Cant.</th>
+                                    <th width="120" class="text-end">Precio</th>
+                                    <th width="120" class="text-end">Total</th>
                                     <th width="50"></th>
                                 </tr>
                             </thead>
-                            <tbody id="tabla_items_body">
-                                </tbody>
+                            <tbody id="tabla_items_body"></tbody>
                         </table>
                     </div>
                 </div>
@@ -184,41 +164,40 @@
 
             <div class="col-lg-4">
                 <div class="venta-section">
-                    <h4 class="text-warning mb-3"><i class="fas fa-coins me-2"></i>Resumen y Pagos</h4>
+                    <h4 class="text-warning mb-3"><i class="fas fa-coins me-2"></i>Pago</h4>
                     
-                    <div class="d-flex justify-content-between mb-2">
+                    <div class="d-flex justify-content-between mb-2 text-white">
                         <span>Subtotal:</span>
                         <span id="lbl_subtotal">S/ 0.00</span>
                     </div>
-                    <div class="d-flex justify-content-between mb-2">
+                    <div class="d-flex justify-content-between mb-2 align-items-center text-white">
                         <span>Descuento:</span>
-                        <input type="number" class="form-control form-control-sm w-25 text-end bg-dark text-white" id="descuento_global" name="descuento_global" value="0" min="0" step="0.10" oninput="calcularTotales()">
+                        <input type="number" class="form-control form-control-sm w-50 text-end" id="descuento_global" value="0" min="0" step="0.10" oninput="calcularTotales()">
                     </div>
-                    <hr>
+                    <hr class="text-white">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="h4">TOTAL:</span>
+                        <span class="h4 text-white">TOTAL:</span>
                         <span class="total-display" id="lbl_total_pagar">S/ 0.00</span>
                     </div>
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span class="balance-display text-info">Pagado:</span>
-                        <span class="balance-display text-info" id="lbl_total_pagado">S/ 0.00</span>
+                    
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <span class="text-info">Pagado:</span>
+                        <span class="text-info fw-bold" id="lbl_total_pagado">S/ 0.00</span>
                     </div>
-                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <span class="balance-display fw-bold text-white">Faltante:</span>
-                        <span class="balance-display fw-bold text-white" id="lbl_faltante">S/ 0.00</span>
+                     <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="text-white">Faltante:</span>
+                        <span class="text-white fw-bold" id="lbl_faltante">S/ 0.00</span>
                     </div>
 
-                    <h5 class="text-warning mt-4">Métodos de Pago</h5>
-                    <div id="pagos_container">
-                        </div>
+                    <div id="pagos_container"></div>
                     
-                    <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="agregarPago()">
-                        <i class="fas fa-plus me-1"></i>Añadir Método de Pago
+                    <button type="button" class="btn btn-outline-info btn-sm w-100 mt-2" onclick="agregarPago()">
+                        <i class="fas fa-plus me-1"></i> Añadir Pago
                     </button>
                     
                     <div class="d-grid gap-2 mt-4">
-                        <button type="button" class="btn btn-success btn-lg" onclick="registrarVenta()">
-                            <i class="fas fa-check-circle me-2"></i>Registrar Venta
+                        <button type="button" class="btn btn-success btn-lg fw-bold" onclick="registrarVenta()">
+                            <i class="fas fa-check-circle me-2"></i> CONFIRMAR VENTA
                         </button>
                     </div>
                 </div>
@@ -240,72 +219,56 @@
             <option value="Transferencia">Transferencia</option>
         </select>
         <input type="number" class="form-control form-control-sm monto-pago" placeholder="Monto" step="0.10" min="0" oninput="calcularTotales()">
-        <input type="text" class="form-control form-control-sm referencia-pago" placeholder="Referencia (Opcional)">
         <button type="button" class="btn btn-danger btn-sm" onclick="eliminarPago(this)"><i class="fas fa-trash"></i></button>
     </div>
 </template>
 
-<div class="modal fade" id="modalExitoVenta" tabindex="-1" aria-labelledby="modalExitoVentaLabel" aria-hidden="true">
+<div class="modal fade modal-campana" id="modalCampanaDatos" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content bg-dark text-white">
             <div class="modal-header border-secondary">
-                <h5 class="modal-title" id="modalExitoVentaLabel">✅ Venta Registrada con Éxito</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title text-warning"><i class="fas fa-birthday-cake me-2"></i>Actualizar Datos</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <p>¿Qué comprobante desea emitir?</p>
-            </div>
-            <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar / Solo Guardar</button>
-                <a href="#" id="btnImprimirTicket" class="btn btn-info" target="_blank">🖨️ Nota de Venta</a>
-                <a href="#" id="btnEmitirComprobante" class="btn btn-success">🧾 Emitir Boleta/Factura</a>
+            <div class="modal-body text-center p-4">
+                <h5 id="lblNombreClienteCampana" class="mb-3 text-info"></h5>
+                
+                <div id="bloqueConfirmar" style="display:none;">
+                    <p>Tenemos registrado su cumpleaños:</p>
+                    <h2 class="text-warning fw-bold mb-3" id="lblFechaActual"></h2>
+                    <p>¿Es correcta?</p>
+                    <button class="btn btn-success me-2" onclick="responderCampana('confirmar')"><i class="fas fa-check"></i> Sí</button>
+                    <button class="btn btn-outline-light" onclick="mostrarInputFecha()"><i class="fas fa-edit"></i> No, corregir</button>
+                </div>
+
+                <div id="bloqueSolicitar" style="display:none;">
+                    <p>¡Queremos engreírlo en su día!</p>
+                    <p class="text-muted small">¿Nos podría brindar su fecha de cumpleaños?</p>
+                    <input type="date" id="inputFechaCampana" class="form-control w-75 mx-auto mb-3">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-info fw-bold" onclick="responderCampana('actualizar')">Guardar Fecha</button>
+                        <button class="btn btn-link text-muted" onclick="responderCampana('rechazar')">Prefiero no decirlo</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="modal fade modal-campana" id="modalCampanaDatos" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+<div class="modal fade" id="modalExitoVenta" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+        <div class="modal-content bg-dark text-white shadow-lg border-success">
             <div class="modal-header border-secondary">
-                <h5 class="modal-title text-warning">
-                    <i class="fas fa-birthday-cake me-2"></i>Actualización de Datos
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title text-success"><i class="fas fa-check-circle me-2"></i>Venta Registrada</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body text-center p-4">
-                <h5 id="lblNombreClienteCampana" class="mb-3 fw-bold text-light"></h5>
-                
-                <div id="bloqueConfirmar" style="display:none;">
-                    <p class="mb-2">Tenemos registrado su cumpleaños el:</p>
-                    <h2 class="text-info fw-bold mb-4" id="lblFechaActual"></h2>
-                    <p>¿Es correcta esta fecha?</p>
-                    <div class="d-flex justify-content-center gap-2">
-                        <button class="btn btn-success" onclick="responderCampana('confirmar')">
-                            <i class="fas fa-check"></i> Sí
-                        </button>
-                        <button class="btn btn-outline-warning" onclick="mostrarInputFecha()">
-                            <i class="fas fa-edit"></i> No, corregir
-                        </button>
-                    </div>
-                </div>
-
-                <div id="bloqueSolicitar" style="display:none;">
-                    <p class="mb-3">¡Queremos engreírlo en su día!</p>
-                    <p class="text-muted small">¿Nos podría brindar su fecha de cumpleaños?</p>
-                    
-                    <div class="mb-3 mt-3">
-                        <input type="date" id="inputFechaCampana" class="form-control bg-secondary text-light border-info mx-auto" style="max-width: 200px;">
-                    </div>
-
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-info fw-bold" onclick="responderCampana('actualizar')">
-                            <i class="fas fa-save"></i> Guardar Fecha
-                        </button>
-                        <button class="btn btn-link text-muted text-decoration-none btn-sm mt-2" onclick="responderCampana('rechazar')">
-                            El cliente prefiere no decirlo
-                        </button>
-                    </div>
+            <div class="modal-body text-center">
+                <p class="fs-5">¿Qué desea hacer ahora?</p>
+                <div class="d-grid gap-2 col-8 mx-auto">
+                    <a href="#" id="btnImprimirTicket" target="_blank" class="btn btn-warning fw-bold">
+                        <i class="fas fa-print me-2"></i>Imprimir Ticket
+                    </a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Nueva Venta</button>
                 </div>
             </div>
         </div>
@@ -318,68 +281,70 @@
 {{ super() }}
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
 <script>
     // Variables Globales
     let listaItems = [];
     let clienteIdCampana = null;
 
+    // --- INICIALIZACIÓN ---
     $(document).ready(function() {
-        // Inicializar Select2
+        // Select2 con tema Bootstrap 5
         $('.select2-cliente').select2({
-            placeholder: 'Buscar por nombre, DNI o teléfono...',
+            theme: 'bootstrap-5',
+            placeholder: 'Buscar cliente...',
             width: '100%'
         });
 
-        // -----------------------------------------------------
-        // LÓGICA DE CAMPAÑA CUMPLEAÑOS (Detectar cambio cliente)
-        // -----------------------------------------------------
+        // DETECTOR DE CLIENTE (Campaña Cumpleaños)
         $('.select2-cliente').on('select2:select', function(e) {
-            // Acceder al elemento <option> real para leer atributos data-*
-            var element = e.params.data.element;
+            const el = e.params.data.element;
+            if (!el) return;
+
+            const dataset = el.dataset;
+            clienteIdCampana = el.value;
+            const nombre = e.params.data.text.split('|')[0]; 
+
+            // Si ya validó o rechazó, no hacemos nada
+            if (dataset.validado === 'true' || dataset.rechazo === 'true') return;
+
+            // Preparar Modal
+            document.getElementById('lblNombreClienteCampana').innerText = nombre;
             
-            // Validar existencia de datos (importante si es placeholder)
-            if (!element) return;
-
-            var validado = element.dataset.validado === 'true';
-            var rechazo = element.dataset.rechazo === 'true';
-            var fecha = element.dataset.fecha;
-            var nombre = e.params.data.text.split('|')[0]; // Limpiar nombre visual
-            
-            clienteIdCampana = element.value;
-
-            // Si es un cliente válido y no ha sido procesado aun
-            if (clienteIdCampana && !validado && !rechazo) {
-                // Configurar Modal
-                document.getElementById('lblNombreClienteCampana').innerText = nombre;
-                
-                if (fecha && fecha !== 'None') {
-                    // Modo Confirmar
-                    document.getElementById('bloqueConfirmar').style.display = 'block';
-                    document.getElementById('bloqueSolicitar').style.display = 'none';
-                    
-                    // Formatear visualmente
-                    try {
-                        const [y, m, d] = fecha.split('-');
-                        document.getElementById('lblFechaActual').innerText = `${d}/${m}`;
-                        document.getElementById('inputFechaCampana').value = fecha;
-                    } catch(err) {
-                        console.error("Error formateando fecha:", err);
-                    }
-                } else {
-                    // Modo Solicitar
-                    document.getElementById('bloqueConfirmar').style.display = 'none';
-                    document.getElementById('bloqueSolicitar').style.display = 'block';
-                    document.getElementById('inputFechaCampana').value = '';
-                }
-
-                // Mostrar Modal
-                var myModal = new bootstrap.Modal(document.getElementById('modalCampanaDatos'));
-                myModal.show();
+            if (dataset.fecha && dataset.fecha !== 'None' && dataset.fecha !== '') {
+                // Modo Confirmar
+                const [y, m, d] = dataset.fecha.split('-');
+                document.getElementById('lblFechaActual').innerText = `${d}/${m}`;
+                document.getElementById('inputFechaCampana').value = dataset.fecha;
+                document.getElementById('bloqueConfirmar').style.display = 'block';
+                document.getElementById('bloqueSolicitar').style.display = 'none';
+            } else {
+                // Modo Solicitar
+                document.getElementById('inputFechaCampana').value = '';
+                document.getElementById('bloqueConfirmar').style.display = 'none';
+                document.getElementById('bloqueSolicitar').style.display = 'block';
             }
+
+            const modal = new bootstrap.Modal(document.getElementById('modalCampanaDatos'));
+            modal.show();
         });
+
+        // VERIFICAR SI VENIMOS DE UNA VENTA EXITOSA
+        const serverData = document.getElementById('server-data');
+        const ventaId = serverData.dataset.ventaGuardadaId;
+        
+        if (ventaId) {
+            const urlBase = serverData.dataset.urlTicket;
+            document.getElementById('btnImprimirTicket').href = urlBase.replace('/0', '/' + ventaId);
+            const modalExito = new bootstrap.Modal(document.getElementById('modalExitoVenta'));
+            modalExito.show();
+        }
+        
+        // Agregar una línea de pago por defecto
+        agregarPago();
     });
 
-    // --- FUNCIONES CAMPAÑA DATOS ---
+    // --- FUNCIONES CAMPAÑA ---
     function mostrarInputFecha() {
         document.getElementById('bloqueConfirmar').style.display = 'none';
         document.getElementById('bloqueSolicitar').style.display = 'block';
@@ -387,259 +352,163 @@
 
     async function responderCampana(accion) {
         const fecha = document.getElementById('inputFechaCampana').value;
-        
-        if (accion === 'actualizar' && !fecha) {
-            alert("Ingrese una fecha válida.");
-            return;
-        }
+        if (accion === 'actualizar' && !fecha) { alert('Ingrese fecha'); return; }
 
         try {
-            const response = await fetch('/api/clientes/actualizar-campana', {
-                method: 'POST',
+            const res = await fetch('/api/clientes/actualizar-campana', {
+                method: 'POST', 
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    cliente_id: clienteIdCampana,
-                    accion: accion,
-                    fecha_nacimiento: fecha
-                })
+                body: JSON.stringify({cliente_id: clienteIdCampana, accion, fecha_nacimiento: fecha})
             });
+            const data = await res.json();
             
-            const res = await response.json();
-            
-            if (res.success) {
-                // Cerrar modal
-                const modalEl = document.getElementById('modalCampanaDatos');
-                const modal = bootstrap.Modal.getInstance(modalEl);
-                modal.hide();
-                
-                // Actualizar DOM del Select para que no vuelva a salir en esta sesión
-                // Buscamos la opción por su value
-                const option = document.querySelector(`.select2-cliente option[value="${clienteIdCampana}"]`);
-                if(option) {
-                    option.dataset.validado = 'true';
-                    if(accion === 'rechazar') option.dataset.rechazo = 'true';
-                    if(accion === 'actualizar') option.dataset.fecha = fecha;
+            if(data.success) {
+                bootstrap.Modal.getInstance(document.getElementById('modalCampanaDatos')).hide();
+                // Actualizar DOM para no volver a preguntar
+                const opt = document.querySelector(`.select2-cliente option[value="${clienteIdCampana}"]`);
+                if(opt) {
+                    opt.dataset.validado = 'true';
+                    if(accion === 'rechazar') opt.dataset.rechazo = 'true';
                 }
-                
-                // alert(res.message); // Opcional: Mostrar mensaje de éxito
-            } else {
-                alert('Error: ' + res.message);
+                alert(data.message);
             }
-        } catch (error) {
-            console.error(error);
-            alert('Error de conexión.');
-        }
+        } catch(e) { console.error(e); alert('Error de conexión'); }
     }
 
-    // --- MANEJO DE ITEMS ---
+    // --- LOGICA VENTA ---
     function agregarItem(tipo) {
-        const select = document.getElementById(tipo === 'servicio' ? 'select_servicio' : 'select_producto');
-        const id = select.value;
-        if (!id) return;
-
-        const option = select.options[select.selectedIndex];
-        const nombre = option.getAttribute('data-nombre');
-        const precio = parseFloat(option.getAttribute('data-precio'));
-        const stock = tipo === 'producto' ? parseInt(option.getAttribute('data-stock')) : Infinity;
-
-        const existente = listaItems.find(i => i.id === id && i.tipo === tipo);
-        if (existente) {
-            if (tipo === 'producto' && existente.cantidad + 1 > stock) {
-                alert("No hay suficiente stock para añadir otra unidad.");
-                return;
-            }
-            existente.cantidad++;
-        } else {
-            if (tipo === 'producto' && stock < 1) {
-                alert("Producto sin stock.");
-                return;
-            }
-            listaItems.push({ id, tipo, descripcion: nombre, precio, cantidad: 1, stock });
-        }
+        const sel = document.getElementById(tipo === 'servicio' ? 'select_servicio' : 'select_producto');
+        const id = sel.value; 
+        if(!id) return;
         
-        renderizarTabla();
-        select.value = "";
-    }
-
-    function eliminarItem(index) {
-        listaItems.splice(index, 1);
-        renderizarTabla();
-    }
-
-    function actualizarCantidad(index, nuevaCant) {
-        const item = listaItems[index];
-        const cant = parseInt(nuevaCant);
-        if (cant < 1) {
-            this.value = 1;
-            return;
+        const opt = sel.options[sel.selectedIndex];
+        const item = {
+            id, tipo, 
+            descripcion: opt.dataset.nombre, 
+            precio: parseFloat(opt.dataset.precio),
+            stock: parseInt(opt.dataset.stock || 0),
+            cantidad: 1
         };
 
-        if (item.tipo === 'producto' && cant > item.stock) {
-            alert(`Stock máximo es ${item.stock}.`);
-            // Renderizar de nuevo para resetear el input
-            renderizarTabla();
+        const existe = listaItems.find(i => i.id === id && i.tipo === tipo);
+        if(existe) {
+            if(tipo === 'producto' && existe.cantidad >= item.stock) { alert('Sin stock suficiente'); return; }
+            existe.cantidad++;
         } else {
-            item.cantidad = cant;
-            renderizarTabla();
+            if(tipo === 'producto' && item.stock < 1) { alert('Producto agotado'); return; }
+            listaItems.push(item);
         }
+        renderTabla();
+        sel.value = '';
     }
 
-    function renderizarTabla() {
+    function renderTabla() {
         const tbody = document.getElementById('tabla_items_body');
         tbody.innerHTML = '';
-        if (listaItems.length === 0) {
-             tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Añade servicios o productos a la venta.</td></tr>';
-        } else {
-            listaItems.forEach((item, index) => {
-                const totalItem = item.cantidad * item.precio;
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${item.descripcion} <small class="text-muted d-block">${item.tipo.toUpperCase()}</small></td>
-                    <td>
-                        <input type="number" class="form-control form-control-sm text-center" 
-                               value="${item.cantidad}" min="1" ${item.tipo === 'producto' ? `max="${item.stock}"` : ''}
-                               onchange="actualizarCantidad(${index}, this.value)">
-                    </td>
-                    <td>S/ ${item.precio.toFixed(2)}</td>
-                    <td>S/ ${totalItem.toFixed(2)}</td>
-                    <td><button type="button" class="btn btn-sm btn-danger" onclick="eliminarItem(${index})"><i class="fas fa-times"></i></button></td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
+        listaItems.forEach((it, i) => {
+            const total = it.cantidad * it.precio;
+            tbody.innerHTML += `
+                <tr>
+                    <td>${it.descripcion} <small class='text-muted'>${it.tipo}</small></td>
+                    <td><input type="number" class="form-control form-control-sm text-center" value="${it.cantidad}" min="1" onchange="updateCant(${i}, this.value)"></td>
+                    <td class="text-end">S/ ${it.precio.toFixed(2)}</td>
+                    <td class="text-end">S/ ${total.toFixed(2)}</td>
+                    <td><button class="btn btn-sm btn-danger" onclick="delItem(${i})">X</button></td>
+                </tr>
+            `;
+        });
         calcularTotales();
     }
 
-    // --- MANEJO DE PAGOS ---
+    function updateCant(i, val) {
+        val = parseInt(val);
+        if(val < 1) val = 1;
+        if(listaItems[i].tipo === 'producto' && val > listaItems[i].stock) {
+            alert('Stock máximo: ' + listaItems[i].stock);
+            val = listaItems[i].stock;
+        }
+        listaItems[i].cantidad = val;
+        renderTabla();
+    }
+
+    function delItem(i) { listaItems.splice(i, 1); renderTabla(); }
+
     function agregarPago() {
-        const template = document.getElementById('pago_template');
-        const clone = template.content.cloneNode(true);
-        document.getElementById('pagos_container').appendChild(clone);
+        const tpl = document.getElementById('pago_template');
+        document.getElementById('pagos_container').appendChild(tpl.content.cloneNode(true));
         calcularTotales();
-    }
-
-    function eliminarPago(btn) {
-        btn.closest('.pago-row').remove();
-        calcularTotales();
-    }
-
-    // --- CÁLCULOS GENERALES ---
-    function calcularTotales() {
-        const subtotal = listaItems.reduce((sum, item) => sum + (item.cantidad * item.precio), 0);
-        document.getElementById('lbl_subtotal').innerText = `S/ ${subtotal.toFixed(2)}`;
-        
-        const descuento = parseFloat(document.getElementById('descuento_global').value) || 0;
-        const totalPagar = subtotal - descuento > 0 ? subtotal - descuento : 0;
-        document.getElementById('lbl_total_pagar').innerText = `S/ ${totalPagar.toFixed(2)}`;
-
-        let totalPagado = 0;
-        document.querySelectorAll('.pago-row').forEach(row => {
-            const monto = parseFloat(row.querySelector('.monto-pago').value) || 0;
-            totalPagado += monto;
-        });
-        document.getElementById('lbl_total_pagado').innerText = `S/ ${totalPagado.toFixed(2)}`;
-
-        const faltante = totalPagar - totalPagado;
-        const lblFaltante = document.getElementById('lbl_faltante');
-        
-        if (faltante < -0.01) { // Vuelto (Negativo)
-            lblFaltante.classList.remove('text-danger', 'text-white');
-            lblFaltante.classList.add('text-success');
-            lblFaltante.innerText = `S/ ${Math.abs(faltante).toFixed(2)} (Vuelto)`;
-        } else if (faltante > 0.01) { // Falta pagar
-             lblFaltante.classList.remove('text-success', 'text-white');
-             lblFaltante.classList.add('text-danger');
-             lblFaltante.innerText = `S/ ${faltante.toFixed(2)}`;
-        } else { // Exacto
-             lblFaltante.classList.remove('text-success', 'text-danger');
-             lblFaltante.classList.add('text-white');
-             lblFaltante.innerText = `S/ 0.00`;
-        }
-    }
-
-    // --- ENVÍO DE FORMULARIO ---
-    function registrarVenta() {
-        if (listaItems.length === 0) {
-            alert("Debe agregar al menos un ítem a la venta.");
-            return;
-        }
-
-        const tipoComprobante = document.getElementById('tipo_comprobante').value;
-        const clienteSelect = $('#cliente_id');
-        // Select2 usa jQuery para obtener datos
-        const clienteData = clienteSelect.select2('data')[0];
-        
-        if(!clienteData || !clienteData.element) {
-             alert("Seleccione un cliente.");
-             return;
-        }
-
-        const clienteDocumento = clienteData.element.dataset.documento;
-        const totalPagar = parseFloat(document.getElementById('lbl_total_pagar').innerText.replace('S/ ', ''));
-
-        if (tipoComprobante === 'Factura Electrónica') {
-            if (!clienteDocumento || clienteDocumento.length !== 11) {
-                alert("Para Factura Electrónica, el cliente debe tener un RUC de 11 dígitos.");
-                return;
-            }
-        }
-
-        if (tipoComprobante === 'Boleta Electrónica' && totalPagar > 700) {
-            if (!clienteDocumento || clienteDocumento.length !== 8) {
-                alert("Para Boletas mayores a S/ 700, el cliente debe tener un DNI de 8 dígitos.");
-                return;
-            }
-        }
-
-        // Recolectar pagos
-        const listaPagos = [];
-        const pagoRows = document.querySelectorAll('#pagos_container .pago-row');
-        pagoRows.forEach(row => {
-            const metodo = row.querySelector('.metodo-pago').value;
-            const monto = parseFloat(row.querySelector('.monto-pago').value) || 0;
-            const referencia = row.querySelector('.referencia-pago').value;
-            if (monto > 0) {
-                listaPagos.push({ metodo: metodo, monto: monto, referencia: referencia });
-            }
-        });
-
-        // Auto-pago efectivo si no hay pagos
-        if (listaPagos.length === 0 && totalPagar > 0) {
-            listaPagos.push({ metodo: 'Efectivo', monto: totalPagar, referencia: '' });
-        }
-        
-        const totalPagado = listaPagos.reduce((sum, pago) => sum + pago.monto, 0);
-
-        if (totalPagado < totalPagar - 0.01) {
-            alert(`El monto pagado (S/ ${totalPagado.toFixed(2)}) es menor que el total (S/ ${totalPagar.toFixed(2)}).`);
-            return;
-        }
-
-        document.getElementById('items_lista_json').value = JSON.stringify(listaItems);
-        document.getElementById('pagos_lista_json').value = JSON.stringify(listaPagos);
-
-        document.getElementById('formVenta').submit();
     }
     
-    document.addEventListener('DOMContentLoaded', () => {
-        renderizarTabla();
-        agregarPago(); 
+    function eliminarPago(btn) { btn.closest('.pago-row').remove(); calcularTotales(); }
 
-        {% if request.args.get('venta_guardada_id') %}
-        const ventaGuardadaId = {{ request.args.get('venta_guardada_id')|tojson }};
-        if (ventaGuardadaId) {
-            const successModal = new bootstrap.Modal(document.getElementById('modalExitoVenta'));
-            
-            let urlTicketBase = "{{ url_for('main.ver_ticket', venta_id=0) }}";
-            let urlTicket = urlTicketBase.replace('/0', '/' + ventaGuardadaId);
-            document.getElementById('btnImprimirTicket').href = urlTicket;
-
-            // Aquí podrías agregar lógica para Factura si tienes una ruta PDF diferente
-            document.getElementById('btnEmitirComprobante').href = urlTicket; 
-            
-            successModal.show();
+    function calcularTotales() {
+        const sub = listaItems.reduce((acc, it) => acc + (it.cantidad * it.precio), 0);
+        const desc = parseFloat(document.getElementById('descuento_global').value) || 0;
+        const total = Math.max(0, sub - desc);
+        
+        document.getElementById('lbl_subtotal').innerText = 'S/ ' + sub.toFixed(2);
+        document.getElementById('lbl_total_pagar').innerText = 'S/ ' + total.toFixed(2);
+        
+        let pagado = 0;
+        document.querySelectorAll('.monto-pago').forEach(inp => pagado += parseFloat(inp.value) || 0);
+        document.getElementById('lbl_total_pagado').innerText = 'S/ ' + pagado.toFixed(2);
+        
+        const faltante = total - pagado;
+        const lblFalt = document.getElementById('lbl_faltante');
+        
+        if(faltante <= 0.01 && faltante >= -0.01) { // Exacto
+            lblFalt.className = 'text-white fw-bold';
+            lblFalt.innerText = 'S/ 0.00';
+        } else if (faltante < 0) { // Vuelto
+            lblFalt.className = 'text-success fw-bold';
+            lblFalt.innerText = 'Vuelto: S/ ' + Math.abs(faltante).toFixed(2);
+        } else { // Falta
+            lblFalt.className = 'text-danger fw-bold';
+            lblFalt.innerText = 'S/ ' + faltante.toFixed(2);
         }
-        {% endif %}
-    });
+        
+        // Autocompletar primer pago si está vacío
+        const primerPago = document.querySelector('.monto-pago');
+        if(primerPago && !primerPago.value && listaItems.length > 0) {
+            primerPago.value = total.toFixed(2);
+            // Recalcular para actualizar etiquetas
+            document.getElementById('lbl_total_pagado').innerText = 'S/ ' + total.toFixed(2);
+            lblFalt.className = 'text-white fw-bold';
+            lblFalt.innerText = 'S/ 0.00';
+        }
+    }
+
+    function registrarVenta() {
+        if(listaItems.length === 0) { alert('Agregue ítems'); return; }
+        
+        // Validaciones RUC/DNI
+        const tipo = document.getElementById('tipo_comprobante').value;
+        const optCliente = $('.select2-cliente').select2('data')[0].element;
+        const doc = optCliente ? optCliente.dataset.documento : '';
+        const total = parseFloat(document.getElementById('lbl_total_pagar').innerText.replace('S/ ', ''));
+
+        if(tipo === 'Factura Electrónica' && (!doc || doc.length !== 11)) {
+            alert('Para Factura se requiere cliente con RUC (11 dígitos).'); return;
+        }
+        if(tipo === 'Boleta Electrónica' && total >= 700 && (!doc || doc.length !== 8)) {
+            alert('Para boletas >= S/ 700 se requiere DNI.'); return;
+        }
+
+        // Preparar Pagos
+        const pagos = [];
+        document.querySelectorAll('.pago-row').forEach(row => {
+            const m = parseFloat(row.querySelector('.monto-pago').value) || 0;
+            if(m > 0) pagos.push({
+                metodo: row.querySelector('.metodo-pago').value,
+                monto: m
+            });
+        });
+        
+        if(pagos.length === 0 && total > 0) { alert('Ingrese el pago'); return; }
+
+        document.getElementById('items_lista_json').value = JSON.stringify(listaItems);
+        document.getElementById('pagos_lista_json').value = JSON.stringify(pagos);
+        document.getElementById('formVenta').submit();
+    }
 </script>
 {% endblock %}
