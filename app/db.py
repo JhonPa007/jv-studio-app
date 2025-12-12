@@ -19,8 +19,8 @@ def get_db():
                 g.db = psycopg2.connect(
                     host="localhost",
                     user="postgres",       
-                    password="TU_CONTRASEÑA_LOCAL_AQUI",  # <--- Asegúrate de poner tu clave local si vas a probar en tu PC
-                    database="jv_studio_db"
+                    password="jv123",  # <--- Asegúrate de poner tu clave local si vas a probar en tu PC
+                    database="jv_studio_pg_db"
                 )
                 print("✅ Conectado a base de datos LOCAL")
         except Exception as e:
