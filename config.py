@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'clave-secreta-jv-corp'
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'miclave_super_secreta_jvstudio_2025'
     
     # Configuración PostgreSQL
     DB_HOST = os.environ.get('DB_HOST') or 'localhost'
