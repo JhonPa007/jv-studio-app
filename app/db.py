@@ -1,25 +1,26 @@
+import os
 import psycopg2
 import psycopg2.extras
 from flask import g, current_app
 
 def get_db():
     if 'db' not in g:
-        try:
-            # Conexión profesional leyendo de la configuración cargada (config.py -> .env)
+        # 1. Intentamos leer la dirección de la nube
+        database_url = os.environ.get('DATABASE_URL')
+        
+        if database_url:
+            # CONEXIÓN MODO NUBE (Railway)
+            g.db = psycopg2.connect(database_url)
+        else:
+            # CONEXIÓN MODO LOCAL (Tu PC)
             g.db = psycopg2.connect(
-                host=current_app.config['DB_HOST'],
-                user=current_app.config['DB_USER'],
-                password=current_app.config['DB_PASSWORD'],
-                dbname=current_app.config['DB_NAME'],
-                port=current_app.config['DB_PORT']
+                host="localhost",
+                user="postgres",       # Tus datos locales
+                password="jv123", 
+                database="jv_studio_db"
             )
-            g.db.autocommit = True
-            
-        except psycopg2.Error as e:
-            print(f"Error crítico conectando a PostgreSQL: {e}")
-            return None
-
     return g.db
+
 
 def close_db(e=None):
     db = g.pop('db', None)
