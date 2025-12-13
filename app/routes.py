@@ -5976,8 +5976,7 @@ def listar_gastos():
 @main_bp.route('/finanzas/gastos/nuevo', methods=['GET', 'POST'])
 @login_required
 def nuevo_gasto():
-    # Verificación de Permisos
-    # (Ajusta esto según tu lógica de roles si es necesario, por ahora permitimos admin y cajero o permiso)
+    # --- 0. VERIFICACIONES DE SEGURIDAD ---
     es_admin = getattr(current_user, 'rol_nombre', '') == 'Administrador'
     es_cajero = getattr(current_user, 'rol_nombre', '') == 'Cajero'
     
@@ -5985,15 +5984,37 @@ def nuevo_gasto():
         flash('Acceso denegado', 'danger')
         return redirect(url_for('main.index'))
     
-    # 1. OBTENER SUCURSAL AUTOMÁTICAMENTE
     sucursal_id = session.get('sucursal_id')
     if not sucursal_id:
         flash("Debe seleccionar una sucursal para registrar gastos.", "warning")
         return redirect(url_for('main.index'))
 
     db_conn = get_db()
-    
-    # 2. CARGAR DATOS PARA EL FORMULARIO
+
+    # ==============================================================================
+    # --- 1. VALIDACIÓN CRÍTICA: CAJA ABIERTA (NUEVO) ---
+    # ==============================================================================
+    caja_id_activa = None
+    try:
+        with db_conn.cursor() as cursor_val:
+            cursor_val.execute("""
+                SELECT id FROM caja_sesiones 
+                WHERE usuario_id = %s AND sucursal_id = %s AND estado = 'Abierta'
+                LIMIT 1
+            """, (current_user.id, sucursal_id))
+            row_caja = cursor_val.fetchone()
+
+            if not row_caja:
+                flash("⛔ ACCESO DENEGADO: Debes ABRIR CAJA para registrar salidas de dinero (gastos).", "danger")
+                return redirect(url_for('main.index'))
+            
+            caja_id_activa = row_caja[0] # Guardamos el ID para usarlo al guardar
+    except Exception as e:
+        flash(f"Error verificando estado de caja: {e}", "danger")
+        return redirect(url_for('main.index'))
+    # ==============================================================================
+
+    # 2. CARGAR DATOS PARA EL FORMULARIO (GET)
     categorias_gastos = []
     colaboradores_activos = []
     try:
@@ -6006,12 +6027,12 @@ def nuevo_gasto():
             cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE ORDER BY apellidos, nombres")
             colaboradores_activos = cursor.fetchall()
     except Exception as err_load:
-        flash(f"Error al cargar datos: {err_load}", "danger")
+        flash(f"Error al cargar datos auxiliares: {err_load}", "danger")
 
     form_titulo = "Registrar Nuevo Gasto"
     action_url_form = url_for('main.nuevo_gasto')
 
-    # --- LÓGICA POST ---
+    # --- LÓGICA POST (GUARDAR GASTO) ---
     if request.method == 'POST':
         # Recoger datos
         categoria_gasto_id_str = request.form.get('categoria_gasto_id')
@@ -6034,7 +6055,6 @@ def nuevo_gasto():
         if not descripcion: errores.append("La descripción es obligatoria.")
         if not monto_str: errores.append("El monto es obligatorio.")
         
-        # CORRECCIÓN IMPORTANTE: Si método es vacío, asumimos Efectivo
         if not metodo_pago: metodo_pago = 'Efectivo' 
 
         monto = 0.0
@@ -6044,22 +6064,8 @@ def nuevo_gasto():
         except:
             errores.append("Monto inválido.")
         
-        # 3. VINCULAR CON CAJA ABIERTA
-        caja_id = None
-        try:
-            with db_conn.cursor() as cursor_caja:
-                cursor_caja.execute(
-                    "SELECT id FROM caja_sesiones WHERE usuario_id=%s AND estado='Abierta' AND sucursal_id=%s",
-                    (current_user.id, sucursal_id)
-                )
-                caja_abierta = cursor_caja.fetchone()
-                if caja_abierta:
-                    caja_id = caja_abierta[0]
-                elif metodo_pago == 'Efectivo':
-                    # Si es efectivo, exigimos caja abierta
-                    errores.append("No tienes una caja abierta para registrar salidas de efectivo.")
-        except Exception as e:
-            errores.append(f"Error verificando caja: {e}")
+        # NOTA: Ya no necesitamos "buscar" la caja aquí, porque la validamos al inicio.
+        # Usamos directamente 'caja_id_activa' que obtuvimos arriba.
 
         if errores:
             for error in errores: flash(error, 'warning')
@@ -6077,7 +6083,7 @@ def nuevo_gasto():
                     empleado_beneficiario_id = int(empleado_beneficiario_id_str) if empleado_beneficiario_id_str else None
 
                     val = (sucursal_id, int(categoria_gasto_id_str), fecha_str, descripcion, monto, 
-                           metodo_pago, current_user.id, empleado_beneficiario_id, caja_id,
+                           metodo_pago, current_user.id, empleado_beneficiario_id, caja_id_activa, # <--- USAMOS LA CAJA VALIDADA
                            comprobante_tipo or None, comprobante_serie or None,
                            comprobante_numero or None, comprobante_ruc_emisor or None,
                            comprobante_razon_social_emisor or None
@@ -6085,15 +6091,15 @@ def nuevo_gasto():
                     cursor.execute(sql, val)
                 
                 db_conn.commit()
-                flash("Gasto registrado exitosamente.", "success")
+                flash("✅ Gasto registrado correctamente.", "success")
                 return redirect(url_for('main.listar_gastos'))
                 
             except Exception as err:
                 db_conn.rollback()
                 flash(f"Error al guardar gasto: {err}", "danger")
-                current_app.logger.error(f"Error nuevo_gasto POST: {err}")
+                # current_app.logger.error(f"Error nuevo_gasto POST: {err}")
         
-        # Si hubo error, volver al formulario
+        # Si hubo error en validación o inserción, volver al formulario
         return render_template('finanzas/form_gasto.html', 
                                form_data=request.form, es_nueva=True, 
                                titulo_form=form_titulo,
@@ -6110,7 +6116,7 @@ def nuevo_gasto():
                            categorias_gastos=categorias_gastos, 
                            colaboradores=colaboradores_activos,
                            hoy=date.today().strftime('%Y-%m-%d'))
-
+    
 @main_bp.route('/finanzas/gastos/editar/<int:gasto_id>', methods=['GET', 'POST'])
 @login_required
 def editar_gasto(gasto_id):
