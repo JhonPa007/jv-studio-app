@@ -4514,6 +4514,29 @@ def nueva_venta():
         flash("Seleccione una sucursal para continuar.", "warning")
         return redirect(url_for('main.index'))
 
+    # ==============================================================================
+    # --- INICIO VALIDACIÓN DE CAJA ABIERTA (AGREGADO) ---
+    # ==============================================================================
+    try:
+        with db_conn.cursor() as cursor_val:
+            cursor_val.execute("""
+                SELECT id FROM caja_sesiones 
+                WHERE usuario_id = %s AND sucursal_id = %s AND estado = 'Abierta'
+            """, (current_user.id, sucursal_id))
+            caja_abierta = cursor_val.fetchone()
+
+            if not caja_abierta:
+                flash("⛔ ACCESO DENEGADO: Debes ABRIR CAJA antes de realizar ventas.", "danger")
+                return redirect(url_for('main.index')) # O redirigir a 'main.abrir_caja' si tienes esa ruta
+    except Exception as e:
+        flash(f"Error verificando caja: {e}", "danger")
+        return redirect(url_for('main.index'))
+    
+    # ==============================================================================
+    # --- FIN VALIDACIÓN ---
+    # ==============================================================================
+    
+
     # --- LÓGICA POST (PROCESAR VENTA) ---
     if request.method == 'POST':
         cursor = None
