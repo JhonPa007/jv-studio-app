@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        
+        <div class="col-md-4">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-calculator"></i> Generar Pago</h5>
+                </div>
+                <div class="card-body">
+                    <form id="formCalculo">
+                        <div class="mb-3">
+                            <label>Colaborador</label>
+                            <select class="form-select" id="empleado_id">
+                                {% for e in empleados %}
+                                <option value="{{ e.id }}">{{ e.nombres }} {{ e.apellidos }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label>Desde</label>
+                                <input type="date" class="form-control" id="fecha_inicio" required>
+                            </div>
+                            <div class="col-6">
+                                <label>Hasta</label>
+                                <input type="date" class="form-control" id="fecha_fin" required>
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn btn-primary w-100" onclick="consultarPlanilla()">
+                            <i class="fas fa-search-dollar"></i> Calcular Pago
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card shadow border-0" id="cardBoleta" style="display:none;">
+                <div class="card-body p-5" style="background-color: #f8f9fa;">
+                    
+                    <div class="d-flex justify-content-between border-bottom pb-3 mb-3">
+                        <div>
+                            <h4 class="fw-bold text-dark">BOLETA DE PAGO</h4>
+                            <p class="text-muted mb-0">JV STUDIO - Planilla de Comisiones</p>
+                        </div>
+                        <div class="text-end">
+                            <h5 id="lblEmpleado" class="text-primary">Juan Pérez</h5>
+                            <small id="lblPeriodo">01 Dic - 07 Dic</small>
+                        </div>
+                    </div>
+
+                    <h6 class="text-uppercase text-secondary small fw-bold">Ingresos (Comisiones)</h6>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-sm table-borderless">
+                            <thead class="text-muted border-bottom">
+                                <tr>
+                                    <th>Concepto / Tramos</th>
+                                    <th class="text-end">Venta Base</th>
+                                    <th class="text-end">Importe</th>
+                                </tr>
+                            </thead>
+                            <tbody id="listaIngresos">
+                                </tbody>
+                            <tfoot>
+                                <tr class="border-top fw-bold">
+                                    <td colspan="2">Total Bruto</td>
+                                    <td class="text-end text-success" id="valBruto">S/ 0.00</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <h6 class="text-uppercase text-secondary small fw-bold">Descuentos & Adelantos</h6>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-sm table-borderless">
+                            <tbody id="listaDescuentos">
+                                </tbody>
+                        </table>
+                    </div>
+
+                    <div class="alert alert-primary d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">NETO A PAGAR</h4>
+                        <h2 class="mb-0 fw-bold" id="valNeto">S/ 0.00</h2>
+                    </div>
+
+                    <div class="text-end mt-4">
+                        <button class="btn btn-outline-secondary"><i class="fas fa-print"></i> Imprimir</button>
+                        <button class="btn btn-success btn-lg" onclick="procesarPagoReal()">
+                            <i class="fas fa-check-circle"></i> CONFIRMAR PAGO
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+            
+            <div id="msgInicial" class="text-center py-5 text-muted">
+                <i class="fas fa-file-invoice-dollar fa-4x mb-3"></i>
+                <p>Selecciona un colaborador y fechas para generar la boleta.</p>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+// --- LÓGICA JAVASCRIPT ---
+
+async function consultarPlanilla() {
+    const data = {
+        empleado_id: document.getElementById('empleado_id').value,
+        fecha_inicio: document.getElementById('fecha_inicio').value,
+        fecha_fin: document.getElementById('fecha_fin').value
+    };
+
+    if(!data.fecha_inicio || !data.fecha_fin) {
+        alert("Por favor selecciona las fechas");
+        return;
+    }
+
+    // Llamada al Backend
+    const response = await fetch('/finanzas/api/calcular-planilla-empleado', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    });
+
+    const resultado = await response.json();
+
+    if(resultado.error) {
+        alert("Error: " + resultado.error);
+        return;
+    }
+
+    renderizarBoleta(resultado);
+}
+
+function renderizarBoleta(data) {
+    document.getElementById('msgInicial').style.display = 'none';
+    document.getElementById('cardBoleta').style.display = 'block';
+
+    // 1. Datos Generales
+    document.getElementById('lblEmpleado').innerText = data.empleado;
+    
+    // 2. Ingresos (Desglose de Tramos)
+    const tbodyIng = document.getElementById('listaIngresos');
+    tbodyIng.innerHTML = '';
+    
+    // Recorremos los sub-periodos (Semanas o cortes de mes)
+    data.detalle_calculo.forEach(bloque => {
+        // Título del bloque (fechas)
+        let rowHeader = `<tr class="table-light"><td colspan="3"><small>Periodo: ${bloque.fechas}</small></td></tr>`;
+        tbodyIng.innerHTML += rowHeader;
+
+        bloque.desglose.forEach(item => {
+            let row = `
+                <tr>
+                    <td>Comisión Nivel ${item.nivel} (${item.tasa}%)</td>
+                    <td class="text-end text-muted">S/ ${item.venta_base.toFixed(2)}</td>
+                    <td class="text-end">S/ ${item.comision.toFixed(2)}</td>
+                </tr>
+            `;
+            tbodyIng.innerHTML += row;
+        });
+    });
+
+    // Si hubo reintegro SMV
+    if(data.resumen_financiero.reintegro_smv > 0) {
+        tbodyIng.innerHTML += `
+            <tr class="text-primary">
+                <td><strong>Reintegro Ley (Sueldo Mínimo)</strong></td>
+                <td class="text-end">-</td>
+                <td class="text-end">S/ ${data.resumen_financiero.reintegro_smv.toFixed(2)}</td>
+            </tr>
+        `;
+    }
+
+    document.getElementById('valBruto').innerText = `S/ ${data.resumen_financiero.bruto_comisiones.toFixed(2)}`;
+
+    // 3. Descuentos (Adelantos)
+    const tbodyDesc = document.getElementById('listaDescuentos');
+    tbodyDesc.innerHTML = '';
+    
+    if(data.resumen_financiero.descuento_adelantos > 0) {
+        tbodyDesc.innerHTML += `
+            <tr>
+                <td class="text-danger"><i class="fas fa-minus-circle"></i> Adelantos / Préstamos</td>
+                <td class="text-end text-danger">- S/ ${data.resumen_financiero.descuento_adelantos.toFixed(2)}</td>
+            </tr>
+        `;
+    } else {
+        tbodyDesc.innerHTML = '<tr><td colspan="2" class="text-muted text-center"><small>Sin descuentos</small></td></tr>';
+    }
+
+    // 4. Total Neto
+    document.getElementById('valNeto').innerText = `S/ ${data.resumen_financiero.neto_a_pagar.toFixed(2)}`;
+}
+
+function procesarPagoReal() {
+    if(confirm("¿Estás seguro de registrar este pago? Esto cerrará las comisiones de este periodo.")) {
+        // Aquí llamaríamos a la ruta /api/guardar-planilla que creamos antes
+        alert("¡Pago registrado correctamente!"); 
+        // Redirigir o limpiar
+    }
+}
+</script>
+{% endblock %}
