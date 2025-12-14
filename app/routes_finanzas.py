@@ -244,4 +244,185 @@ def proceso_cierre_mensual_fondo():
         db.commit()
         print("✅ Cierre de Fondo de Lealtad completado.")
 
+# --- Agregar al inicio de routes_finanzas.py ---
+from datetime import datetime, timedelta
+
+# ... (tus imports anteriores) ...
+
+from datetime import datetime, timedelta, date
+from calendar import monthrange
+
+def _calcular_desglose_tramos(cursor, venta_actual, acumulado_previo):
+    """
+    Función auxiliar: Toma un monto de venta y lo "pica" en pedacitos 
+    según los espacios disponibles en cada nivel (50%, 55%, 60%).
+    """
+    cursor.execute("SELECT * FROM esquema_comisiones ORDER BY monto_minimo ASC")
+    tramos = cursor.fetchall()
+    
+    desglose = []
+    monto_restante = float(venta_actual)
+    cursor_acumulado = float(acumulado_previo) # Dónde empieza mi "barra de experiencia"
+    
+    comision_total = 0.0
+    
+    for tramo in tramos:
+        if monto_restante <= 0:
+            break
+            
+        techo_tramo = float(tramo['monto_maximo']) if tramo['monto_maximo'] else float('inf')
+        piso_tramo = float(tramo['monto_minimo'])
+        tasa = float(tramo['porcentaje'])
+        
+        # 1. ¿Este tramo ya lo pasé antes de empezar esta venta?
+        if cursor_acumulado >= techo_tramo:
+            continue # Ya llené este saco, paso al siguiente
+            
+        # 2. ¿Cuánto espacio libre queda en este tramo?
+        # Si mi acumulado está en 4200 y el techo es 4500, tengo 300 de espacio.
+        espacio_disponible = techo_tramo - max(piso_tramo, cursor_acumulado)
+        
+        # 3. ¿Cuánto de mi venta actual cabe aquí?
+        monto_a_computar = min(monto_restante, espacio_disponible)
+        
+        if monto_a_computar > 0:
+            subtotal_comision = monto_a_computar * (tasa / 100)
+            desglose.append({
+                'nivel': tramo['nombre_nivel'],
+                'tasa': tasa,
+                'venta_base': monto_a_computar,
+                'comision': subtotal_comision
+            })
+            
+            comision_total += subtotal_comision
+            monto_restante -= monto_a_computar
+            cursor_acumulado += monto_a_computar # Avanzo mi cursor
+            
+    return desglose, comision_total
+
+@finanzas_bp.route('/api/calcular-planilla-empleado', methods=['POST'])
+@login_required
+def calcular_planilla_preliminar():
+    data = request.json
+    empleado_id = data.get('empleado_id')
+    f_inicio_str = data.get('fecha_inicio')
+    f_fin_str = data.get('fecha_fin')
+
+    db = get_db()
+    
+    try:
+        # Convertir a objetos Date
+        f_inicio = datetime.strptime(f_inicio_str, '%Y-%m-%d').date()
+        f_fin = datetime.strptime(f_fin_str, '%Y-%m-%d').date()
+        
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Datos Empleado
+            cursor.execute("SELECT * FROM empleados WHERE id = %s", (empleado_id,))
+            empleado = cursor.fetchone()
+            
+            # Configuracion SMV
+            cursor.execute("SELECT sueldo_minimo_vital FROM configuracion_sistema LIMIT 1")
+            config = cursor.fetchone()
+            smv = float(config['sueldo_minimo_vital']) if config else 1130.00
+            
+            total_periodo_pagar = 0.00
+            detalle_final = []
+            mensajes_alerta = []
+            
+            # --- DETECCIÓN DE CRUCE DE MES (Ej: Semana 5: 29 Dic - 03 Ene) ---
+            sub_periodos = []
+            
+            if f_inicio.month == f_fin.month:
+                # Caso Normal: Todo cae en el mismo mes
+                sub_periodos.append({'inicio': f_inicio, 'fin': f_fin, 'mes': f_inicio.month})
+            else:
+                # Caso Cruzado: Hay que partir la semana en dos
+                # Periodo A: Inicio -> Fin de Mes 1
+                ultimo_dia_mes_1 = date(f_inicio.year, f_inicio.month, monthrange(f_inicio.year, f_inicio.month)[1])
+                sub_periodos.append({'inicio': f_inicio, 'fin': ultimo_dia_mes_1, 'mes': f_inicio.month})
+                
+                # Periodo B: 1ro de Mes 2 -> Fin
+                primer_dia_mes_2 = f_fin.replace(day=1)
+                sub_periodos.append({'inicio': primer_dia_mes_2, 'fin': f_fin, 'mes': f_fin.month})
+            
+            # --- PROCESAR CADA SUB-PERIODO ---
+            reintegro_smv_total = 0.00
+            
+            for periodo in sub_periodos:
+                p_ini = periodo['inicio']
+                p_fin = periodo['fin']
+                
+                # 1. Calcular Venta del Sub-Periodo
+                cursor.execute("""
+                    SELECT COALESCE(SUM(vi.subtotal_item_neto), 0) as total
+                    FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id
+                    WHERE v.empleado_id = %s AND v.fecha_venta BETWEEN %s AND %s 
+                    AND v.estado != 'Anulada'
+                """, (empleado_id, p_ini, p_fin))
+                venta_actual = float(cursor.fetchone()['total'])
+                
+                # 2. Calcular Acumulado Previo en ese Mes (Desde el día 1 hasta ayer)
+                inicio_de_ese_mes = p_ini.replace(day=1)
+                cursor.execute("""
+                    SELECT COALESCE(SUM(vi.subtotal_item_neto), 0) as total
+                    FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id
+                    WHERE v.empleado_id = %s AND v.fecha_venta >= %s AND v.fecha_venta < %s
+                    AND v.estado != 'Anulada'
+                """, (empleado_id, inicio_de_ese_mes, p_ini))
+                acumulado_previo = float(cursor.fetchone()['total'])
+                
+                # 3. Calcular Comisiones Escalonadas (La magia de los tramos)
+                desglose_tramos, comision_sub = _calcular_desglose_tramos(cursor, venta_actual, acumulado_previo)
+                
+                total_periodo_pagar += comision_sub
+                
+                # Guardar detalle para el recibo
+                detalle_final.append({
+                    'fechas': f"{p_ini.strftime('%d/%m')} al {p_fin.strftime('%d/%m')}",
+                    'venta': venta_actual,
+                    'acumulado_antes': acumulado_previo,
+                    'acumulado_despues': acumulado_previo + venta_actual,
+                    'desglose': desglose_tramos
+                })
+
+                # --- 4. CÁLCULO DE REINTEGRO SMV (Solo si es fin de mes) ---
+                # Si este sub-periodo toca el último día del mes, verificamos el SMV del mes completo
+                ultimo_dia_del_mes_actual = date(p_ini.year, p_ini.month, monthrange(p_ini.year, p_ini.month)[1])
+                
+                if p_fin == ultimo_dia_del_mes_actual:
+                    # Traemos toda la comisión ganada en el mes
+                    total_mes_acumulado = acumulado_previo + venta_actual
+                    
+                    # Simulamos comisión total del mes (aproximada para validar SMV)
+                    # Nota: Para ser exactos habría que guardar el histórico de pagos, 
+                    # aquí recalculamos cuánto DEBIÓ ganar en el mes entero.
+                    _, comision_total_mes_teorica = _calcular_desglose_tramos(cursor, total_mes_acumulado, 0)
+                    
+                    if comision_total_mes_teorica < smv:
+                        reintegro = smv - comision_total_mes_teorica
+                        reintegro_smv_total += reintegro
+                        mensajes_alerta.append(f"⚠️ Reintegro Ley Mes {p_ini.strftime('%B')}: S/ {reintegro:.2f}")
+
+            # --- RESPUESTA FINAL JSON ---
+            return jsonify({
+                'empleado': f"{empleado['nombres']} {empleado['apellidos']}",
+                'total_a_pagar': total_periodo_pagar + reintegro_smv_total,
+                'reintegro_smv': reintegro_smv_total,
+                'detalle_calculo': detalle_final,
+                'mensajes': mensajes_alerta
+            })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    
+    
+@finanzas_bp.route('/api/guardar-planilla', methods=['POST'])
+@login_required
+def guardar_planilla():
+    # Aquí recibirías el JSON final confirmado por el admin y harías el INSERT en la tabla 'planillas'
+    # ... Lógica de INSERT ...
+    return jsonify({'mensaje': 'Planilla guardada correctamente'})
+
 
