@@ -115,4 +115,10 @@ def create_app():
     # Importar modelos para que Flask-Login los reconozca
     from . import models
 
+    from . import routes_finanzas
+    app.register_blueprint(routes_finanzas.finanzas_bp)
+    
     return app
+
+    
+

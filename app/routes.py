@@ -9635,4 +9635,5 @@ def descargar_cdr(venta_id):
         flash(f"Error al descargar CDR: {e}", "danger")
         return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id)) 
  
-    
+  
+  
