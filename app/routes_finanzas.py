@@ -1,9 +1,11 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_user, session
-from flask_login import login_required
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
+from flask_login import login_required, current_user  
 import psycopg2
 import psycopg2.extras
 from datetime import date
 from .db import get_db
+
+# ... el resto del código sigue igual ...
 
 # Definimos el "Blueprint" (es como un mini-módulo dentro de la app)
 finanzas_bp = Blueprint('finanzas', __name__, url_prefix='/finanzas')
