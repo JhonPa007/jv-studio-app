@@ -12,17 +12,25 @@ finanzas_bp = Blueprint('finanzas', __name__, url_prefix='/finanzas')
 
 # --- FUNCIÓN AUXILIAR (Lógica de cálculo) ---
 def _calcular_produccion_mes_actual(cursor, empleado_id, tipo_salario, sueldo_basico=0):
-    # Rango de fechas: Primer día del mes hasta hoy
+    """
+    Calcula cuánto dinero ha generado el empleado en lo que va del mes.
+    Sirve de base para saber si llegó a la meta del Fondo de Lealtad.
+    """
+    # 1. Definir rango de fechas (Inicio de mes hasta hoy)
     hoy = date.today()
     inicio_mes = hoy.replace(day=1)
     
     produccion = 0.00
 
+    # CASO A: Personal con Sueldo Fijo (Ej: Recepción)
+    # Su "producción base" es su sueldo (para efectos de calcular el 5% de aporte)
     if tipo_salario == 'Fijo_Recepcion':
-        produccion = float(sueldo_basico)
+        produccion = float(sueldo_basico or 0)
 
+    # CASO B: Personal Operativo (Barberos / Instructores)
     elif tipo_salario in ['Comisionista', 'Mixto_Instructor']:
-        # Sumar ventas activas del mes
+        # Sumamos el neto de los ítems vendidos por este empleado desde el día 1 del mes
+        # Importante: Ignoramos ventas anuladas para no inflar la producción
         cursor.execute("""
             SELECT COALESCE(SUM(vi.subtotal_item_neto), 0)
             FROM venta_items vi
@@ -31,6 +39,7 @@ def _calcular_produccion_mes_actual(cursor, empleado_id, tipo_salario, sueldo_ba
               AND v.fecha_venta >= %s 
               AND v.estado != 'Anulada'
         """, (empleado_id, inicio_mes))
+        
         result = cursor.fetchone()
         produccion = float(result[0]) if result else 0.00
             
