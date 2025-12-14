@@ -453,3 +453,41 @@ def guardar_planilla():
     return jsonify({'mensaje': 'Planilla guardada correctamente'})
 
 
+# --- VISTAS HTML (PÁGINAS) ---
+
+@finanzas_bp.route('/planilla', methods=['GET'])
+@login_required
+def ver_planilla():
+    """ Carga la pantalla de Generación de Pagos """
+    db = get_db()
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+        # Cargamos solo empleados activos para el dropdown
+        cursor.execute("""
+            SELECT id, nombres, apellidos, modalidad_pago 
+            FROM empleados 
+            WHERE activo = TRUE 
+            ORDER BY nombres
+        """)
+        empleados = cursor.fetchall()
+    
+    return render_template('finanzas/planilla.html', empleados=empleados)
+
+@finanzas_bp.route('/gestion-fondo', methods=['GET'])
+@login_required
+def ver_fondo_admin():
+    """ Carga el Panel Administrativo del Fondo de Lealtad """
+    db = get_db()
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+        # Obtenemos lista de empleados con sus saldos actuales
+        cursor.execute("""
+            SELECT id, nombres, apellidos, saldo_fondo_acumulado, 
+                   meta_activacion_mensual, estado_fondo
+            FROM empleados 
+            WHERE activo = TRUE 
+            ORDER BY saldo_fondo_acumulado DESC
+        """)
+        empleados = cursor.fetchall()
+        
+    return render_template('finanzas/fondo_admin.html', empleados=empleados)
+
+
