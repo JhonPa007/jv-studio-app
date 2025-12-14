@@ -490,4 +490,69 @@ def ver_fondo_admin():
         
     return render_template('finanzas/fondo_admin.html', empleados=empleados)
 
+# --- AGREGAR ESTO EN routes_finanzas.py ---
+
+@finanzas_bp.route('/fondo/penalidad', methods=['POST'])
+@login_required
+def aplicar_penalidad_fondo():
+    # Validar permisos (Solo Admin)
+    if getattr(current_user, 'rol_nombre', '') != 'Administrador':
+        flash("Acceso denegado.", "danger")
+        return redirect(url_for('main.index'))
+
+    empleado_id = request.form.get('empleado_id')
+    motivo = request.form.get('motivo')
+    
+    # Validar monto
+    try:
+        monto = float(request.form.get('monto'))
+    except (ValueError, TypeError):
+        flash("El monto ingresado no es válido.", "danger")
+        return redirect(url_for('finanzas.ver_fondo_admin'))
+
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            # 1. Obtener saldo actual
+            cursor.execute("SELECT saldo_fondo_acumulado FROM empleados WHERE id = %s", (empleado_id,))
+            res = cursor.fetchone()
+            
+            if not res:
+                flash("Empleado no encontrado", "danger")
+                return redirect(url_for('finanzas.ver_fondo_admin'))
+                
+            saldo_actual = float(res[0] or 0)
+            nuevo_saldo = saldo_actual - monto
+            
+            # 2. Evitar saldos negativos (Opcional, según tu regla de negocio)
+            if nuevo_saldo < 0:
+                # Si quieres permitir deuda, borra este if. 
+                # Si quieres dejarlo en 0:
+                monto = saldo_actual 
+                nuevo_saldo = 0
+                flash(f"El saldo era insuficiente. Se descontó el máximo posible (S/ {monto:.2f}).", "warning")
+
+            if monto > 0:
+                # 3. Actualizar Empleado
+                cursor.execute("UPDATE empleados SET saldo_fondo_acumulado = %s WHERE id = %s", (nuevo_saldo, empleado_id))
+                
+                # 4. Registrar en Historial
+                # Usamos current_user.id para saber quién puso la multa.
+                # Asegúrate que tu tabla movimientos_fondo tenga la columna creado_por_usuario_id 
+                # Si no la tiene, quita esa columna del INSERT.
+                cursor.execute("""
+                    INSERT INTO movimientos_fondo (empleado_id, tipo_movimiento, monto, motivo, creado_por_usuario_id)
+                    VALUES (%s, 'Penalidad', %s, %s, %s)
+                """, (empleado_id, monto, motivo, current_user.id))
+
+                db.commit()
+                flash("🔴 Infracción registrada y descuento aplicado.", "success")
+            else:
+                flash("No se aplicó descuento (Monto 0).", "info")
+
+    except Exception as e:
+        db.rollback()
+        flash(f"Error al aplicar penalidad: {e}", "danger")
+
+    return redirect(url_for('finanzas.ver_fondo_admin'))
 
