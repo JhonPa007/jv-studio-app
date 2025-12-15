@@ -608,24 +608,28 @@ def confirmar_pago_planilla():
     empleado_id = data.get('empleado_id')
     f_inicio = data.get('fecha_inicio')
     f_fin = data.get('fecha_fin')
-    monto_total = data.get('monto_total') # Dato que viene del frontend para registro
+    monto_total = data.get('monto_total')
 
     if not empleado_id or not f_inicio or not f_fin:
         return jsonify({'error': 'Datos incompletos'}), 400
 
     db = get_db()
     try:
-        with db.cursor() as cursor:
+        # Usamos RealDictCursor explícitamente para evitar errores de índice
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            
             # 1. Crear el registro "Padre" de la Planilla
             cursor.execute("""
                 INSERT INTO planillas (empleado_id, fecha_inicio_periodo, fecha_fin_periodo, total_pagado)
                 VALUES (%s, %s, %s, %s)
                 RETURNING id
             """, (empleado_id, f_inicio, f_fin, monto_total))
-            planilla_id = cursor.fetchone()[0]
+            
+            # Capturamos el ID de la nueva planilla
+            nueva_planilla = cursor.fetchone()
+            planilla_id = nueva_planilla['id']
 
-            # 2. MARCAR VENTAS COMO PAGADAS
-            # Actualizamos todas las ventas de ese rango que no estaban pagadas
+            # 2. MARCAR VENTAS COMO PAGADAS (Bloquearlas)
             cursor.execute("""
                 UPDATE ventas 
                 SET pago_nomina_id = %s 
@@ -635,7 +639,7 @@ def confirmar_pago_planilla():
                   AND pago_nomina_id IS NULL
             """, (planilla_id, empleado_id, f_inicio, f_fin))
 
-            # 3. MARCAR ADELANTOS COMO DEDUCIDOS
+            # 3. MARCAR ADELANTOS COMO DEDUCIDOS (Bloquearlos)
             cursor.execute("""
                 UPDATE gastos
                 SET deducido_en_planilla_id = %s
@@ -645,12 +649,13 @@ def confirmar_pago_planilla():
             """, (planilla_id, empleado_id, f_inicio, f_fin))
 
             db.commit()
-            return jsonify({'mensaje': 'Pago registrado correctamente. Las ventas han sido cerradas.', 'planilla_id': planilla_id})
+            return jsonify({'mensaje': 'Pago registrado correctamente. Ventas cerradas.', 'planilla_id': planilla_id})
 
     except Exception as e:
-        db.rollback()
+        if db: db.rollback()
+        # Imprimir el error en la consola de Railway para verlo
+        print(f"Error confirmando pago: {e}")
         return jsonify({'error': str(e)}), 500
-    
     
 # --- GESTIÓN DE PROPINAS ---
 
