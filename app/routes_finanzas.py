@@ -273,38 +273,39 @@ def proceso_cierre_mensual_fondo():
 # ==============================================================================
 # 1. FUNCIÓN AUXILIAR: LÓGICA DE TRAMOS (CEREBRO MATEMÁTICO)
 # ==============================================================================
-def _calcular_desglose_tramos(cursor, venta_actual, acumulado_previo):
-    # Toma un monto de venta y lo distribuye en los niveles disponibles (Base, Master, Top)
-    # basándose en cuánto ya tenía acumulado el empleado en el mes.
-    
+def _calcular_desglose_tramos(cursor, venta_pagable, acumulado_histórico_mes):
+    """
+    Calcula cuánto pagar por la 'venta_pagable' actual, basándose en el 
+    'acumulado_histórico_mes' para determinar el nivel (50%, 55%, 60%).
+    """
     cursor.execute("SELECT * FROM esquema_comisiones ORDER BY monto_minimo ASC")
     tramos = cursor.fetchall()
     
     desglose = []
-    monto_restante = float(venta_actual)
-    cursor_acumulado = float(acumulado_previo) # Punto de partida en la "barra de experiencia"
+    monto_restante_por_pagar = float(venta_pagable)
+    
+    # El cursor empieza donde va la producción TOTAL del mes (incluyendo lo ya pagado)
+    cursor_nivel = float(acumulado_histórico_mes) 
     
     comision_total = 0.0
     
     for tramo in tramos:
-        if monto_restante <= 0:
+        if monto_restante_por_pagar <= 0:
             break
             
-        # Definir techos y pisos del nivel actual
         techo_tramo = float(tramo['monto_maximo']) if tramo['monto_maximo'] else float('inf')
         piso_tramo = float(tramo['monto_minimo'])
         tasa = float(tramo['porcentaje'])
         
-        # 1. ¿Este tramo ya fue llenado completamente en días anteriores?
-        if cursor_acumulado >= techo_tramo:
+        # 1. ¿Este nivel ya fue superado por la producción histórica?
+        if cursor_nivel >= techo_tramo:
             continue 
             
-        # 2. ¿Cuánto espacio libre queda en este tramo?
-        # Ej: Si el techo es 4500 y voy en 4200, quedan 300 libres.
-        espacio_disponible = techo_tramo - max(piso_tramo, cursor_acumulado)
+        # 2. ¿Cuánto espacio queda en este nivel?
+        espacio_disponible = techo_tramo - max(piso_tramo, cursor_nivel)
         
         # 3. ¿Cuánto de mi venta actual cabe aquí?
-        monto_a_computar = min(monto_restante, espacio_disponible)
+        monto_a_computar = min(monto_restante_por_pagar, espacio_disponible)
         
         if monto_a_computar > 0:
             subtotal_comision = monto_a_computar * (tasa / 100)
@@ -316,20 +317,21 @@ def _calcular_desglose_tramos(cursor, venta_actual, acumulado_previo):
             })
             
             comision_total += subtotal_comision
-            monto_restante -= monto_a_computar
-            cursor_acumulado += monto_a_computar # Mover el cursor para la siguiente iteración
+            monto_restante_por_pagar -= monto_a_computar
+            cursor_nivel += monto_a_computar # Avanzamos el cursor de nivel
             
     return desglose, comision_total
 
 
 # ==============================================================================
-# 2. ENDPOINT PRINCIPAL: CALCULAR PLANILLA
+# 2. ENDPOINT: CALCULAR PLANILLA (PRELIMINAR)
 # ==============================================================================
 @finanzas_bp.route('/api/calcular-planilla-empleado', methods=['POST'])
 @login_required
 def calcular_planilla_preliminar():
-    # Calcula el pago exacto considerando cruces de mes, tramos marginales y adelantos.
-    
+    """
+    Calcula el pago exacto excluyendo ventas ya pagadas y descontando adelantos no deducidos.
+    """
     data = request.json
     empleado_id = data.get('empleado_id')
     f_inicio_str = data.get('fecha_inicio')
@@ -338,39 +340,31 @@ def calcular_planilla_preliminar():
     db = get_db()
     
     try:
-        # Convertir strings a objetos Date
         f_inicio = datetime.strptime(f_inicio_str, '%Y-%m-%d').date()
         f_fin = datetime.strptime(f_fin_str, '%Y-%m-%d').date()
         
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # A. Obtener Datos Básicos
+            # A. Datos Básicos
             cursor.execute("SELECT * FROM empleados WHERE id = %s", (empleado_id,))
             empleado = cursor.fetchone()
-            
-            if not empleado:
-                return jsonify({'error': 'Empleado no encontrado'}), 404
+            if not empleado: return jsonify({'error': 'Empleado no encontrado'}), 404
             
             cursor.execute("SELECT sueldo_minimo_vital FROM configuracion_sistema LIMIT 1")
             config = cursor.fetchone()
             smv = float(config['sueldo_minimo_vital']) if config else 1130.00
             
-            # Variables acumuladoras para la respuesta final
             total_comisiones_periodo = 0.00
             detalle_final = []
             mensajes_alerta = []
             reintegro_smv_total = 0.00
             
-            # B. Detectar Sub-Periodos (Por si la semana cruza dos meses)
+            # B. Detectar Sub-Periodos (Cruce de Meses)
             sub_periodos = []
-            
             if f_inicio.month == f_fin.month and f_inicio.year == f_fin.year:
-                # Caso Normal: Todo en el mismo mes
                 sub_periodos.append({'inicio': f_inicio, 'fin': f_fin})
             else:
-                # Caso Cruzado: Partir la semana
                 ultimo_dia_mes_1 = date(f_inicio.year, f_inicio.month, monthrange(f_inicio.year, f_inicio.month)[1])
                 primer_dia_mes_2 = f_fin.replace(day=1)
-                
                 sub_periodos.append({'inicio': f_inicio, 'fin': ultimo_dia_mes_1})
                 sub_periodos.append({'inicio': primer_dia_mes_2, 'fin': f_fin})
             
@@ -379,68 +373,64 @@ def calcular_planilla_preliminar():
                 p_ini = periodo['inicio']
                 p_fin = periodo['fin']
                 
-                # 1. Calcular Venta del Sub-Periodo (Lo que se va a pagar ahora)
+                # 1. VENTA PAGABLE (Solo lo que NO tiene 'pago_nomina_id')
                 cursor.execute("""
                     SELECT COALESCE(SUM(vi.subtotal_item_neto), 0) as total
                     FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id
-                    WHERE v.empleado_id = %s AND v.fecha_venta BETWEEN %s AND %s 
-                    AND v.estado != 'Anulada'
+                    WHERE v.empleado_id = %s 
+                      AND v.fecha_venta BETWEEN %s AND %s 
+                      AND v.estado != 'Anulada'
+                      AND v.pago_nomina_id IS NULL -- <--- CLAVE: Solo lo no pagado
                 """, (empleado_id, p_ini, p_fin))
-                venta_actual = float(cursor.fetchone()['total'])
+                venta_pagable = float(cursor.fetchone()['total'])
                 
-                # 2. Calcular Acumulado Previo en ese Mes (Para saber en qué nivel de la tabla cae)
+                # 2. ACUMULADO HISTÓRICO DEL MES (Todo lo vendido en el mes, pagado o no, para definir nivel)
                 inicio_de_ese_mes = p_ini.replace(day=1)
                 cursor.execute("""
                     SELECT COALESCE(SUM(vi.subtotal_item_neto), 0) as total
                     FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id
-                    WHERE v.empleado_id = %s AND v.fecha_venta >= %s AND v.fecha_venta < %s
-                    AND v.estado != 'Anulada'
+                    WHERE v.empleado_id = %s 
+                      AND v.fecha_venta >= %s AND v.fecha_venta < %s -- Desde día 1 hasta ayer
+                      AND v.estado != 'Anulada'
                 """, (empleado_id, inicio_de_ese_mes, p_ini))
-                acumulado_previo = float(cursor.fetchone()['total'])
+                acumulado_histórico = float(cursor.fetchone()['total'])
                 
-                # 3. Calcular Comisiones usando la función auxiliar
-                desglose_tramos, comision_sub = _calcular_desglose_tramos(cursor, venta_actual, acumulado_previo)
-                
+                # 3. Cálculo de Tramos
+                desglose_tramos, comision_sub = _calcular_desglose_tramos(cursor, venta_pagable, acumulado_histórico)
                 total_comisiones_periodo += comision_sub
                 
-                # Guardar detalle visual para la boleta
-                detalle_final.append({
-                    'fechas': f"{p_ini.strftime('%d/%m')} al {p_fin.strftime('%d/%m')}",
-                    'venta': venta_actual,
-                    'acumulado_antes': acumulado_previo,
-                    'desglose': desglose_tramos
-                })
+                if venta_pagable > 0:
+                    detalle_final.append({
+                        'fechas': f"{p_ini.strftime('%d/%m')} al {p_fin.strftime('%d/%m')}",
+                        'venta_nueva': venta_pagable,
+                        'acumulado_previo': acumulado_histórico,
+                        'desglose': desglose_tramos
+                    })
 
-                # 4. Cálculo de Reintegro SMV (Solo si es fin de mes)
-                # Verifica si el sub-periodo termina el último día del mes
+                # 4. Validación SMV (Solo fin de mes)
                 ultimo_dia_del_mes_actual = date(p_ini.year, p_ini.month, monthrange(p_ini.year, p_ini.month)[1])
-                
                 if p_fin == ultimo_dia_del_mes_actual:
-                    # Simulamos cuánto ganó en todo el mes para ver si llegó al mínimo
-                    total_mes_acumulado = acumulado_previo + venta_actual
-                    _, comision_teorica_mes_completo = _calcular_desglose_tramos(cursor, total_mes_acumulado, 0)
-                    
-                    if comision_teorica_mes_completo < smv:
-                        diferencia = smv - comision_teorica_mes_completo
+                    total_mes_real = acumulado_histórico + venta_pagable
+                    _, comision_teorica_mes = _calcular_desglose_tramos(cursor, total_mes_real, 0)
+                    if comision_teorica_mes < smv:
+                        diferencia = smv - comision_teorica_mes
                         reintegro_smv_total += diferencia
-                        mensajes_alerta.append(f"⚠️ Reintegro Ley (Cierre {p_ini.strftime('%B')}): S/ {diferencia:.2f}")
+                        mensajes_alerta.append(f"⚠️ Reintegro Ley ({p_ini.strftime('%B')}): S/ {diferencia:.2f}")
 
-            # D. DEDUCCIÓN DE ADELANTOS (GASTOS)
+            # D. DEDUCCIÓN DE ADELANTOS (Solo los NO deducidos)
             cursor.execute("""
                 SELECT COALESCE(SUM(monto), 0) as total_adelantos
                 FROM gastos 
                 WHERE empleado_beneficiario_id = %s 
                   AND fecha BETWEEN %s AND %s
+                  AND deducido_en_planilla_id IS NULL -- <--- CLAVE: Solo no cobrados
             """, (empleado_id, f_inicio, f_fin))
+            total_adelantos = float(cursor.fetchone()['total_adelantos'])
             
-            row_adelantos = cursor.fetchone()
-            total_adelantos = float(row_adelantos['total_adelantos']) if row_adelantos else 0.00
-            
-            # E. CÁLCULO FINAL
+            # E. TOTAL FINAL
             total_bruto = total_comisiones_periodo + reintegro_smv_total
             total_neto_pagar = total_bruto - total_adelantos
 
-            # --- RESPUESTA JSON PARA EL FRONTEND ---
             return jsonify({
                 'empleado': f"{empleado['nombres']} {empleado['apellidos']}",
                 'total_a_pagar': total_neto_pagar,
@@ -455,8 +445,7 @@ def calcular_planilla_preliminar():
             })
 
     except Exception as e:
-        # Imprimir error en logs para depuración
-        print(f"Error en calcular_planilla: {e}") 
+        print(f"Error planilla: {e}")
         return jsonify({'error': str(e)}), 500
     
 @finanzas_bp.route('/api/guardar-planilla', methods=['POST'])
@@ -610,6 +599,59 @@ def actualizar_meta_fondo():
         flash(f"Error al actualizar: {e}", "danger")
 
     return redirect(url_for('finanzas.ver_fondo_admin'))
+
+
+@finanzas_bp.route('/api/confirmar-pago-planilla', methods=['POST'])
+@login_required
+def confirmar_pago_planilla():
+    data = request.json
+    empleado_id = data.get('empleado_id')
+    f_inicio = data.get('fecha_inicio')
+    f_fin = data.get('fecha_fin')
+    monto_total = data.get('monto_total') # Dato que viene del frontend para registro
+
+    if not empleado_id or not f_inicio or not f_fin:
+        return jsonify({'error': 'Datos incompletos'}), 400
+
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            # 1. Crear el registro "Padre" de la Planilla
+            cursor.execute("""
+                INSERT INTO planillas (empleado_id, fecha_inicio_periodo, fecha_fin_periodo, total_pagado)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            """, (empleado_id, f_inicio, f_fin, monto_total))
+            planilla_id = cursor.fetchone()[0]
+
+            # 2. MARCAR VENTAS COMO PAGADAS
+            # Actualizamos todas las ventas de ese rango que no estaban pagadas
+            cursor.execute("""
+                UPDATE ventas 
+                SET pago_nomina_id = %s 
+                WHERE empleado_id = %s 
+                  AND fecha_venta BETWEEN %s AND %s
+                  AND estado != 'Anulada'
+                  AND pago_nomina_id IS NULL
+            """, (planilla_id, empleado_id, f_inicio, f_fin))
+
+            # 3. MARCAR ADELANTOS COMO DEDUCIDOS
+            cursor.execute("""
+                UPDATE gastos
+                SET deducido_en_planilla_id = %s
+                WHERE empleado_beneficiario_id = %s
+                  AND fecha BETWEEN %s AND %s
+                  AND deducido_en_planilla_id IS NULL
+            """, (planilla_id, empleado_id, f_inicio, f_fin))
+
+            db.commit()
+            return jsonify({'mensaje': 'Pago registrado correctamente. Las ventas han sido cerradas.', 'planilla_id': planilla_id})
+
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
+    
+    
 
 
 
