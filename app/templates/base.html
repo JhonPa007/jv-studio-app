@@ -327,10 +327,17 @@
                 </a>
                 <div class="collapse" id="inventarioSubmenu">
                     <ul class="nav flex-column ms-3">
-                        <li><a class="nav-link small" href="{{ url_for('main.listar_productos') }}">Productos</a></li>
+                        
+                        <li>
+                            <a class="nav-link small fw-bold text-warning" href="{{ url_for('inventario.lista_inventario') }}">
+                                <i class="fas fa-clipboard-list me-1"></i> Kardex / Control Stock
+                            </a>
+                        </li>
+                        <li><a class="nav-link small" href="{{ url_for('main.listar_productos') }}">Productos (Catálogo)</a></li>
                         <li><a class="nav-link small" href="{{ url_for('main.nueva_compra') }}">Registrar Compra</a></li>
-                        <li><a class="nav-link small" href="{{ url_for('main.listar_compras') }}">Historial</a></li>
+                        <li><a class="nav-link small" href="{{ url_for('main.listar_compras') }}">Historial Compras</a></li>
                         <li><a class="nav-link small" href="{{ url_for('main.listar_proveedores') }}">Proveedores</a></li>
+                        
                     </ul>
                 </div>
             </li>

@@ -118,6 +118,9 @@ def create_app():
     from . import routes_finanzas
     app.register_blueprint(routes_finanzas.finanzas_bp)
     
+    from . import routes_inventario
+    app.register_blueprint(routes_inventario.inventario_bp)
+    
     return app
 
     
