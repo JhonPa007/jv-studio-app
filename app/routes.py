@@ -4824,7 +4824,7 @@ def editar_venta(venta_id):
             # Ya no necesitamos enviar 'tipos_comprobante' porque es readonly
             metodos_pago = ['Efectivo', 'Yape', 'Plin', 'Tarjeta', 'Transferencia']
 
-            return render_template('ventas/editar_venta.html',
+            return render_template('ventas/form_editar_venta.html',
                                    titulo_form=f"Editar Datos Venta #{venta_actual['numero_comprobante']}",
                                    action_url=url_for('main.editar_venta', venta_id=venta_id),
                                    venta=venta_actual,
