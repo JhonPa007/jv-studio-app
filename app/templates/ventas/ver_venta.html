@@ -74,7 +74,7 @@
             {% endif %}
             
             {% if venta.estado_pago != 'Anulado' %}
-                <a href="{{ url_for('main.form_editar_venta', venta_id=venta.id) }}" class="btn btn-secondary btn-sm ms-2">
+                <a href="{{ url_for('main.editar_venta', venta_id=venta.id) }}" class="btn btn-secondary btn-sm ms-2">
                     <i class="fas fa-edit me-1"></i> Editar
                 </a>
                 {% endif %}
