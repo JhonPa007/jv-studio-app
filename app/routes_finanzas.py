@@ -652,6 +652,87 @@ def confirmar_pago_planilla():
         return jsonify({'error': str(e)}), 500
     
     
+# --- GESTIÓN DE PROPINAS ---
 
+@finanzas_bp.route('/propinas/registrar', methods=['POST'])
+@login_required
+def registrar_propina():
+    """
+    Registra que un cliente dejó propina. 
+    Esto suma al saldo de caja (si es Efectivo) o saldo digital.
+    """
+    empleado_id = request.form.get('empleado_id')
+    monto = float(request.form.get('monto'))
+    metodo = request.form.get('metodo_pago') # Efectivo, Yape, etc.
+    venta_id = request.form.get('venta_id') # Opcional
+
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            # 1. Guardar la propina
+            cursor.execute("""
+                INSERT INTO propinas (empleado_id, monto, metodo_pago, registrado_por, entregado_al_barbero)
+                VALUES (%s, %s, %s, %s, FALSE)
+            """, (empleado_id, monto, metodo, current_user.id))
+            
+            # 2. Registrar MOVIMIENTO DE CAJA (INGRESO)
+            # Para que cuadre tu caja del día
+            cursor.execute("""
+                INSERT INTO movimientos_caja (tipo, monto, concepto, metodo_pago, usuario_id)
+                VALUES ('INGRESO', %s, 'Propina Cliente - Custodia', %s, %s)
+            """, (monto, metodo, current_user.id))
+            
+            db.commit()
+            flash(f"✅ Propina de S/ {monto:.2f} registrada en caja.", "success")
+            
+    except Exception as e:
+        db.rollback()
+        flash(f"Error: {e}", "danger")
+
+    return redirect(request.referrer) # Vuelve a la página donde estabas
+
+@finanzas_bp.route('/propinas/pagar', methods=['POST'])
+@login_required
+def pagar_propina_a_barbero():
+    """
+    Registra que le entregaste el dinero al barbero.
+    Esto resta saldo de caja.
+    """
+    propina_id = request.form.get('propina_id')
+    
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            # 1. Obtener datos de la propina para confirmar monto
+            cursor.execute("SELECT monto, empleado_id, metodo_pago FROM propinas WHERE id = %s", (propina_id,))
+            data = cursor.fetchone()
+            
+            if not data:
+                return jsonify({'error': 'Propina no encontrada'}), 404
+                
+            monto = float(data[0])
+            empleado_id = data[1]
+            metodo_origen = data[2] # Si entró por Yape, igual sale por caja chica o transferencia
+
+            # 2. Marcar como ENTREGADO
+            cursor.execute("""
+                UPDATE propinas 
+                SET entregado_al_barbero = TRUE, fecha_entrega = CURRENT_TIMESTAMP 
+                WHERE id = %s
+            """, (propina_id,))
+            
+            # 3. Registrar MOVIMIENTO DE CAJA (EGRESO)
+            # Concepto: Salida de dinero para pagar la propina que estaba en custodia
+            cursor.execute("""
+                INSERT INTO movimientos_caja (tipo, monto, concepto, metodo_pago, usuario_id)
+                VALUES ('EGRESO', %s, 'Entrega de Propina a Barbero', 'Efectivo', %s)
+            """, (monto, current_user.id))
+            
+            db.commit()
+            return jsonify({'mensaje': 'Propina pagada y descontada de caja'})
+
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
 
 

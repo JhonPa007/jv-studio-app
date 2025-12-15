@@ -6,7 +6,7 @@
 <div class="container-fluid mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 style="color: var(--color-acento-dorado);">
-            <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+            <i class="fas fa-tachometer-alt me-2"></i>Dashboard 
             {% if current_user.is_authenticated and current_user.rol == 'Administrador' %}
                 <span class="fs-5 text-muted">| Vista de Administrador</span>
             {% else %}

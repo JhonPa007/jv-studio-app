@@ -4643,6 +4643,42 @@ def nueva_venta():
             for p in pagos:
                 cursor.execute(sql_pago, (venta_id, p['metodo'], p['monto'], p.get('referencia')))
 
+            # ==============================================================================
+            # 🟢 8. LOGICA NUEVA: REGISTRO AUTOMÁTICO DE PROPINA
+            # ==============================================================================
+            monto_propina = request.form.get('monto_propina')
+            empleado_propina_id = request.form.get('empleado_propina_id')
+            metodo_propina = request.form.get('metodo_propina')
+
+            # Verificamos si escribieron un monto válido y seleccionaron al barbero
+            if monto_propina and empleado_propina_id:
+                try:
+                    monto_p_float = float(monto_propina)
+                    if monto_p_float > 0:
+                        # A. Guardar en tabla PROPINAS (Vinculada a la venta)
+                        cursor.execute("""
+                            INSERT INTO propinas (
+                                empleado_id, monto, metodo_pago, fecha_registro, 
+                                entregado_al_barbero, venta_asociada_id, registrado_por
+                            )
+                            VALUES (%s, %s, %s, CURRENT_TIMESTAMP, FALSE, %s, %s)
+                        """, (empleado_propina_id, monto_p_float, metodo_propina, venta_id, current_user.id))
+
+                        # B. Guardar en MOVIMIENTOS CAJA (INGRESO)
+                        # Concepto incluye el ID de venta para rastreo
+                        cursor.execute("""
+                            INSERT INTO movimientos_caja (tipo, monto, concepto, metodo_pago, usuario_id)
+                            VALUES ('INGRESO', %s, %s, %s, %s)
+                        """, (monto_p_float, f"Propina Venta #{serie_comprobante}-{numero_comprobante_str}", metodo_propina, current_user.id))
+                        
+                except ValueError:
+                    pass # Si enviaron texto en vez de número, lo ignoramos
+
+            # ==============================================================================
+            # FIN LOGICA PROPINA
+            # ==============================================================================
+            
+            
             db_conn.commit()
             flash(f'Venta registrada: {serie_comprobante}-{numero_comprobante_str}', 'success')
             return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
