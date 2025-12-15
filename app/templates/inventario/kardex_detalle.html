@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="mb-4">
+        <a href="{{ url_for('inventario.lista_inventario') }}" class="text-decoration-none text-muted mb-2 d-inline-block">
+            <i class="fas fa-arrow-left"></i> Volver al Inventario
+        </a>
+        <h2 class="text-white">Kardex: <span class="text-warning">{{ prod.nombre }}</span></h2>
+        <h4 class="text-white">Stock Actual: {{ prod.stock_actual }}</h4>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-dark table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Motivo</th>
+                    <th class="text-center">Entrada</th>
+                    <th class="text-center">Salida</th>
+                    <th class="text-center">Saldo</th>
+                    <th>Usuario</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mov in movimientos %}
+                <tr>
+                    <td>{{ mov.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
+                    <td>
+                        {% if mov.cantidad > 0 %}
+                            <span class="badge bg-success">{{ mov.tipo_movimiento }}</span>
+                        {% else %}
+                            <span class="badge bg-danger">{{ mov.tipo_movimiento }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {{ mov.motivo }}
+                        {% if mov.venta_id %}
+                            <a href="{{ url_for('main.ver_detalle_venta', venta_id=mov.venta_id) }}" class="text-info small ms-1">
+                                <i class="fas fa-external-link-alt"></i> Ver Venta
+                            </a>
+                        {% endif %}
+                    </td>
+                    
+                    <td class="text-center text-success fw-bold">
+                        {% if mov.cantidad > 0 %}+{{ mov.cantidad }}{% endif %}
+                    </td>
+                    <td class="text-center text-danger fw-bold">
+                        {% if mov.cantidad < 0 %}{{ mov.cantidad }}{% endif %}
+                    </td>
+                    
+                    <td class="text-center fw-bold">{{ mov.stock_actual }}</td>
+                    <td class="small text-muted">{{ mov.usuario }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="text-center text-muted">No hay movimientos registrados.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -4634,8 +4634,30 @@ def nueva_venta():
                     total_item, total_item
                 ))
                 if item['tipo'] == 'producto':
-                    cursor.execute("UPDATE productos SET stock_actual = stock_actual - %s WHERE id = %s", (item['cantidad'], item['id']))
+                    # === INTEGRACIÓN KARDEX ===
+                    # 1. Obtener stock antes de la venta para registro correcto
+                    cursor.execute("SELECT stock_actual FROM productos WHERE id = %s", (item['id'],))
+                    stock_anterior = cursor.fetchone()['stock_actual']
+                    cantidad_salida = float(item['cantidad']) # Positivo
+                    nuevo_stock = stock_anterior - cantidad_salida
 
+                    # 2. Actualizar Producto
+                    cursor.execute("UPDATE productos SET stock_actual = %s WHERE id = %s", (nuevo_stock, item['id']))
+
+                    # 3. Insertar en KARDEX
+                    cursor.execute("""
+                        INSERT INTO kardex (producto_id, tipo_movimiento, cantidad, stock_anterior, stock_actual, motivo, usuario_id, venta_id)
+                        VALUES (%s, 'VENTA', %s, %s, %s, %s, %s, %s)
+                    """, (
+                        item['id'], 
+                        -cantidad_salida, # Negativo porque sale
+                        stock_anterior, 
+                        nuevo_stock, 
+                        f"Venta {serie_comprobante}-{numero_comprobante_str}", 
+                        current_user.id, 
+                        venta_id
+                    ))
+                    
             # 7. Insertar Pagos
             if not pagos:
                 pagos = [{'metodo': 'Efectivo', 'monto': monto_final, 'referencia': ''}]
