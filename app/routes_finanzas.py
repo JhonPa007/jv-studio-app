@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 from calendar import monthrange
 from .db import get_db
 
+
 # ... el resto del código sigue igual ...
 
 # Definimos el "Blueprint" (es como un mini-módulo dentro de la app)
@@ -48,76 +49,153 @@ def _calcular_produccion_mes_actual(cursor, empleado_id, tipo_salario, sueldo_ba
 
 # --- RUTAS (ENDPOINTS) ---
 
+
+# ==============================================================================
+# LÓGICA DE CÁLCULO MULTI-ROL (Cajero, Barbero, Educador)
+# ==============================================================================
+def _calcular_metricas_fondo(cursor, empleado_id, tipo_salario, sueldo_basico=0, porcentaje_prod_empleado=0):
+    
+    # Retorna dos valores:
+    # 1. progreso_meta: Cuánto ha logrado para llenar la barra.
+    # 2. base_calculo: Sobre qué monto se calcula el 5% del fondo.
+    
+    hoy = date.today()
+    inicio_mes = hoy.replace(day=1)
+    
+    progreso_meta = 0.00
+    base_calculo = 0.00
+
+    # --- 1. DATOS COMUNES: VENTA DE PRODUCTOS ---
+    # Necesario para Cajeros y Barberos
+    cursor.execute("""
+        SELECT COALESCE(SUM(vi.subtotal_item_neto), 0) as total
+        FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id
+        JOIN productos p ON vi.producto_id = p.id
+        WHERE v.empleado_id = %s AND v.fecha_venta >= %s AND v.estado != 'Anulada'
+    """, (empleado_id, inicio_mes))
+    venta_productos = float(cursor.fetchone()['total'])
+    comision_productos = venta_productos * (float(porcentaje_prod_empleado) / 100)
+
+    # --- 2. DATOS COMUNES: VENTA DE SERVICIOS (BARBERÍA) ---
+    cursor.execute("""
+        SELECT COALESCE(SUM(vi.subtotal_item_neto), 0) as total
+        FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id
+        JOIN servicios s ON vi.servicio_id = s.id
+        WHERE v.empleado_id = %s AND v.fecha_venta >= %s AND v.estado != 'Anulada'
+    """, (empleado_id, inicio_mes))
+    produccion_servicios = float(cursor.fetchone()['total'])
+
+
+    # === CASO A: CAJERO (Meta = Comisiones Productos | Fondo = Sueldo + Comisiones) ===
+    if tipo_salario == 'Cajero_Ventas':
+        # Meta: "Se considerará la suma de la comisión"
+        progreso_meta = comision_productos 
+        
+        # Fondo: "Porcentaje en base a su sueldo + comision venta productos"
+        base_calculo = float(sueldo_basico) + comision_productos
+
+
+    # === CASO B: EDUCADOR (Meta/Fondo = Servicios + 30% Academia) ===
+    elif tipo_salario == 'Mixto_Instructor':
+        # 1. Calcular Comisiones de Academia (30% de mensualidades)
+        cursor.execute("""
+            SELECT COALESCE(SUM(comision_instructor), 0) as total_edu
+            FROM ingresos_academia
+            WHERE empleado_instructor_id = %s AND fecha_pago >= %s
+        """, (empleado_id, inicio_mes))
+        comision_educacion = float(cursor.fetchone()['total_edu'])
+        
+        # Meta y Fondo: "Suma de comisión educador + producción barbero"
+        # Nota: Asumimos que "producción barbero" se refiere al total vendido en servicios
+        total_mixto = produccion_servicios + comision_educacion
+        
+        progreso_meta = total_mixto
+        base_calculo = total_mixto
+
+
+    # === CASO C: BARBERO ESTÁNDAR (Meta/Fondo = Producción Total) ===
+    else: # 'Comisionista'
+        # Asumimos que su meta es su producción total (Servicios + Productos)
+        total_prod = produccion_servicios # + venta_productos (según tu regla anterior)
+        
+        progreso_meta = total_prod
+        # Para barberos, el fondo suele calcularse sobre lo que ellos produjeron
+        base_calculo = total_prod 
+
+    return progreso_meta, base_calculo
+
+
 @finanzas_bp.route('/api/fondo-lealtad', methods=['GET'])
 @login_required
 def dashboard_fondo_lealtad():
-    """
-    API para la App Móvil y Dashboard Web: Devuelve JSON con el progreso del fondo.
-    """
-    # Verificamos si el usuario logueado está asociado a un empleado
-    # OJO: Asegúrate que tu modelo de User tenga este campo, si no, hay que buscarlo
     empleado_id = getattr(current_user, 'empleado_id', None)
     
-    # Si usas un sistema donde el ID de usuario es igual al de empleado o tienes una tabla de relación:
+    # Fallback si no está linkeado en sesión
     if not empleado_id:
-        # Fallback: intentar buscar empleado por el email del usuario actual
         db = get_db()
         with db.cursor() as cursor:
-            cursor.execute("SELECT id FROM empleados WHERE email = %s", (current_user.email,)) # O el campo que uses para linkear
+            cursor.execute("SELECT id FROM empleados WHERE email = %s", (current_user.email,))
             res = cursor.fetchone()
-            if res:
-                empleado_id = res[0]
-            else:
-                return jsonify({'error': 'Usuario no vinculado a un empleado'}), 400
+            if res: empleado_id = res[0]
+            else: return jsonify({'error': 'Usuario no vinculado'}), 400
 
     db = get_db()
-    data_response = {}
-
     try:
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # 1. Configuración del Empleado
+            # 1. Obtener Configuración Global y Empleado
+            cursor.execute("SELECT porcentaje_fondo_global FROM configuracion_sistema LIMIT 1")
+            conf = cursor.fetchone()
+            porcentaje_global = float(conf['porcentaje_fondo_global']) if conf else 5.00
+
             cursor.execute("""
                 SELECT meta_activacion_mensual, porcentaje_fondo, saldo_fondo_acumulado, 
-                       tipo_salario, nombres, apellidos
+                       tipo_salario, sueldo_fijo_mensual, porcentaje_productos, nombres
                 FROM empleados WHERE id = %s
             """, (empleado_id,))
             emp = cursor.fetchone()
 
-            if not emp:
-                 return jsonify({'error': 'Empleado no encontrado'}), 404
+            if not emp: return jsonify({'error': 'Empleado no encontrado'}), 404
 
+            # Preferencia: Si el empleado tiene un % específico, úsalo. Si no, usa el Global.
+            porcentaje_aplicar = float(emp['porcentaje_fondo']) if emp['porcentaje_fondo'] else porcentaje_global
             meta = float(emp['meta_activacion_mensual'] or 0)
-            porcentaje = float(emp['porcentaje_fondo'] or 0) / 100
-            saldo_historico = float(emp['saldo_fondo_acumulado'] or 0)
             
-            # 2. Calcular Producción
-            produccion_actual = _calcular_produccion_mes_actual(cursor, empleado_id, emp['tipo_salario'])
+            # 2. CALCULAR MÉTRICAS (Usando la nueva función inteligente)
+            progreso_actual, base_para_fondo = _calcular_metricas_fondo(
+                cursor, 
+                empleado_id, 
+                emp['tipo_salario'], 
+                emp['sueldo_fijo_mensual'] or 0,
+                emp['porcentaje_productos'] or 0
+            )
             
-            # 3. Proyección
-            aporte_proyectado = produccion_actual * porcentaje
-            progreso_porcentaje = min(100, (produccion_actual / meta) * 100) if meta > 0 else 100
+            # 3. Proyección Dinero
+            aporte_proyectado = base_para_fondo * (porcentaje_aplicar / 100)
+            
+            # 4. Porcentaje Barra (Tope 100%)
+            barra_porcentaje = min(100, (progreso_actual / meta) * 100) if meta > 0 else 100
 
-            # 4. Gamificación
+            # 5. Gamificación Visual
             estado_visual = {}
-            if produccion_actual >= meta:
+            if progreso_actual >= meta:
                 estado_visual = {
                     'color': '#28a745', 'icono': '🎉', 'titulo': '¡BONO ACTIVADO!',
-                    'mensaje': f'Asegurado: S/ {aporte_proyectado:.2f}', 'clase_css': 'bg-success'
+                    'mensaje': f'Fondo asegurado este mes: S/ {aporte_proyectado:.2f}', 'clase_css': 'bg-success'
                 }
-            elif produccion_actual >= (meta * 0.7):
-                faltante = meta - produccion_actual
+            elif progreso_actual >= (meta * 0.7):
+                faltante = meta - progreso_actual
                 estado_visual = {
-                    'color': '#ffc107', 'icono': '🔥', 'titulo': '¡Estás muy cerca!',
-                    'mensaje': f'Faltan S/ {faltante:.2f}', 'clase_css': 'bg-warning'
+                    'color': '#ffc107', 'icono': '🔥', 'titulo': '¡Ya casi!',
+                    'mensaje': f'Te falta generar S/ {faltante:.2f} para desbloquear.', 'clase_css': 'bg-warning'
                 }
             else:
-                faltante = meta - produccion_actual
+                faltante = meta - progreso_actual
                 estado_visual = {
-                    'color': '#dc3545', 'icono': '💪', 'titulo': 'Tú puedes hacerlo',
-                    'mensaje': f'Faltan S/ {faltante:.2f} para activar.', 'clase_css': 'bg-danger'
+                    'color': '#dc3545', 'icono': '💪', 'titulo': 'Tú puedes',
+                    'mensaje': f'Meta restante: S/ {faltante:.2f}', 'clase_css': 'bg-danger'
                 }
 
-            # 5. Historial
+            # 6. Historial
             cursor.execute("""
                 SELECT fecha, tipo_movimiento, monto, motivo 
                 FROM movimientos_fondo 
@@ -126,88 +204,32 @@ def dashboard_fondo_lealtad():
             """, (empleado_id,))
             historial = cursor.fetchall()
             
-            data_response = {
+            return jsonify({
                 'resumen': {
-                    'saldo_total_acumulado': saldo_historico,
-                    'aporte_mes_proyectado': aporte_proyectado if produccion_actual >= meta else 0,
+                    'saldo_total_acumulado': float(emp['saldo_fondo_acumulado']),
+                    'aporte_mes_proyectado': aporte_proyectado if progreso_actual >= meta else 0,
                     'meta_objetivo': meta,
-                    'produccion_actual': produccion_actual
+                    'progreso_actual_valor': progreso_actual, # Valor numérico para mostrar "Llevas X"
+                    'base_calculo_real': base_para_fondo # Dato informativo
                 },
                 'gamificacion': {
-                    'progreso_porcentaje': progreso_porcentaje,
+                    'progreso_porcentaje': barra_porcentaje,
                     **estado_visual
                 },
                 'historial': [dict(h) for h in historial]
-            }
+            })
 
     except Exception as e:
-        print(f"Error dashboard fondo: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
-    return jsonify(data_response)
-
-@finanzas_bp.route('/fondo/penalidad', methods=['POST'])
-@login_required
-def aplicar_penalidad_fondo():
-    # Validar permisos de admin (ajusta según tu lógica de roles)
-    # if not current_user.es_admin: ...
-    
-    empleado_id = request.form.get('empleado_id')
-    motivo = request.form.get('motivo')
-    monto = float(request.form.get('monto'))
-
-    db = get_db()
-    try:
-        with db.cursor() as cursor:
-            cursor.execute("SELECT saldo_fondo_acumulado FROM empleados WHERE id = %s", (empleado_id,))
-            res = cursor.fetchone()
-            if not res:
-                flash("Empleado no encontrado", "danger")
-                return redirect(url_for('main.index'))
-                
-            saldo_actual = float(res[0] or 0)
-            nuevo_saldo = saldo_actual - monto
-            
-            if nuevo_saldo < 0:
-                monto = saldo_actual # Ajustar al máximo posible
-                nuevo_saldo = 0
-                flash(f"Saldo insuficiente. Se descontó el total disponible (S/ {monto:.2f}).", "warning")
-
-            if monto > 0:
-                cursor.execute("UPDATE empleados SET saldo_fondo_acumulado = %s WHERE id = %s", (nuevo_saldo, empleado_id))
-                
-                # Asumiendo que current_user tiene un atributo id o empleado_id válido para 'creado_por'
-                # Si 'creado_por_usuario_id' es FK a empleados, usa el ID de empleado del admin.
-                # Si es FK a usuarios, usa current_user.id
-                
-                # Para evitar errores con la FK corregida, asegúrate de enviar un ID válido de empleado
-                admin_empleado_id = getattr(current_user, 'empleado_id', None) 
-                # Si no tienes esto mapeado aún, pon 1 (suponiendo que 1 es el Admin principal) temporalmente o ajusta tu modelo User
-                if not admin_empleado_id: admin_empleado_id = 1 
-
-                cursor.execute("""
-                    INSERT INTO movimientos_fondo (empleado_id, tipo_movimiento, monto, motivo, creado_por_usuario_id)
-                    VALUES (%s, 'Penalidad', %s, %s, %s)
-                """, (empleado_id, monto, motivo, admin_empleado_id))
-
-                db.commit()
-                flash("🔴 Penalidad aplicada.", "success")
-            else:
-                flash("No hay saldo para descontar.", "info")
-
-    except Exception as e:
-        db.rollback()
-        flash(f"Error: {e}", "danger")
-
-    # Redirigir al perfil o lista de empleados (ajusta la ruta de retorno)
-    return redirect(request.referrer or url_for('main.index'))
 
 
 def proceso_cierre_mensual_fondo():
-    """
-    Esto corre automáticamente a fin de mes.
-    Verifica quién cumplió la meta y consolida el dinero en su 'bolsa'.
-    """
+    
+    # Esto corre automáticamente a fin de mes.
+    # Verifica quién cumplió la meta y consolida el dinero en su 'bolsa'.
+    
     db = get_db()
     # Rango del mes que cerramos (Ej: estamos 1ro dic, cerramos nov)
     # ... lógica de fechas ...
@@ -245,23 +267,16 @@ def proceso_cierre_mensual_fondo():
         db.commit()
         print("✅ Cierre de Fondo de Lealtad completado.")
 
-# --- Agregar al inicio de routes_finanzas.py ---
-from datetime import datetime, timedelta
 
-# ... (tus imports anteriores) ...
 
-from datetime import datetime, timedelta, date
-from calendar import monthrange
-finanzas_bp = Blueprint('finanzas', __name__, url_prefix='/finanzas')
 
 # ==============================================================================
 # 1. FUNCIÓN AUXILIAR: LÓGICA DE TRAMOS (CEREBRO MATEMÁTICO)
 # ==============================================================================
 def _calcular_desglose_tramos(cursor, venta_actual, acumulado_previo):
-    """
-    Toma un monto de venta y lo distribuye en los niveles disponibles (Base, Master, Top)
-    basándose en cuánto ya tenía acumulado el empleado en el mes.
-    """
+    # Toma un monto de venta y lo distribuye en los niveles disponibles (Base, Master, Top)
+    # basándose en cuánto ya tenía acumulado el empleado en el mes.
+    
     cursor.execute("SELECT * FROM esquema_comisiones ORDER BY monto_minimo ASC")
     tramos = cursor.fetchall()
     
@@ -313,9 +328,8 @@ def _calcular_desglose_tramos(cursor, venta_actual, acumulado_previo):
 @finanzas_bp.route('/api/calcular-planilla-empleado', methods=['POST'])
 @login_required
 def calcular_planilla_preliminar():
-    """
-    Calcula el pago exacto considerando cruces de mes, tramos marginales y adelantos.
-    """
+    # Calcula el pago exacto considerando cruces de mes, tramos marginales y adelantos.
+    
     data = request.json
     empleado_id = data.get('empleado_id')
     f_inicio_str = data.get('fecha_inicio')
@@ -555,4 +569,47 @@ def aplicar_penalidad_fondo():
         flash(f"Error al aplicar penalidad: {e}", "danger")
 
     return redirect(url_for('finanzas.ver_fondo_admin'))
+
+
+# --- AGREGAR AL FINAL DE routes_finanzas.py ---
+
+@finanzas_bp.route('/fondo/actualizar-meta', methods=['POST'])
+@login_required
+def actualizar_meta_fondo():
+    # 1. Seguridad: Solo Admin
+    if getattr(current_user, 'rol_nombre', '') != 'Administrador':
+        flash("Acceso denegado.", "danger")
+        return redirect(url_for('main.index'))
+
+    # 2. Recibir Datos
+    empleado_id = request.form.get('empleado_id')
+    nueva_meta = request.form.get('nueva_meta')
+
+    try:
+        monto = float(nueva_meta)
+        if monto < 0:
+            flash("La meta no puede ser negativa.", "warning")
+            return redirect(url_for('finanzas.ver_fondo_admin'))
+    except (ValueError, TypeError):
+        flash("Monto inválido.", "danger")
+        return redirect(url_for('finanzas.ver_fondo_admin'))
+
+    # 3. Guardar en Base de Datos
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            cursor.execute("""
+                UPDATE empleados 
+                SET meta_activacion_mensual = %s 
+                WHERE id = %s
+            """, (monto, empleado_id))
+            db.commit()
+            flash(f"✅ Meta actualizada a S/ {monto:.2f}", "success")
+    except Exception as e:
+        db.rollback()
+        flash(f"Error al actualizar: {e}", "danger")
+
+    return redirect(url_for('finanzas.ver_fondo_admin'))
+
+
 

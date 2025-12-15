@@ -3,7 +3,10 @@
 {% block content %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>💰 Gestión Fondo de Lealtad</h2>
+        <div>
+            <h2 class="fw-bold"><i class="fas fa-piggy-bank text-primary"></i> Gestión Fondo de Lealtad</h2>
+            <p class="text-muted">Administra los saldos acumulados, metas y disciplina del personal.</p>
+        </div>
         <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalPenalidad">
             <i class="fas fa-gavel"></i> Registrar Infracción
         </button>
@@ -11,26 +14,41 @@
 
     <div class="row">
         {% for emp in empleados %}
-        <div class="col-md-4 mb-3">
+        <div class="col-md-4 mb-4">
             <div class="card h-100 shadow-sm border-start border-4 {% if emp.saldo_fondo_acumulado > 0 %}border-success{% else %}border-secondary{% endif %}">
                 <div class="card-body">
-                    <h5 class="card-title text-primary">{{ emp.nombres }} {{ emp.apellidos }}</h5>
-                    <div class="d-flex justify-content-between align-items-end mt-3">
+                    <h5 class="card-title text-primary fw-bold">{{ emp.nombres }} {{ emp.apellidos }}</h5>
+                    
+                    <div class="d-flex justify-content-between align-items-end mt-4">
                         <div>
-                            <small class="text-muted">Saldo Acumulado</small>
-                            <h3 class="fw-bold mb-0">S/ {{ "%.2f"|format(emp.saldo_fondo_acumulado) }}</h3>
+                            <small class="text-muted text-uppercase" style="font-size: 0.75rem;">Saldo Acumulado</small>
+                            <h3 class="fw-bold mb-0 {% if emp.saldo_fondo_acumulado > 0 %}text-success{% else %}text-muted{% endif %}">
+                                S/ {{ "%.2f"|format(emp.saldo_fondo_acumulado) }}
+                            </h3>
                         </div>
+
                         <div class="text-end">
-                            <small class="d-block text-muted">Meta Mensual</small>
-                            <span class="badge bg-info text-dark">S/ {{ "%.2f"|format(emp.meta_activacion_mensual) }}</span>
+                            <small class="d-block text-muted text-uppercase" style="font-size: 0.75rem;">Meta Mensual</small>
+                            <span class="badge bg-info text-dark p-2 shadow-sm" 
+                                  style="cursor: pointer; transition: 0.2s;" 
+                                  onmouseover="this.classList.add('bg-primary', 'text-white'); this.classList.remove('bg-info', 'text-dark')"
+                                  onmouseout="this.classList.remove('bg-primary', 'text-white'); this.classList.add('bg-info', 'text-dark')"
+                                  onclick="abrirModalMeta('{{ emp.id }}', '{{ emp.nombres }}', '{{ emp.meta_activacion_mensual }}')"
+                                  title="Clic para editar meta">
+                                S/ {{ "%.2f"|format(emp.meta_activacion_mensual) }} <i class="fas fa-pen small ms-1"></i>
+                            </span>
                         </div>
                     </div>
                 </div>
-                <div class="card-footer bg-light d-flex justify-content-between">
+                <div class="card-footer bg-light d-flex justify-content-between align-items-center">
                     <small>Estado: <strong>{{ emp.estado_fondo }}</strong></small>
-                    <a href="#" class="text-decoration-none small">Ver Historial</a>
+                    <span class="badge bg-light text-muted border">Historial</span>
                 </div>
             </div>
+        </div>
+        {% else %}
+        <div class="col-12 text-center py-5">
+            <p class="text-muted">No hay colaboradores activos configurados.</p>
         </div>
         {% endfor %}
     </div>
@@ -40,32 +58,42 @@
             <div class="modal-content">
                 <form action="{{ url_for('finanzas.aplicar_penalidad_fondo') }}" method="POST">
                     <div class="modal-header bg-danger text-white">
-                        <h5 class="modal-title">Registrar Infracción / Penalidad</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Registrar Infracción</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
+                        <div class="alert alert-warning small">
+                            <i class="fas fa-info-circle"></i> Esta acción descontará dinero del fondo acumulado del colaborador.
+                        </div>
+
                         <div class="mb-3">
-                            <label>Colaborador</label>
+                            <label class="form-label fw-bold">Colaborador</label>
                             <select name="empleado_id" class="form-select" required>
+                                <option value="">Seleccione...</option>
                                 {% for emp in empleados %}
                                 <option value="{{ emp.id }}">{{ emp.nombres }} {{ emp.apellidos }}</option>
                                 {% endfor %}
                             </select>
                         </div>
+
                         <div class="mb-3">
-                            <label>Motivo de la Falta</label>
+                            <label class="form-label fw-bold">Motivo de la Falta</label>
                             <select name="motivo" class="form-select" onchange="sugerirMonto(this)">
-                                <option value="">Seleccione...</option>
-                                <option value="Tardanza (15min+)">Tardanza (>15min)</option>
+                                <option value="">Seleccione motivo...</option>
+                                <option value="Tardanza (15min+)">Tardanza (>15 min)</option>
                                 <option value="Sin Uniforme">No trajo Uniforme</option>
-                                <option value="Limpieza Deficiente">Puesto Sucio</option>
-                                <option value="Falta Grave">Falta Grave (Manual)</option>
+                                <option value="Limpieza Deficiente">Puesto de trabajo sucio</option>
+                                <option value="Falta Injustificada">Falta Injustificada</option>
+                                <option value="Otro">Otro (Manual)</option>
                             </select>
                         </div>
+
                         <div class="mb-3">
-                            <label>Monto a Descontar (S/)</label>
-                            <input type="number" step="0.50" name="monto" id="inputMonto" class="form-control text-danger fw-bold" required>
-                            <small class="text-muted">Este dinero se restará del fondo acumulado.</small>
+                            <label class="form-label fw-bold">Monto a Descontar (S/)</label>
+                            <div class="input-group">
+                                <span class="input-group-text text-danger fw-bold">- S/</span>
+                                <input type="number" step="0.50" name="monto" id="inputMonto" class="form-control text-danger fw-bold" placeholder="0.00" required>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -76,20 +104,66 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="modalMeta" tabindex="-1">
+        <div class="modal-dialog modal-sm"> 
+            <div class="modal-content">
+                <form action="{{ url_for('finanzas.actualizar_meta_fondo') }}" method="POST">
+                    <div class="modal-header bg-info text-white">
+                        <h5 class="modal-title"><i class="fas fa-bullseye"></i> Ajustar Meta</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <p class="small text-muted mb-1">Colaborador</p>
+                        <h5 class="fw-bold mb-3" id="lblNombreMeta">...</h5>
+                        
+                        <input type="hidden" name="empleado_id" id="inputEmpleadoMeta">
+                        
+                        <div class="form-floating mb-2">
+                            <input type="number" step="0.01" name="nueva_meta" id="inputNuevaMeta" class="form-control fw-bold text-center fs-4" placeholder="0.00" required>
+                            <label>Nueva Meta (S/)</label>
+                        </div>
+                        <small class="text-muted" style="font-size: 0.75rem;">Esto actualizará el objetivo para el cálculo de bonos.</small>
+                    </div>
+                    <div class="modal-footer p-2">
+                        <button type="submit" class="btn btn-primary w-100">Guardar Cambio</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script>
+    // 1. Sugerir monto de multa automáticamente
     function sugerirMonto(select) {
         const input = document.getElementById('inputMonto');
-        // Precios sugeridos de multas (puedes editar esto)
-        const multas = {
+        const precios = {
             'Tardanza (15min+)': 10.00,
             'Sin Uniforme': 20.00,
-            'Limpieza Deficiente': 15.00
+            'Limpieza Deficiente': 15.00,
+            'Falta Injustificada': 50.00
         };
-        if (multas[select.value]) {
-            input.value = multas[select.value];
+        
+        if (precios[select.value]) {
+            input.value = precios[select.value];
+        } else if (select.value === 'Otro') {
+            input.value = ''; // Limpiar para que escriban manual
+            input.focus();
         }
+    }
+
+    // 2. Abrir Modal de Meta con los datos cargados
+    function abrirModalMeta(id, nombre, metaActual) {
+        // Asignar valores a los campos del modal
+        document.getElementById('inputEmpleadoMeta').value = id;
+        document.getElementById('lblNombreMeta').innerText = nombre;
+        document.getElementById('inputNuevaMeta').value = metaActual;
+        
+        // Mostrar el modal usando Bootstrap 5
+        var myModal = new bootstrap.Modal(document.getElementById('modalMeta'));
+        myModal.show();
     }
 </script>
 {% endblock %}
