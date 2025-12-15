@@ -7,7 +7,6 @@ from .db import get_db
 inventario_bp = Blueprint('inventario', __name__, url_prefix='/inventario')
 
 # --- FUNCIÓN AUXILIAR: REGISTRAR EN KARDEX ---
-# Esta función la usaremos aquí y TAMBIÉN en Ventas
 def registrar_movimiento_kardex(cursor, producto_id, tipo, cantidad, motivo, usuario_id, venta_id=None):
     # 1. Obtener stock actual
     cursor.execute("SELECT stock_actual FROM productos WHERE id = %s", (producto_id,))
@@ -16,8 +15,6 @@ def registrar_movimiento_kardex(cursor, producto_id, tipo, cantidad, motivo, usu
     stock_ant = res['stock_actual'] if isinstance(res, dict) else res[0]
     
     # 2. Calcular nuevo stock
-    # Si es VENTA o CONSUMO, la cantidad debe venir negativa, o la restamos aquí.
-    # Para estandarizar: ENTRADA (+), SALIDA (-)
     stock_nuevo = stock_ant + cantidad
     
     # 3. Actualizar Producto
@@ -56,7 +53,13 @@ def lista_inventario():
 def guardar_movimiento():
     producto_id = request.form.get('producto_id')
     tipo = request.form.get('tipo_movimiento') # 'COMPRA' o 'CONSUMO_INTERNO'
-    cantidad_input = int(request.form.get('cantidad'))
+    
+    try:
+        cantidad_input = int(request.form.get('cantidad'))
+    except (ValueError, TypeError):
+        flash("Cantidad inválida", "danger")
+        return redirect(url_for('inventario.lista_inventario'))
+
     nota = request.form.get('nota')
     
     if cantidad_input <= 0:
