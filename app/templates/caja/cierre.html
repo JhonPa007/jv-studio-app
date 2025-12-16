@@ -348,13 +348,10 @@
             const data = await res.json();
             
             if(data.mensaje) {
-                // Eliminar visualmente la fila
-                const fila = document.getElementById(`row-prop-${id}`);
-                fila.style.opacity = '0';
-                setTimeout(() => fila.remove(), 500);
                 alert("✅ " + data.mensaje);
-                // Opcional: Recargar para actualizar saldos de caja
-                // location.reload();
+                
+                // 🟢 AQUÍ ESTÁ EL CAMBIO: Recargar la página para actualizar saldos visualmente
+                window.location.reload(); 
             } else {
                 alert("❌ Error: " + data.error);
             }
