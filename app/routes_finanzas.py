@@ -696,48 +696,84 @@ def registrar_propina():
 
     return redirect(request.referrer) # Vuelve a la página donde estabas
 
+# En app/routes_finanzas.py
+
 @finanzas_bp.route('/propinas/pagar', methods=['POST'])
 @login_required
 def pagar_propina_a_barbero():
-    """
-    Registra que le entregaste el dinero al barbero.
-    Esto resta saldo de caja.
-    """
     propina_id = request.form.get('propina_id')
     
     db = get_db()
     try:
-        with db.cursor() as cursor:
-            # 1. Obtener datos de la propina para confirmar monto
-            cursor.execute("SELECT monto, empleado_id, metodo_pago FROM propinas WHERE id = %s", (propina_id,))
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Obtener datos de la propina
+            cursor.execute("""
+                SELECT p.monto, p.empleado_id, p.metodo_pago, e.nombres 
+                FROM propinas p
+                JOIN empleados e ON p.empleado_id = e.id
+                WHERE p.id = %s
+            """, (propina_id,))
             data = cursor.fetchone()
             
             if not data:
                 return jsonify({'error': 'Propina no encontrada'}), 404
                 
-            monto = float(data[0])
-            empleado_id = data[1]
-            metodo_origen = data[2] # Si entró por Yape, igual sale por caja chica o transferencia
+            monto = float(data['monto'])
+            nombre_barbero = data['nombres']
 
-            # 2. Marcar como ENTREGADO
+            # 2. Buscar la CAJA ABIERTA del usuario actual (Para registrar la salida)
+            cursor.execute("""
+                SELECT id FROM caja_sesiones 
+                WHERE usuario_id = %s AND estado = 'Abierta'
+            """, (current_user.id,))
+            sesion = cursor.fetchone()
+            
+            if not sesion:
+                return jsonify({'error': 'No tienes una caja abierta para registrar esta salida de dinero.'}), 400
+            
+            caja_id = sesion['id']
+
+            # 3. Marcar propina como ENTREGADA
             cursor.execute("""
                 UPDATE propinas 
                 SET entregado_al_barbero = TRUE, fecha_entrega = CURRENT_TIMESTAMP 
                 WHERE id = %s
             """, (propina_id,))
             
-            # 3. Registrar MOVIMIENTO DE CAJA (EGRESO)
-            # Concepto: Salida de dinero para pagar la propina que estaba en custodia
+            # 4. Registrar SALIDA DE DINERO (Gasto Automático)
+            # Esto es lo que hace que tu caja cuadre. Resta el efectivo.
             cursor.execute("""
-                INSERT INTO movimientos_caja (tipo, monto, concepto, metodo_pago, usuario_id)
-                VALUES ('EGRESO', %s, 'Entrega de Propina a Barbero', 'Efectivo', %s)
-            """, (monto, current_user.id))
+                INSERT INTO gastos (
+                    descripcion, 
+                    monto, 
+                    fecha_registro, 
+                    metodo_pago, 
+                    caja_sesion_id, 
+                    usuario_id, 
+                    empleado_beneficiario_id,
+                    tipo
+                )
+                VALUES (%s, %s, CURRENT_TIMESTAMP, 'Efectivo', %s, %s, %s, 'Salida de Propina')
+            """, (
+                f"Entrega de Propina - {nombre_barbero}", # Descripción
+                monto,                                    # Monto
+                caja_id,                                  # Tu caja abierta
+                current_user.id,                          # Tú (Cajero)
+                data['empleado_id']                       # El Barbero
+            ))
+            
+            # Opcional: También registrar en movimientos_caja si usas esa tabla para reportes
+            cursor.execute("""
+                INSERT INTO movimientos_caja (tipo, monto, concepto, metodo_pago, usuario_id, caja_sesion_id)
+                VALUES ('EGRESO', %s, %s, 'Efectivo', %s, %s)
+            """, (monto, f"Entrega Propina - {nombre_barbero}", current_user.id, caja_id))
             
             db.commit()
-            return jsonify({'mensaje': 'Propina pagada y descontada de caja'})
+            return jsonify({'mensaje': 'Propina entregada y descontada de caja correctamente.'})
 
     except Exception as e:
         db.rollback()
+        print(f"Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
