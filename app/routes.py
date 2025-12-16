@@ -2206,65 +2206,136 @@ def api_get_datos_reserva(reserva_id):
 @login_required
 def api_agenda_dia_data():
     """
-    Devuelve datos para FullCalendar, tratando todos los fondos (turnos, ausencias) como eventos.
+    API que alimenta el FullCalendar.
+    Devuelve:
+    1. 'recursos': Los empleados (columnas).
+    2. 'eventos': Turnos (verde), Ausencias (rojo) y Reservas (citas).
     """
+    # Recibimos fecha y sucursal desde los parámetros GET del JavaScript
     fecha_str = request.args.get('fecha', date.today().isoformat())
     sucursal_id = request.args.get('sucursal_id', type=int)
-    fecha_obj = date.fromisoformat(fecha_str)
     
+    # Validaciones básicas
     if not sucursal_id:
         return jsonify({"recursos": [], "eventos": []})
+        
+    try:
+        fecha_obj = date.fromisoformat(fecha_str)
+    except ValueError:
+        return jsonify({"error": "Formato de fecha inválido"}), 400
 
     try:
         db_conn = get_db()
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # 1. Obtener los colaboradores (Recursos)
-            if sucursal_id:
-                cursor.execute("SELECT id, nombre_display as title FROM empleados WHERE activo = TRUE AND id IN (SELECT empleado_id FROM empleado_sucursales WHERE sucursal_id = %s) ORDER BY nombres", (sucursal_id,))
-            else:
-                cursor.execute("SELECT id, nombre_display as title FROM empleados WHERE activo = TRUE ORDER BY nombres")
+            
+            # --- 1. OBTENER RECURSOS (COLABORADORES) ---
+            # Solo empleados activos de la sucursal solicitada
+            cursor.execute("""
+                SELECT e.id, e.nombre_display as title 
+                FROM empleados e
+                WHERE e.activo = TRUE 
+                  AND e.id IN (SELECT empleado_id FROM empleado_sucursales WHERE sucursal_id = %s)
+                ORDER BY e.nombres
+            """, (sucursal_id,))
             recursos = cursor.fetchall()
             
             eventos = []
+            
             if recursos:
                 recursos_ids = [r['id'] for r in recursos]
-                placeholders = ','.join(['%s'] * len(recursos_ids))
                 
-                # 2. Obtener Turnos de Trabajo y convertirlos en EVENTOS de fondo verdes
-                dia_semana_num = fecha_obj.isoweekday()
-                sql_turnos = f"SELECT empleado_id, hora_inicio, hora_fin FROM horarios_empleado WHERE empleado_id IN ({placeholders}) AND dia_semana = %s"
-                cursor.execute(sql_turnos, tuple(recursos_ids) + (dia_semana_num,))
+                # Preparamos placeholders para SQL (ej: %s, %s, %s)
+                placeholders = ','.join(['%s'] * len(recursos_ids))
+                params_base = list(recursos_ids)
+                
+                # --- 2. FONDO VERDE: HORARIOS DE TRABAJO ---
+                # Esto le dice al calendario cuándo el barbero está disponible
+                dia_semana_num = fecha_obj.isoweekday() # 1=Lunes, 7=Domingo
+                
+                sql_turnos = f"""
+                    SELECT empleado_id, hora_inicio, hora_fin 
+                    FROM horarios_empleado 
+                    WHERE empleado_id IN ({placeholders}) AND dia_semana = %s
+                """
+                cursor.execute(sql_turnos, params_base + [dia_semana_num])
+                
                 for turno in cursor.fetchall():
                     eventos.append({
                         "resourceId": turno['empleado_id'],
-                        "start": f"{fecha_str}T{timedelta_to_hhmm_str(turno['hora_inicio'])}",
-                        "end": f"{fecha_str}T{timedelta_to_hhmm_str(turno['hora_fin'])}",
-                        "display": "background",
-                        "backgroundColor": "rgba(40, 167, 69)"
+                        # FullCalendar necesita fecha + hora en formato ISO
+                        "start": f"{fecha_str}T{turno['hora_inicio']}", 
+                        "end": f"{fecha_str}T{turno['hora_fin']}",
+                        "display": "background", # Se muestra al fondo
+                        "backgroundColor": "rgba(40, 167, 69, 0.15)" # Verde suave
                     })
                 
-                # 3. Obtener Ausencias como eventos de fondo rojos
-                sql_ausencias = f"SELECT empleado_id, fecha_hora_inicio, fecha_hora_fin FROM ausencias_empleado WHERE empleado_id IN ({placeholders}) AND aprobado = TRUE AND DATE(fecha_hora_inicio) <= %s AND DATE(fecha_hora_fin) >= %s"
-                cursor.execute(sql_ausencias, tuple(recursos_ids) + (fecha_str, fecha_str))
-                for ausencia in cursor.fetchall():
-                    eventos.append({ "resourceId": ausencia['empleado_id'], "start": ausencia['fecha_hora_inicio'].isoformat(), "end": ausencia['fecha_hora_fin'].isoformat(), "display": "background", "backgroundColor": "rgba(220, 53, 69, 0.4)" })
+                # --- 3. FONDO ROJO: AUSENCIAS / DESCANSOS ---
+                # Esto "tapa" el verde indicando que no está disponible
+                sql_ausencias = f"""
+                    SELECT empleado_id, fecha_hora_inicio, fecha_hora_fin 
+                    FROM ausencias_empleado 
+                    WHERE empleado_id IN ({placeholders}) 
+                      AND aprobado = TRUE 
+                      AND DATE(fecha_hora_inicio) <= %s 
+                      AND DATE(fecha_hora_fin) >= %s
+                """
+                cursor.execute(sql_ausencias, params_base + [fecha_str, fecha_str])
                 
-                # 4. Obtener Reservas como eventos normales
-                sql_reservas = f"SELECT r.id, r.fecha_hora_inicio as start, r.fecha_hora_fin as end, r.estado, r.empleado_id as resourceId, CONCAT(s.nombre, ' - ', c.razon_social_nombres, ' ', IFNULL(c.apellidos, '')) as title FROM reservas r JOIN servicios s ON r.servicio_id = s.id LEFT JOIN clientes c ON r.cliente_id = c.id WHERE r.sucursal_id = %s AND DATE(r.fecha_hora_inicio) = %s AND r.estado NOT IN ('Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio')"
+                for ausencia in cursor.fetchall():
+                    eventos.append({
+                        "resourceId": ausencia['empleado_id'],
+                        "start": ausencia['fecha_hora_inicio'].isoformat(),
+                        "end": ausencia['fecha_hora_fin'].isoformat(),
+                        "display": "background", # Fondo
+                        "backgroundColor": "rgba(220, 53, 69, 0.4)" # Rojo semitransparente
+                    })
+                
+                # --- 4. EVENTOS: RESERVAS (CITAS) ---
+                # Las tarjetas reales que se pueden mover y clickear
+                sql_reservas = """
+                    SELECT 
+                        r.id, 
+                        r.fecha_hora_inicio as start, 
+                        r.fecha_hora_fin as end, 
+                        r.estado, 
+                        r.empleado_id as "resourceId", 
+                        CONCAT(s.nombre, ' - ', c.razon_social_nombres) as title 
+                    FROM reservas r 
+                    JOIN servicios s ON r.servicio_id = s.id 
+                    LEFT JOIN clientes c ON r.cliente_id = c.id 
+                    WHERE r.sucursal_id = %s 
+                      AND DATE(r.fecha_hora_inicio) = %s 
+                      AND r.estado NOT IN ('Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio')
+                """
                 cursor.execute(sql_reservas, (sucursal_id, fecha_str))
+                
                 for reserva in cursor.fetchall():
-                    reserva['start'] = reserva['start'].isoformat()
-                    reserva['end'] = reserva['end'].isoformat()
-                    reserva['borderColor'] = '#b49b4c'
-                    reserva['backgroundColor'] = '#D4AF37' if reserva['estado'] != 'Completada' else '#198754'
-                    eventos.append(reserva)
+                    # Definir color según estado
+                    color_fondo = '#D4AF37' # Dorado por defecto (Programada)
+                    border_color = '#b49b4c'
+                    
+                    if reserva['estado'] == 'Completada':
+                        color_fondo = '#198754' # Verde fuerte
+                        border_color = '#146c43'
+                    elif 'Cancelada' in reserva['estado']:
+                        color_fondo = '#dc3545' # Rojo (aunque filtramos las canceladas, por seguridad)
+                    
+                    eventos.append({
+                        "id": reserva['id'],
+                        "resourceId": reserva['resourceId'],
+                        "title": reserva['title'],
+                        "start": reserva['start'].isoformat(),
+                        "end": reserva['end'].isoformat(),
+                        "backgroundColor": color_fondo,
+                        "borderColor": border_color,
+                        "textColor": "#fff"
+                    })
 
     except Exception as e:
         current_app.logger.error(f"Error fatal en api_agenda_dia_data: {e}", exc_info=True)
         return jsonify({"error": "Error interno del servidor al procesar la solicitud."}), 500
 
     return jsonify({"recursos": recursos, "eventos": eventos})
-
     
 def timedelta_to_time_obj(td):
     if td is None: return None
