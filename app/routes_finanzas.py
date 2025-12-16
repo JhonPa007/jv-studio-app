@@ -704,7 +704,7 @@ def registrar_propina():
 @login_required
 def pagar_propina_a_barbero():
     propina_id = request.form.get('propina_id')
-    sucursal_id = session.get('sucursal_id') # <--- 1. OBTENEMOS LA SUCURSAL
+    sucursal_id = session.get('sucursal_id')
     
     if not sucursal_id:
         return jsonify({'error': 'Error de sesión: No se detectó la sucursal.'}), 400
@@ -712,7 +712,7 @@ def pagar_propina_a_barbero():
     db = get_db()
     try:
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # Obtener datos de la propina
+            # 1. Obtener datos de la propina
             cursor.execute("""
                 SELECT p.monto, p.empleado_id, p.metodo_pago, e.nombres 
                 FROM propinas p
@@ -727,7 +727,7 @@ def pagar_propina_a_barbero():
             monto = float(data['monto'])
             nombre_barbero = data['nombres']
 
-            # Buscar la CAJA ABIERTA
+            # 2. Buscar la CAJA ABIERTA
             cursor.execute("""
                 SELECT id FROM caja_sesiones 
                 WHERE usuario_id = %s AND estado = 'Abierta'
@@ -739,15 +739,29 @@ def pagar_propina_a_barbero():
             
             caja_id = sesion['id']
 
-            # Marcar propina como ENTREGADA
+            # 🟢 3. BUSCAR UNA CATEGORÍA DE GASTO (Para cumplir con la BD)
+            # Intentamos buscar una que diga "Propinas" o "Personal", sino usamos la primera que exista.
+            cursor.execute("SELECT id FROM categorias_gastos WHERE nombre ILIKE '%Propina%' OR nombre ILIKE '%Personal%' LIMIT 1")
+            cat_match = cursor.fetchone()
+            
+            if cat_match:
+                categoria_id = cat_match['id']
+            else:
+                # Si no hay específica, agarramos CUALQUIERA para que no falle
+                cursor.execute("SELECT id FROM categorias_gastos LIMIT 1")
+                cat_any = cursor.fetchone()
+                if not cat_any:
+                    return jsonify({'error': 'Error: Debes crear al menos una "Categoría de Gastos" en el sistema antes de hacer esto.'}), 400
+                categoria_id = cat_any['id']
+
+            # 4. Marcar propina como ENTREGADA
             cursor.execute("""
                 UPDATE propinas 
                 SET entregado_al_barbero = TRUE, fecha_entrega = CURRENT_TIMESTAMP 
                 WHERE id = %s
             """, (propina_id,))
             
-            # Registrar SALIDA DE DINERO (Gasto)
-            # 🔥 CORRECCIÓN AQUÍ: Agregamos sucursal_id
+            # 5. Registrar SALIDA DE DINERO (Gasto)
             cursor.execute("""
                 INSERT INTO gastos (
                     descripcion, 
@@ -758,16 +772,18 @@ def pagar_propina_a_barbero():
                     usuario_id, 
                     empleado_beneficiario_id,
                     tipo,
-                    sucursal_id  -- <--- Campo Nuevo
+                    sucursal_id,
+                    categoria_gasto_id  -- <--- CAMPO OBLIGATORIO AGREGADO
                 )
-                VALUES (%s, %s, CURRENT_TIMESTAMP, 'Efectivo', %s, %s, %s, 'Salida de Propina', %s)
+                VALUES (%s, %s, CURRENT_TIMESTAMP, 'Efectivo', %s, %s, %s, 'Salida de Propina', %s, %s)
             """, (
                 f"Entrega de Propina - {nombre_barbero}", 
                 monto, 
                 caja_id, 
                 current_user.id, 
                 data['empleado_id'],
-                sucursal_id  # <--- Valor Nuevo
+                sucursal_id,
+                categoria_id  # <--- VALOR AGREGADO
             ))
             
             db.commit()
