@@ -6726,27 +6726,31 @@ def gestionar_caja():
             # CASO B: CAJA ABIERTA -> Panel de Gestión
             caja_id = sesion_abierta['id']
             
-            # Totales
+            # --- CÁLCULO DE TOTALES ---
+            
+            # 1. Ventas en Efectivo
             cursor.execute("""
                 SELECT COALESCE(SUM(vp.monto), 0) as total
                 FROM venta_pagos vp JOIN ventas v ON vp.venta_id = v.id
                 WHERE v.caja_sesion_id = %s AND vp.metodo_pago = 'Efectivo' AND v.estado_pago != 'Anulado'
             """, (caja_id,))
-            total_efectivo_ventas = float(cursor.fetchone()['total'])
+            total_ventas_efectivo = float(cursor.fetchone()['total'])
 
-            # 🔥 AJUSTE: Sumamos también las propinas en efectivo al total físico en caja
-            # (Si implementaste movimientos_caja, podrías sumar desde ahí, pero esto es compatible con tu código actual)
+            # 2. Propinas en Efectivo (Dinero en custodia)
+            # Sumamos las propinas que entraron en efectivo desde que se abrió esta caja
             cursor.execute("""
-                SELECT COALESCE(SUM(monto), 0) FROM propinas 
-                WHERE metodo_pago = 'Efectivo' AND entregado_al_barbero = FALSE
-                AND fecha_registro >= %s
+                SELECT COALESCE(SUM(monto), 0) as total 
+                FROM propinas 
+                WHERE metodo_pago = 'Efectivo' 
+                  AND fecha_registro >= %s 
+                  AND entregado_al_barbero = FALSE
             """, (sesion_abierta['fecha_apertura'],))
-            # Nota: Esto es un aproximado. Lo ideal es usar 'movimientos_caja' para cuadre exacto, 
-            # pero esto ayudará a visualizar el dinero extra.
-            total_propinas_caja = float(cursor.fetchone()['coalesce'] or 0)
+            total_propinas_efectivo = float(cursor.fetchone()['total'])
 
-            total_efectivo = total_efectivo_ventas + total_propinas_caja
+            # TOTAL EFECTIVO (Ventas + Propinas)
+            total_efectivo = total_ventas_efectivo + total_propinas_efectivo
 
+            # 3. Ventas Digitales
             cursor.execute("""
                 SELECT COALESCE(SUM(vp.monto), 0) as total
                 FROM venta_pagos vp JOIN ventas v ON vp.venta_id = v.id
@@ -6754,15 +6758,17 @@ def gestionar_caja():
             """, (caja_id,))
             total_digital = float(cursor.fetchone()['total'])
 
+            # 4. Gastos / Salidas
             cursor.execute("""
                 SELECT COALESCE(SUM(monto), 0) as total 
                 FROM gastos WHERE caja_sesion_id = %s AND (metodo_pago = 'Efectivo' OR metodo_pago = 'Efectivo de Caja')
             """, (caja_id,))
             total_gastos = float(cursor.fetchone()['total'])
 
+            # Saldo Teórico Final
             saldo_teorico = (float(sesion_abierta['monto_inicial']) + total_efectivo) - total_gastos
 
-            # Movimientos (Historial)
+            # --- MOVIMIENTOS ---
             sql_movimientos = """
                 (SELECT v.fecha_venta as fecha, vp.monto, vp.metodo_pago, 
                         'Venta #' || COALESCE(v.serie_comprobante, '') || '-' || COALESCE(v.numero_comprobante, 'S/N') as descripcion, 
@@ -6778,7 +6784,7 @@ def gestionar_caja():
             cursor.execute(sql_movimientos, (caja_id, caja_id))
             movimientos_caja = cursor.fetchall()
 
-            # Comisiones Pendientes
+            # --- COMISIONES PENDIENTES ---
             cursor.execute("""
                 SELECT c.id, c.monto_comision, TO_CHAR(c.fecha_generacion, 'DD/MM HH24:MI') as fecha_fmt,
                        vi.descripcion_item_venta as concepto, v.numero_comprobante
@@ -6791,7 +6797,7 @@ def gestionar_caja():
             """, (usuario_id, sucursal_id))
             comisiones = cursor.fetchall()
 
-            # 🟢 NUEVO 1: PROPINAS PENDIENTES (Lo que faltaba)
+            # --- 🟢 AQUÍ ESTÁ LO QUE FALTABA: PROPINAS PENDIENTES ---
             cursor.execute("""
                 SELECT p.id, p.monto, p.metodo_pago, p.fecha_registro, 
                        e.nombres, e.apellidos
@@ -6802,7 +6808,7 @@ def gestionar_caja():
             """)
             propinas_pendientes = cursor.fetchall()
 
-            # 🟢 NUEVO 2: EMPLEADOS (Para el modal de registrar propina)
+            # --- 🟢 TAMBIÉN FALTABA ESTO: EMPLEADOS (Para el modal) ---
             cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE")
             empleados = cursor.fetchall()
 
@@ -6814,12 +6820,13 @@ def gestionar_caja():
                                    saldo_teorico=saldo_teorico,
                                    movimientos=movimientos_caja,
                                    comisiones_pendientes=comisiones,
-                                   propinas_pendientes=propinas_pendientes, # <-- Enviado
-                                   empleados=empleados) # <-- Enviado
+                                   propinas_pendientes=propinas_pendientes, # <--- Enviamos la lista
+                                   empleados=empleados) # <--- Enviamos empleados
 
     except Exception as e:
         flash(f"Error cargando caja: {e}", "danger")
         return redirect(url_for('main.index'))
+    
     
 # -------------------------------------------------------------------------
 # CERRAR CAJA
