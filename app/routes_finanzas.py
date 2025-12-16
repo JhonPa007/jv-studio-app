@@ -698,15 +698,21 @@ def registrar_propina():
 
 # En app/routes_finanzas.py
 
+# En app/routes_finanzas.py
+
 @finanzas_bp.route('/propinas/pagar', methods=['POST'])
 @login_required
 def pagar_propina_a_barbero():
     propina_id = request.form.get('propina_id')
+    sucursal_id = session.get('sucursal_id') # <--- 1. OBTENEMOS LA SUCURSAL
     
+    if not sucursal_id:
+        return jsonify({'error': 'Error de sesión: No se detectó la sucursal.'}), 400
+
     db = get_db()
     try:
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # 1. Obtener datos de la propina
+            # Obtener datos de la propina
             cursor.execute("""
                 SELECT p.monto, p.empleado_id, p.metodo_pago, e.nombres 
                 FROM propinas p
@@ -721,7 +727,7 @@ def pagar_propina_a_barbero():
             monto = float(data['monto'])
             nombre_barbero = data['nombres']
 
-            # 2. Buscar la CAJA ABIERTA del usuario actual (Para registrar la salida)
+            # Buscar la CAJA ABIERTA
             cursor.execute("""
                 SELECT id FROM caja_sesiones 
                 WHERE usuario_id = %s AND estado = 'Abierta'
@@ -729,19 +735,19 @@ def pagar_propina_a_barbero():
             sesion = cursor.fetchone()
             
             if not sesion:
-                return jsonify({'error': 'No tienes una caja abierta para registrar esta salida de dinero.'}), 400
+                return jsonify({'error': 'No tienes una caja abierta para registrar esta salida.'}), 400
             
             caja_id = sesion['id']
 
-            # 3. Marcar propina como ENTREGADA
+            # Marcar propina como ENTREGADA
             cursor.execute("""
                 UPDATE propinas 
                 SET entregado_al_barbero = TRUE, fecha_entrega = CURRENT_TIMESTAMP 
                 WHERE id = %s
             """, (propina_id,))
             
-            # 4. Registrar SALIDA DE DINERO (Gasto Automático)
-            # Esto es lo que hace que tu caja cuadre. Resta el efectivo.
+            # Registrar SALIDA DE DINERO (Gasto)
+            # 🔥 CORRECCIÓN AQUÍ: Agregamos sucursal_id
             cursor.execute("""
                 INSERT INTO gastos (
                     descripcion, 
@@ -751,22 +757,18 @@ def pagar_propina_a_barbero():
                     caja_sesion_id, 
                     usuario_id, 
                     empleado_beneficiario_id,
-                    tipo
+                    tipo,
+                    sucursal_id  -- <--- Campo Nuevo
                 )
-                VALUES (%s, %s, CURRENT_TIMESTAMP, 'Efectivo', %s, %s, %s, 'Salida de Propina')
+                VALUES (%s, %s, CURRENT_TIMESTAMP, 'Efectivo', %s, %s, %s, 'Salida de Propina', %s)
             """, (
-                f"Entrega de Propina - {nombre_barbero}", # Descripción
-                monto,                                    # Monto
-                caja_id,                                  # Tu caja abierta
-                current_user.id,                          # Tú (Cajero)
-                data['empleado_id']                       # El Barbero
+                f"Entrega de Propina - {nombre_barbero}", 
+                monto, 
+                caja_id, 
+                current_user.id, 
+                data['empleado_id'],
+                sucursal_id  # <--- Valor Nuevo
             ))
-            
-            # Opcional: También registrar en movimientos_caja si usas esa tabla para reportes
-            cursor.execute("""
-                INSERT INTO movimientos_caja (tipo, monto, concepto, metodo_pago, usuario_id, caja_sesion_id)
-                VALUES ('EGRESO', %s, %s, 'Efectivo', %s, %s)
-            """, (monto, f"Entrega Propina - {nombre_barbero}", current_user.id, caja_id))
             
             db.commit()
             return jsonify({'mensaje': 'Propina entregada y descontada de caja correctamente.'})
@@ -775,5 +777,4 @@ def pagar_propina_a_barbero():
         db.rollback()
         print(f"Error: {e}")
         return jsonify({'error': str(e)}), 500
-
 
