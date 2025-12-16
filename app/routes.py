@@ -66,7 +66,11 @@ def timedelta_to_hhmm_str(td):
     minutes, seconds = divmod(remainder, 60)
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-def timedelta_to_time_obj(td): # Renombrada para claridad
+def timedelta_to_time_obj(td):
+    """
+    Convierte un objeto timedelta (duración) a un objeto time (hora del reloj).
+    Necesario para comparar horarios de turnos.
+    """
     if td is None: return None
     total_seconds = int(td.total_seconds())
     hours = total_seconds // 3600
@@ -2352,7 +2356,7 @@ def timedelta_to_time_obj(td):
 def nueva_reserva():
     """
     Procesa la creación de una nueva reserva desde una petición AJAX (JSON).
-    Versión con corrección de Zona Horaria (Perú).
+    Versión blindada contra errores de tipo y transacción.
     """
     if not request.is_json:
         return jsonify({"success": False, "message": "Error: Se esperaba contenido JSON."}), 400
@@ -2379,27 +2383,18 @@ def nueva_reserva():
         if not empleado_id: errores.append("Colaborador es obligatorio.")
         if not servicio_id: errores.append("Debe seleccionar un servicio.")
         
-        # --- CORRECCIÓN DE ZONA HORARIA AQUÍ ---
+        # --- VALIDACIÓN DE ZONA HORARIA ---
         if not fecha_hora_inicio_str:
             errores.append('Falta la fecha y hora de inicio.')
         else:
             try:
-                # 1. Definir Zona Horaria Perú
                 peru_tz = pytz.timezone('America/Lima')
-                
-                # 2. Obtener hora actual en Perú
                 ahora_peru = datetime.now(peru_tz)
-
-                # 3. Procesar fecha del formulario (viene "naive", sin zona horaria)
                 fecha_hora_inicio = datetime.fromisoformat(fecha_hora_inicio_str)
-                
-                # 4. Le asignamos la identidad de "Perú" a la fecha del formulario para poder comparar
                 fecha_hora_inicio_aware = peru_tz.localize(fecha_hora_inicio)
 
-                # 5. Comparar: Si la fecha elegida es anterior a "ahora en Perú"
                 if fecha_hora_inicio_aware < ahora_peru:
                     errores.append('La fecha y hora de inicio no puede ser en el pasado.')
-            
             except ValueError:
                 errores.append('Formato de fecha y hora de inicio inválido.')
 
@@ -2414,13 +2409,10 @@ def nueva_reserva():
                 return jsonify({"success": False, "message": "Servicio seleccionado no válido o inactivo."}), 400
             
             duracion_servicio = timedelta(minutes=servicio_seleccionado['duracion_minutos'])
-            
-            # Usamos el objeto 'naive' (fecha_hora_inicio) para sumar y guardar en BD
-            # Esto evita problemas si tu BD no está configurada con zonas horarias
             fecha_hora_fin = fecha_hora_inicio + duracion_servicio
             precio_del_servicio = servicio_seleccionado['precio']
 
-            # Validar disponibilidad (horarios, ausencias, otras reservas)
+            # Validar Horarios
             dia_semana_reserva = fecha_hora_inicio.isoweekday()
             cursor.execute("SELECT hora_inicio, hora_fin FROM horarios_empleado WHERE empleado_id = %s AND dia_semana = %s", (empleado_id, dia_semana_reserva))
             turnos_del_dia = cursor.fetchall()
@@ -2430,9 +2422,10 @@ def nueva_reserva():
             
             esta_en_turno_valido = False
             for turno in turnos_del_dia:
+                # Usamos la función auxiliar corregida
                 turno_inicio_time_obj = timedelta_to_time_obj(turno['hora_inicio'])
                 turno_fin_time_obj = timedelta_to_time_obj(turno['hora_fin'])
-                # Comparamos solo las horas (.time())
+                
                 if fecha_hora_inicio.time() >= turno_inicio_time_obj and fecha_hora_fin.time() <= turno_fin_time_obj:
                     esta_en_turno_valido = True
                     break
@@ -2440,18 +2433,18 @@ def nueva_reserva():
             if not esta_en_turno_valido:
                 return jsonify({"success": False, "message": "La hora de la reserva está fuera del horario laboral del colaborador."}), 409
 
+            # Validar Ausencias
             cursor.execute("SELECT id FROM ausencias_empleado WHERE empleado_id = %s AND aprobado = TRUE AND fecha_hora_inicio < %s AND fecha_hora_fin > %s", (empleado_id, fecha_hora_fin, fecha_hora_inicio))
             if cursor.fetchone():
                 return jsonify({"success": False, "message": "El colaborador tiene una ausencia registrada en este horario."}), 409
 
+            # Validar Choques
             cursor.execute("SELECT id FROM reservas WHERE empleado_id = %s AND sucursal_id = %s AND estado NOT IN ('Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio', 'Completada') AND fecha_hora_inicio < %s AND fecha_hora_fin > %s", (empleado_id, sucursal_id, fecha_hora_fin, fecha_hora_inicio))
             if cursor.fetchone():
                 return jsonify({"success": False, "message": "El colaborador ya tiene otra reserva en el horario seleccionado."}), 409
             
             # --- 3. Guardar en la BD ---
             sql = "INSERT INTO reservas (sucursal_id, cliente_id, empleado_id, servicio_id, fecha_hora_inicio, fecha_hora_fin, estado, notas_cliente, precio_cobrado) VALUES (%s, %s, %s, %s, %s, %s, 'Programada', %s, %s)"
-            # Guardamos fecha_hora_inicio (que es naive, sin zona horaria explicita) 
-            # para que la BD la guarde tal cual se ve en el reloj ("Wall clock time")
             val = (sucursal_id, cliente_id, empleado_id, servicio_id, fecha_hora_inicio, fecha_hora_fin, notas_cliente, precio_del_servicio)
             
             cursor.execute(sql, val)
@@ -2459,11 +2452,12 @@ def nueva_reserva():
             
             return jsonify({"success": True, "message": f'Reserva creada exitosamente para el {fecha_hora_inicio.strftime("%d/%m/%Y a las %H:%M")}.'}), 201
 
-    except (ValueError, Exception) as e:
-        if db_conn and db_conn.in_transaction: db_conn.rollback()
+    except Exception as e:
+        # Manejo de error seguro
+        if db_conn:
+            db_conn.rollback()
         current_app.logger.error(f"Error procesando nueva reserva: {e}")
-        return jsonify({"success": False, "message": f"No se pudo guardar la reserva. Error: {str(e)}"}), 500
-    
+        return jsonify({"success": False, "message": f"Error interno: {str(e)}"}), 500    
         
 @main_bp.route('/reservas/editar/<int:reserva_id>', methods=['POST'])
 @login_required
