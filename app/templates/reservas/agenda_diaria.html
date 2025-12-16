@@ -3,6 +3,8 @@
 {% block title %}Agenda Diaria de Citas - JV Studio{% endblock %}
 
 {% block head_extra %}
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.10/index.global.min.js'></script>
+
 <style>
     /* Contenedor del Calendario */
     #calendar { 
@@ -10,6 +12,9 @@
         border-radius: 8px; 
         padding: 10px; 
         background-color: #302f2dda; 
+        
+        /* 🟢 2. ALTURA MÍNIMA (Agregado para evitar que se vea como una línea gris) */
+        min-height: 650px; 
     }
     
     /* Barra de Herramientas Superior */
@@ -72,6 +77,7 @@
     }
 </style>
 {% endblock head_extra %}
+
 
 {% block content %}
 <div class="container-fluid mt-4">
