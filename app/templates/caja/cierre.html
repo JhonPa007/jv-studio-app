@@ -12,9 +12,13 @@
                     <h2 class="text-light mb-0"><i class="fas fa-cash-register text-warning me-2"></i>Gestión de Caja</h2>
                     <span class="badge bg-success">TURNO ABIERTO</span>
                 </div>
-                <div class="text-end text-muted">
-                    <small>Apertura: {{ sesion.fecha_apertura.strftime('%d/%m/%Y %H:%M') }}</small><br>
-                    <small>Responsable: <span class="text-white">{{ current_user.nombres }}</span></small>
+                <div class="text-end">
+                    <button class="btn btn-warning fw-bold shadow-sm mb-2" data-bs-toggle="modal" data-bs-target="#modalPropina">
+                        <i class="fas fa-hand-holding-usd me-1"></i> Registrar Propina
+                    </button>
+                    <br>
+                    <small class="text-muted">Apertura: {{ sesion.fecha_apertura.strftime('%d/%m/%Y %H:%M') }}</small><br>
+                    <small class="text-muted">Responsable: <span class="text-white">{{ current_user.nombres }}</span></small>
                 </div>
             </div>
 
@@ -40,7 +44,7 @@
                         <div class="card-body text-center">
                             <h6 class="text-muted text-uppercase mb-2">Salidas Efectivo</h6>
                             <h3 class="text-danger fw-bold">- S/ {{ "%.2f"|format(total_gastos) }}</h3>
-                            <small class="text-muted" style="font-size: 0.75rem;">Gastos y Comisiones Pagadas</small>
+                            <small class="text-muted" style="font-size: 0.75rem;">Gastos y Comisiones</small>
                         </div>
                     </div>
                 </div>
@@ -57,7 +61,7 @@
 
             <div class="alert alert-warning border-secondary d-flex justify-content-between align-items-center py-2 px-3 mb-4 text-dark">
                 <small>
-                    <i class="fw-bold text-dark fs-5"></i>Ventas Digitales (Yape/Plin/Tarjeta) - No afectan caja chica:
+                    <i class="fas fa-info-circle text-dark me-2"></i>Ventas Digitales (Yape/Plin/Tarjeta) - No afectan caja chica:
                 </small>            
                 <span class="fw-bold text-dark fs-5">S/ {{ "%.2f"|format(total_digital) }}</span>
             </div>
@@ -103,6 +107,57 @@
             </div>
             {% endif %}
 
+            <div class="card bg-dark border-secondary mb-4 border-start border-warning border-3">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <h5 class="text-white mb-0"><i class="fas fa-piggy-bank text-warning me-2"></i>Propinas por Entregar</h5>
+                    <span class="badge bg-secondary">Dinero ajeno en caja</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0 align-middle">
+                            <thead>
+                                <tr>
+                                    <th class="ps-3">Hora</th>
+                                    <th>Colaborador</th>
+                                    <th>Ingresó por</th>
+                                    <th>Monto</th>
+                                    <th class="text-end pe-3">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if propinas_pendientes %}
+                                    {% for p in propinas_pendientes %}
+                                    <tr id="row-prop-{{ p.id }}">
+                                        <td class="ps-3 text-muted small">{{ p.fecha_registro.strftime('%H:%M') }}</td>
+                                        <td class="fw-bold">{{ p.nombres }} {{ p.apellidos }}</td>
+                                        <td>
+                                            {% if p.metodo_pago == 'Efectivo' %}
+                                                <span class="badge bg-success">Efectivo</span>
+                                            {% else %}
+                                                <span class="badge bg-info text-dark">{{ p.metodo_pago }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="fw-bold text-warning fs-5">S/ {{ "%.2f"|format(p.monto) }}</td>
+                                        <td class="text-end pe-3">
+                                            <button class="btn btn-sm btn-outline-warning" onclick="liquidarPropina({{ p.id }}, '{{ p.nombres }}', '{{ p.monto }}')">
+                                                <i class="fas fa-hand-holding-usd me-1"></i> Entregar
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="5" class="text-center py-3 text-muted">
+                                            <small>No hay propinas pendientes de entrega.</small>
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <hr class="border-secondary my-4">
 
             <div class="row">
@@ -122,7 +177,6 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {# Aquí podrías inyectar la lista 'movimientos' si la pasas desde el backend #}
                                         {% if movimientos %}
                                             {% for mov in movimientos %}
                                             <tr>
@@ -205,11 +259,59 @@
 
 <input type="hidden" id="val_saldo_teorico" value="{{ saldo_teorico }}">
 
+<div class="modal fade" id="modalPropina" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <form action="{{ url_for('finanzas.registrar_propina') }}" method="POST">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title fw-bold text-dark"><i class="fas fa-gift me-2"></i>Nueva Propina</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Registra dinero extra ingresado para el personal.</p>
+                    
+                    <div class="mb-3">
+                        <label class="fw-bold">¿Para quién es?</label>
+                        <select name="empleado_id" class="form-select" required>
+                            {% for e in empleados %}
+                            <option value="{{ e.id }}">{{ e.nombres }} {{ e.apellidos }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="fw-bold">Monto (S/)</label>
+                            <input type="number" step="0.50" name="monto" class="form-control fw-bold text-success" placeholder="0.00" required>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="fw-bold">Medio Pago</label>
+                            <select name="metodo_pago" class="form-select">
+                                <option value="Efectivo">Efectivo</option>
+                                <option value="Yape">Yape</option>
+                                <option value="Plin">Plin</option>
+                                <option value="Tarjeta">Tarjeta</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="alert alert-warning small py-2 mb-0">
+                        <i class="fas fa-info-circle"></i> Sumará al arqueo del día.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-dark w-100">Guardar Ingreso</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
 <script>
+    // 1. Calcular Diferencia en el Cierre
     function calcularDiferencia() {
         const teorico = parseFloat(document.getElementById('val_saldo_teorico').value) || 0;
         const real = parseFloat(document.getElementById('monto_final_real').value) || 0;
@@ -231,6 +333,33 @@
             txtDiff.innerHTML = `<span class="text-danger">${diffFormatted}</span>`;
             lblEstado.innerHTML = "Faltante";
             lblEstado.className = "text-danger fw-bold small";
+        }
+    }
+
+    // 2. 🟢 Liquidar (Pagar) Propina al Barbero
+    async function liquidarPropina(id, nombre, monto) {
+        if(!confirm(`¿Entregar S/ ${monto} en EFECTIVO a ${nombre}?\n\nEsto registrará una salida de caja.`)) return;
+        
+        const formData = new FormData();
+        formData.append('propina_id', id);
+
+        try {
+            const res = await fetch('/finanzas/propinas/pagar', { method: 'POST', body: formData });
+            const data = await res.json();
+            
+            if(data.mensaje) {
+                // Eliminar visualmente la fila
+                const fila = document.getElementById(`row-prop-${id}`);
+                fila.style.opacity = '0';
+                setTimeout(() => fila.remove(), 500);
+                alert("✅ " + data.mensaje);
+                // Opcional: Recargar para actualizar saldos de caja
+                // location.reload();
+            } else {
+                alert("❌ Error: " + data.error);
+            }
+        } catch (err) {
+            alert("Error de conexión");
         }
     }
 </script>
