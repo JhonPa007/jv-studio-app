@@ -2114,37 +2114,54 @@ def listar_reservas():
 def render_agenda_diaria():
     """
     Renderiza la página principal de la nueva agenda con FullCalendar.
+    FILTRADO: Solo muestra datos de la sucursal actual del usuario.
     """
     db_conn = get_db()
-    sucursales_para_selector, clientes_todos, servicios_todos_activos, empleados_para_selector = [], [], [], []
+    clientes_todos, servicios_todos_activos, empleados_para_selector = [], [], []
     
+    # 1. Obtener y Validar Sucursal de la Sesión
+    sucursal_id = session.get('sucursal_id')
+    if not sucursal_id:
+        flash("Debes seleccionar una sucursal para ver la agenda.", "warning")
+        return redirect(url_for('main.index'))
+
     try:
+        # 2. Obtener Nombre de la Sucursal (Para mostrar en el título)
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
-            sucursales_para_selector = cursor.fetchall()
+            cursor.execute("SELECT nombre FROM sucursales WHERE id = %s", (sucursal_id,))
+            res_suc = cursor.fetchone()
+            session['sucursal_nombre'] = res_suc['nombre'] if res_suc else 'Desconocida'
+
+        # 3. Cargar Clientes (Igual que antes)
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, razon_social_nombres, apellidos FROM clientes WHERE tipo_documento != 'RUC' OR tipo_documento IS NULL ORDER BY razon_social_nombres, apellidos")
             clientes_todos = cursor.fetchall()
+
+        # 4. Cargar Servicios (Igual que antes)
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre, precio, duracion_minutos FROM servicios WHERE activo = TRUE ORDER BY nombre")
             servicios_todos_activos = cursor.fetchall()
+
+        # 5. Cargar Colaboradores (FILTRADO POR SUCURSAL)
+        # Solo traemos empleados activos que pertenezcan a ESTA sucursal
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # Modificación para hacer sucursal_id opcional
-            sucursal_id = request.args.get('sucursal_id', type=int)
-            if sucursal_id:
-                cursor.execute("SELECT id, nombres, apellidos, nombre_display FROM empleados WHERE activo = TRUE AND id IN (SELECT empleado_id FROM empleado_sucursales WHERE sucursal_id = %s) ORDER BY apellidos, nombres", (sucursal_id,))
-            else:
-                cursor.execute("SELECT id, nombres, apellidos, nombre_display FROM empleados WHERE activo = TRUE ORDER BY apellidos, nombres")
+            cursor.execute("""
+                SELECT e.id, e.nombres, e.apellidos, e.nombre_display 
+                FROM empleados e
+                WHERE e.activo = TRUE 
+                  AND e.id IN (SELECT empleado_id FROM empleado_sucursales WHERE sucursal_id = %s)
+                ORDER BY e.apellidos, e.nombres
+            """, (sucursal_id,))
             empleados_para_selector = cursor.fetchall()
+
     except Exception as err_load:
         flash(f"Error fatal al cargar datos maestros para la agenda: {err_load}", "danger")
     
     return render_template('reservas/agenda_diaria.html', 
-                           sucursales_para_selector=sucursales_para_selector,
+                           # Ya no enviamos sucursales_para_selector porque está fija
                            clientes_todos=clientes_todos,
                            servicios_todos_activos=servicios_todos_activos,
-                           empleados_para_selector=empleados_para_selector)
-    
+                           empleados_para_selector=empleados_para_selector)   
     
 @main_bp.route('/api/reservas/<int:reserva_id>')
 @login_required
