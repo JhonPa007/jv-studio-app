@@ -2336,6 +2336,7 @@ def api_agenda_dia_data():
         return jsonify({"error": "Error interno del servidor al procesar la solicitud."}), 500
 
     return jsonify({"recursos": recursos, "eventos": eventos})
+   
     
 def timedelta_to_time_obj(td):
     if td is None: return None
