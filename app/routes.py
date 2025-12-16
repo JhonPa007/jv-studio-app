@@ -6709,7 +6709,6 @@ def gestionar_caja():
             if not sesion_abierta:
                 monto_sugerido = 0.00
                 
-                # CORRECCIÓN DE LÓGICA: Buscar la ÚLTIMA absoluta, sin filtrar por destino
                 cursor.execute("""
                     SELECT monto_final_real, destino_remanente 
                     FROM caja_sesiones 
@@ -6719,8 +6718,6 @@ def gestionar_caja():
                 """, (sucursal_id,))
                 ultima_caja = cursor.fetchone()
                 
-                # Solo si la última caja se quedó "En Caja", sugerimos el saldo.
-                # Si fue a "Gerencia", sugerimos 0.00
                 if ultima_caja and ultima_caja['destino_remanente'] == 'Caja':
                     monto_sugerido = float(ultima_caja['monto_final_real'])
 
@@ -6735,7 +6732,20 @@ def gestionar_caja():
                 FROM venta_pagos vp JOIN ventas v ON vp.venta_id = v.id
                 WHERE v.caja_sesion_id = %s AND vp.metodo_pago = 'Efectivo' AND v.estado_pago != 'Anulado'
             """, (caja_id,))
-            total_efectivo = float(cursor.fetchone()['total'])
+            total_efectivo_ventas = float(cursor.fetchone()['total'])
+
+            # 🔥 AJUSTE: Sumamos también las propinas en efectivo al total físico en caja
+            # (Si implementaste movimientos_caja, podrías sumar desde ahí, pero esto es compatible con tu código actual)
+            cursor.execute("""
+                SELECT COALESCE(SUM(monto), 0) FROM propinas 
+                WHERE metodo_pago = 'Efectivo' AND entregado_al_barbero = FALSE
+                AND fecha_registro >= %s
+            """, (sesion_abierta['fecha_apertura'],))
+            # Nota: Esto es un aproximado. Lo ideal es usar 'movimientos_caja' para cuadre exacto, 
+            # pero esto ayudará a visualizar el dinero extra.
+            total_propinas_caja = float(cursor.fetchone()['coalesce'] or 0)
+
+            total_efectivo = total_efectivo_ventas + total_propinas_caja
 
             cursor.execute("""
                 SELECT COALESCE(SUM(vp.monto), 0) as total
@@ -6752,7 +6762,7 @@ def gestionar_caja():
 
             saldo_teorico = (float(sesion_abierta['monto_inicial']) + total_efectivo) - total_gastos
 
-            # Movimientos
+            # Movimientos (Historial)
             sql_movimientos = """
                 (SELECT v.fecha_venta as fecha, vp.monto, vp.metodo_pago, 
                         'Venta #' || COALESCE(v.serie_comprobante, '') || '-' || COALESCE(v.numero_comprobante, 'S/N') as descripcion, 
@@ -6768,7 +6778,7 @@ def gestionar_caja():
             cursor.execute(sql_movimientos, (caja_id, caja_id))
             movimientos_caja = cursor.fetchall()
 
-            # Comisiones
+            # Comisiones Pendientes
             cursor.execute("""
                 SELECT c.id, c.monto_comision, TO_CHAR(c.fecha_generacion, 'DD/MM HH24:MI') as fecha_fmt,
                        vi.descripcion_item_venta as concepto, v.numero_comprobante
@@ -6781,6 +6791,21 @@ def gestionar_caja():
             """, (usuario_id, sucursal_id))
             comisiones = cursor.fetchall()
 
+            # 🟢 NUEVO 1: PROPINAS PENDIENTES (Lo que faltaba)
+            cursor.execute("""
+                SELECT p.id, p.monto, p.metodo_pago, p.fecha_registro, 
+                       e.nombres, e.apellidos
+                FROM propinas p
+                JOIN empleados e ON p.empleado_id = e.id
+                WHERE p.entregado_al_barbero = FALSE
+                ORDER BY p.fecha_registro DESC
+            """)
+            propinas_pendientes = cursor.fetchall()
+
+            # 🟢 NUEVO 2: EMPLEADOS (Para el modal de registrar propina)
+            cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE")
+            empleados = cursor.fetchall()
+
             return render_template('caja/cierre.html', 
                                    sesion=sesion_abierta,
                                    total_efectivo=total_efectivo,
@@ -6788,12 +6813,14 @@ def gestionar_caja():
                                    total_gastos=total_gastos,
                                    saldo_teorico=saldo_teorico,
                                    movimientos=movimientos_caja,
-                                   comisiones_pendientes=comisiones)
+                                   comisiones_pendientes=comisiones,
+                                   propinas_pendientes=propinas_pendientes, # <-- Enviado
+                                   empleados=empleados) # <-- Enviado
 
     except Exception as e:
         flash(f"Error cargando caja: {e}", "danger")
         return redirect(url_for('main.index'))
-
+    
 # -------------------------------------------------------------------------
 # CERRAR CAJA
 # -------------------------------------------------------------------------
