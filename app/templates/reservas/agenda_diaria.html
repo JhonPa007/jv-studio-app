@@ -134,6 +134,26 @@ document.addEventListener('DOMContentLoaded', function() {
     let datosApiAgenda = null; 
     let datosReservaActualParaModal = null; 
 
+
+    
+    // 🟢 NUEVO: Actualizar precio automáticamente al cambiar el servicio (Modo Edición)
+    const selectServicioEdit = document.getElementById('editServicioId');
+    const inputPrecioEdit = document.getElementById('editPrecioCobrado');
+
+    if (selectServicioEdit && inputPrecioEdit) {
+        selectServicioEdit.addEventListener('change', function() {
+            const idSeleccionado = this.value;
+            
+            // Buscar el servicio en la lista global para obtener su precio
+            const servicio = todosLosServiciosActivos.find(s => s.id == idSeleccionado);
+            
+            if (servicio) {
+                // Actualizar el input de precio con el valor del servicio
+                inputPrecioEdit.value = parseFloat(servicio.precio).toFixed(2);
+            }
+        });
+    }
+
     // 2. Función Fecha Local (Corrige UTC)
     function setFechaLocal() {
         if (selectorFecha) { 
