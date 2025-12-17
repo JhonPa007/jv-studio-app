@@ -4641,7 +4641,7 @@ def nueva_venta():
         return redirect(url_for('main.index'))
 
     # ==============================================================================
-    # --- INICIO VALIDACIÓN DE CAJA ABIERTA (AGREGADO) ---
+    # --- VALIDACIÓN DE CAJA ABIERTA ---
     # ==============================================================================
     try:
         with db_conn.cursor() as cursor_val:
@@ -4653,16 +4653,11 @@ def nueva_venta():
 
             if not caja_abierta:
                 flash("⛔ ACCESO DENEGADO: Debes ABRIR CAJA antes de realizar ventas.", "danger")
-                return redirect(url_for('main.index')) # O redirigir a 'main.abrir_caja' si tienes esa ruta
+                return redirect(url_for('main.index')) 
     except Exception as e:
         flash(f"Error verificando caja: {e}", "danger")
         return redirect(url_for('main.index'))
     
-    # ==============================================================================
-    # --- FIN VALIDACIÓN ---
-    # ==============================================================================
-    
-
     # --- LÓGICA POST (PROCESAR VENTA) ---
     if request.method == 'POST':
         cursor = None
@@ -4760,29 +4755,18 @@ def nueva_venta():
                     total_item, total_item
                 ))
                 if item['tipo'] == 'producto':
-                    # === INTEGRACIÓN KARDEX ===
-                    # 1. Obtener stock antes de la venta para registro correcto
+                    # KARDEX
                     cursor.execute("SELECT stock_actual FROM productos WHERE id = %s", (item['id'],))
                     stock_anterior = cursor.fetchone()['stock_actual']
-                    cantidad_salida = float(item['cantidad']) # Positivo
+                    cantidad_salida = float(item['cantidad'])
                     nuevo_stock = stock_anterior - cantidad_salida
 
-                    # 2. Actualizar Producto
                     cursor.execute("UPDATE productos SET stock_actual = %s WHERE id = %s", (nuevo_stock, item['id']))
 
-                    # 3. Insertar en KARDEX
                     cursor.execute("""
                         INSERT INTO kardex (producto_id, tipo_movimiento, cantidad, stock_anterior, stock_actual, motivo, usuario_id, venta_id)
                         VALUES (%s, 'VENTA', %s, %s, %s, %s, %s, %s)
-                    """, (
-                        item['id'], 
-                        -cantidad_salida, # Negativo porque sale
-                        stock_anterior, 
-                        nuevo_stock, 
-                        f"Venta {serie_comprobante}-{numero_comprobante_str}", 
-                        current_user.id, 
-                        venta_id
-                    ))
+                    """, (item['id'], -cantidad_salida, stock_anterior, nuevo_stock, f"Venta {serie_comprobante}-{numero_comprobante_str}", current_user.id, venta_id))
                     
             # 7. Insertar Pagos
             if not pagos:
@@ -4791,69 +4775,86 @@ def nueva_venta():
             for p in pagos:
                 cursor.execute(sql_pago, (venta_id, p['metodo'], p['monto'], p.get('referencia')))
 
-            # ==============================================================================
-            # 🟢 8. LOGICA NUEVA: REGISTRO AUTOMÁTICO DE PROPINA
-            # ==============================================================================
+            # 8. PROPINA
             monto_propina = request.form.get('monto_propina')
             empleado_propina_id = request.form.get('empleado_propina_id')
             metodo_propina = request.form.get('metodo_propina')
 
-            # Verificamos si escribieron un monto válido y seleccionaron al barbero
             if monto_propina and empleado_propina_id:
                 try:
                     monto_p_float = float(monto_propina)
                     if monto_p_float > 0:
-                        # A. Guardar en tabla PROPINAS (Vinculada a la venta)
                         cursor.execute("""
-                            INSERT INTO propinas (
-                                empleado_id, monto, metodo_pago, fecha_registro, 
-                                entregado_al_barbero, venta_asociada_id, registrado_por
-                            )
+                            INSERT INTO propinas (empleado_id, monto, metodo_pago, fecha_registro, entregado_al_barbero, venta_asociada_id, registrado_por)
                             VALUES (%s, %s, %s, CURRENT_TIMESTAMP, FALSE, %s, %s)
                         """, (empleado_propina_id, monto_p_float, metodo_propina, venta_id, current_user.id))
 
-                        # B. Guardar en MOVIMIENTOS CAJA (INGRESO)
-                        # Concepto incluye el ID de venta para rastreo
                         cursor.execute("""
                             INSERT INTO movimientos_caja (tipo, monto, concepto, metodo_pago, usuario_id)
                             VALUES ('INGRESO', %s, %s, %s, %s)
                         """, (monto_p_float, f"Propina Venta #{serie_comprobante}-{numero_comprobante_str}", metodo_propina, current_user.id))
-                        
-                except ValueError:
-                    pass # Si enviaron texto en vez de número, lo ignoramos
+                except ValueError: pass
 
-            # ==============================================================================
-            # FIN LOGICA PROPINA
-            # ==============================================================================
-            
-            
             db_conn.commit()
             flash(f'Venta registrada: {serie_comprobante}-{numero_comprobante_str}', 'success')
             return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
 
         except Exception as e:
             if db_conn: db_conn.rollback()
-            # import traceback
-            # traceback.print_exc()
             flash(f"Error al procesar la venta: {e}", "danger")
             return redirect(url_for('main.nueva_venta'))
         finally:
             if cursor: cursor.close()
-
     # --- LÓGICA GET (CARGAR FORMULARIO) ---
     try:
+        # Recuperar ID de reserva si viene de la agenda
+        reserva_id = request.args.get('reserva_id', type=int)
+        prefill_data = None
+
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # 1. Clientes (Actualizado con campos de campaña)
+            
+            # 🟢 NUEVO: Si hay reserva, buscamos sus datos para pre-llenar la venta
+            if reserva_id:
+                cursor.execute("""
+                    SELECT 
+                        r.id, r.cliente_id, r.empleado_id, r.servicio_id, 
+                        r.precio_cobrado,
+                        s.nombre AS servicio_nombre,
+                        s.precio AS servicio_precio_base
+                    FROM reservas r
+                    JOIN servicios s ON r.servicio_id = s.id
+                    WHERE r.id = %s
+                """, (reserva_id,))
+                reserva = cursor.fetchone()
+                
+                if reserva:
+                    # Construimos el objeto que el JavaScript va a leer
+                    prefill_data = {
+                        "reserva_id": reserva['id'],
+                        "cliente_id": reserva['cliente_id'],
+                        "empleado_id": reserva['empleado_id'],
+                        # Datos del servicio para agregarlo al carrito automáticamente
+                        "item_inicial": {
+                            "tipo": "servicio", # Minúscula para facilitar JS
+                            "id": reserva['servicio_id'],
+                            "nombre": reserva['servicio_nombre'],
+                            # Usamos el precio pactado, o si es nulo, el precio base
+                            "precio": float(reserva['precio_cobrado']) if reserva['precio_cobrado'] else float(reserva['servicio_precio_base']),
+                            "cantidad": 1,
+                            "empleado_id": reserva['empleado_id']
+                        }
+                    }
+                    flash(f"Datos cargados desde la Reserva #{reserva_id}", "info")
+
+            # 1. Clientes
             cursor.execute("""
                 SELECT id, razon_social_nombres, apellidos, telefono, numero_documento,
                        TO_CHAR(fecha_nacimiento, 'YYYY-MM-DD') as fecha_nac_str,
                        cumpleanos_validado, rechazo_dato_cumpleanos
-                FROM clientes 
-                ORDER BY razon_social_nombres
+                FROM clientes ORDER BY razon_social_nombres
             """)
             clientes = cursor.fetchall()
             
-            # Procesar texto de búsqueda (Asegúrate de que este 'for' esté alineado con 'clientes = ...')
             for c in clientes:
                 nombre_full = f"{c['razon_social_nombres']} {c['apellidos'] or ''}".strip()
                 doc = c['numero_documento'] or 'S/D'
@@ -4868,7 +4869,7 @@ def nueva_venta():
             cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY nombre")
             servicios = cursor.fetchall()
             
-            # 4. Productos Activos (con stock)
+            # 4. Productos Activos
             cursor.execute("SELECT id, nombre, precio_venta, stock_actual FROM productos WHERE activo = TRUE ORDER BY nombre")
             productos = cursor.fetchall()
             
@@ -4876,12 +4877,13 @@ def nueva_venta():
             cursor.execute("SELECT id, nombre FROM campanas WHERE activo = TRUE AND CURRENT_DATE BETWEEN fecha_inicio AND fecha_fin")
             campanas = cursor.fetchall()
             
-            return render_template('ventas/form_venta.html',
+            return render_template('ventas/form_venta.html', # Asegúrate que tu archivo se llama así, o 'nueva_venta.html'
                                    clientes=clientes, 
                                    empleados=empleados,
                                    servicios=servicios, 
                                    productos=productos,
                                    campanas=campanas, 
+                                   prefill_data=prefill_data, # <--- IMPORTANTE: Enviamos los datos
                                    hoy=date.today().strftime('%d/%m/%Y'))
                                    
     except Exception as e:

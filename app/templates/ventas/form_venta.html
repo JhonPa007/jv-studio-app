@@ -16,34 +16,16 @@
     .btn-add { height: 100%; }
 
     /* --- CORRECCIÓN CRÍTICA DE VISIBILIDAD (Colaboradores) --- */
-    /* Fuerza texto negro en las opciones de los selects estándar */
-    select option {
-        color: #000 !important;
-        background-color: #fff !important;
-    }
-    .form-select {
-        color: #000 !important; /* Texto negro en el input cerrado */
-    }
+    select option { color: #000 !important; background-color: #fff !important; }
+    .form-select { color: #000 !important; }
 
     /* --- CORRECCIÓN SELECT2 MODO OSCURO --- */
-    .select2-container--bootstrap-5 .select2-selection {
-        background-color: #fff;
-        color: #000;
-        border: 1px solid #ced4da;
-    }
-    .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
-        color: #000 !important;
-    }
-    .select2-results__option { 
-        color: #000 !important; 
-    }
+    .select2-container--bootstrap-5 .select2-selection { background-color: #fff; color: #000; border: 1px solid #ced4da; }
+    .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered { color: #000 !important; }
+    .select2-results__option { color: #000 !important; }
     
     /* Estilos Modals */
-    .modal-campana .modal-content {
-        background-color: #2c2c2c;
-        border: 1px solid var(--color-acento-dorado);
-        color: #fff;
-    }
+    .modal-campana .modal-content { background-color: #2c2c2c; border: 1px solid var(--color-acento-dorado); color: #fff; }
     .modal-campana .btn-close { filter: invert(1); }
 </style>
 {% endblock %}
@@ -100,7 +82,7 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label class="form-label text-warning">Colaborador</label>
-                    <select class="form-select form-select-lg" name="empleado_id" required>
+                    <select class="form-select form-select-lg" name="empleado_id" id="empleado_id" required>
                         <option value="">Seleccione...</option>
                         {% for e in empleados %}
                         <option value="{{ e.id }}" {% if current_user.id == e.id %}selected{% endif %}>
@@ -155,7 +137,7 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-2">                                                        
+                        <div class="col-md-2">                                                    
                             <button type="button" class="btn btn-warning w-100" onclick="agregarItem('producto')">
                                 <i class="fas fa-box"></i>
                             </button>
@@ -220,7 +202,7 @@
                                     <input type="number" step="0.50" name="monto_propina" class="form-control form-control-sm bg-dark text-warning border-secondary fw-bold" placeholder="S/ 0.00">
                                 </div>
                                 <div class="col-4">
-                                    <select name="empleado_propina_id" class="form-select form-select-sm bg-dark text-white border-secondary" style="font-size: 0.8rem;">
+                                    <select name="empleado_propina_id" id="empleado_propina_id" class="form-select form-select-sm bg-dark text-white border-secondary" style="font-size: 0.8rem;">
                                         <option value="">¿A quién?</option>
                                         {% for e in empleados %}
                                         <option value="{{ e.id }}">{{ e.nombre_display }}</option>
@@ -331,6 +313,9 @@
     let listaItems = [];
     let clienteIdCampana = null;
 
+    // 1. Recibir datos del Backend (NUEVO)
+    const datosPreCargados = JSON.parse('{{ prefill_data | tojson | safe if prefill_data else "null" }}');
+
     // --- INICIALIZACIÓN ---
     $(document).ready(function() {
         // Select2 con tema Bootstrap 5
@@ -339,6 +324,39 @@
             placeholder: 'Buscar cliente...',
             width: '100%'
         });
+
+        // 🟢 AUTOMATIZACIÓN: Si hay datos pre-cargados (Desde Agenda)
+        if (datosPreCargados) {
+            console.log("Cargando datos de reserva:", datosPreCargados);
+            
+            // 1. Seleccionar Cliente
+            if (datosPreCargados.cliente_id) {
+                $('#cliente_id').val(datosPreCargados.cliente_id).trigger('change');
+            }
+
+            // 2. Seleccionar Colaborador
+            if (datosPreCargados.empleado_id) {
+                $('#empleado_id').val(datosPreCargados.empleado_id);
+                // También sugerir al colaborador para la propina
+                $('#empleado_propina_id').val(datosPreCargados.empleado_id);
+            }
+
+            // 3. Agregar Servicio a la Tabla
+            if (datosPreCargados.item_inicial) {
+                const item = datosPreCargados.item_inicial;
+                // Simulamos el objeto que crea la función 'agregarItem'
+                const nuevoItem = {
+                    id: item.id.toString(),
+                    tipo: item.tipo, // 'servicio'
+                    descripcion: item.nombre,
+                    precio: parseFloat(item.precio),
+                    stock: 0, // Servicios no tienen stock
+                    cantidad: 1
+                };
+                listaItems.push(nuevoItem);
+                renderTabla(); // Actualizar vista
+            }
+        }
 
         // DETECTOR DE CLIENTE (Campaña Cumpleaños)
         $('.select2-cliente').on('select2:select', function(e) {
@@ -384,8 +402,10 @@
             modalExito.show();
         }
         
-        // Agregar una línea de pago por defecto
-        agregarPago();
+        // Agregar una línea de pago por defecto si la lista está vacía
+        if (document.querySelectorAll('.pago-row').length === 0) {
+            agregarPago();
+        }
     });
 
     // --- FUNCIONES CAMPAÑA ---
@@ -500,7 +520,7 @@
         const faltante = total - pagado;
         const lblFalt = document.getElementById('lbl_faltante');
         
-        if(faltante <= 0.01 && faltante >= -0.01) { // Exacto
+        if(Math.abs(faltante) <= 0.01) { // Exacto
             lblFalt.className = 'text-white fw-bold';
             lblFalt.innerText = 'S/ 0.00';
         } else if (faltante < 0) { // Vuelto
@@ -511,11 +531,11 @@
             lblFalt.innerText = 'S/ ' + faltante.toFixed(2);
         }
         
-        // Autocompletar primer pago si está vacío
+        // Autocompletar primer pago si está vacío y hay monto
         const primerPago = document.querySelector('.monto-pago');
-        if(primerPago && !primerPago.value && listaItems.length > 0) {
+        if(primerPago && (!primerPago.value || parseFloat(primerPago.value) === 0) && total > 0 && document.querySelectorAll('.monto-pago').length === 1) {
             primerPago.value = total.toFixed(2);
-            // Recalcular para actualizar etiquetas
+            // Recalcular visualmente sin llamar recursivamente
             document.getElementById('lbl_total_pagado').innerText = 'S/ ' + total.toFixed(2);
             lblFalt.className = 'text-white fw-bold';
             lblFalt.innerText = 'S/ 0.00';
@@ -527,8 +547,12 @@
         
         // Validaciones RUC/DNI
         const tipo = document.getElementById('tipo_comprobante').value;
-        const optCliente = $('.select2-cliente').select2('data')[0].element;
-        const doc = optCliente ? optCliente.dataset.documento : '';
+        
+        // Obtener data del cliente seleccionado en Select2
+        const dataCliente = $('.select2-cliente').select2('data')[0];
+        const elCliente = dataCliente ? dataCliente.element : null;
+        const doc = elCliente ? elCliente.dataset.documento : '';
+        
         const total = parseFloat(document.getElementById('lbl_total_pagar').innerText.replace('S/ ', ''));
 
         if(tipo === 'Factura Electrónica' && (!doc || doc.length !== 11)) {
