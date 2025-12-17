@@ -10,22 +10,15 @@
     #calendar { 
         border: 1px solid #d1d5db; 
         border-radius: 8px; 
-        /* padding: 10px;  <-- QUITAMOS el padding interno para que el scroll llegue al borde */
-        padding: 0;
+        padding: 0; /* Sin padding para que el scroll llegue al borde */
         background-color: #ffffff;
         
-        /* CAMBIO CLAVE: Altura dinámica */
-        /* 100vh es el alto total de la pantalla. Le restamos aprox 250px 
-        (que es lo que ocupan tu barra negra superior + los controles de filtros) */
-        /*height: calc(100vh - 250px); */
-        
-        /* Esto es vital: */
-        /*overflow: hidden; */
-        min-height: 500px; /* Solo por seguridad si falla el JS */
-        overflow: hidden; /* Mantiene bordes redondeados */
+        /* La altura se controla por JS, pero dejamos esto por seguridad */
+        min-height: 500px; 
+        overflow: hidden; 
     }
 
-    /* Opcional: Asegurar que el scroll interno se vea elegante */
+    /* Scroll interno elegante */
     .fc-scroller::-webkit-scrollbar {
         width: 8px;
     }
@@ -48,32 +41,31 @@
     }
 
     /* --- ESTILOS PARA AVATAR EN CABECERA (TIPO FRESHA) --- */
-
     .staff-header-container {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         padding-bottom: 5px;
+        padding-top: 5px;
     }
 
     .staff-avatar {
         width: 45px;
         height: 45px;
-        border-radius: 50%; /* Círculo perfecto */
-        object-fit: cover; /* Evita que la foto se estire */
+        border-radius: 50%;
+        object-fit: cover;
         margin-bottom: 8px;
-        border: 2px solid #ffffff; /* Anillo blanco alrededor */
-        box-shadow: 0 3px 6px rgba(0,0,0,0.15); /* Sombra suave */
+        border: 2px solid #ffffff;
+        box-shadow: 0 3px 6px rgba(0,0,0,0.15);
         background-color: #f3f4f6;
     }
 
-    /* Estilo para cuando NO hay foto (Iniciales) */
     .staff-initials {
         width: 45px;
         height: 45px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #6c63ff 0%, #5a52d6 100%); /* Tu color morado */
+        background: linear-gradient(135deg, #6c63ff 0%, #5a52d6 100%);
         color: white;
         font-size: 1.2rem;
         font-weight: 700;
@@ -109,19 +101,16 @@
     }
     
     /* B. CELDAS PRINCIPALES (SLOTS) */
-    /* CRÍTICO: position relative hace que la barra hover se limite al ancho de la columna */
     .fc-timegrid-slot {
-        position: relative !important; 
-        z-index: 1;
-        border-bottom: 1px solid #efefef !important; /* Líneas muy suaves */
+        position: static !important; /* Static para evitar conflictos de apilamiento con la barra */
+        z-index: auto !important;
+        border-bottom: 1px solid #efefef !important;
     }
 
-    /* C. FONDO BLANCO PARA TURNOS DISPONIBLES 
-       (Esto normalmente lo maneja FullCalendar con eventos de fondo, 
-       pero aseguramos que no tapen la barra hover con z-index) */
+    /* C. FONDO BLANCO PARA TURNOS DISPONIBLES */
     .fc-bg-event {
         opacity: 1.0 !important; 
-        z-index: 2 !important; /* Nivel intermedio */
+        z-index: 2 !important;
     }
     
     /* D. HEADER Y TEXTOS */
@@ -145,13 +134,13 @@
         border-color: #ffffff !important; 
     }
     
-    /* E. TARJETAS DE CITAS (EVENTOS) */
+    /* E. TARJETAS DE CITAS */
     .fc-event { 
         border: none !important; 
         border-radius: 4px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); 
         margin: 1px 2px !important; 
-        z-index: 50 !important; /* Siempre encima de todo */
+        z-index: 50 !important;
     }
     .fc-event-main { 
         color: #ffffff !important; 
@@ -160,7 +149,7 @@
         font-size: 0.85rem;
     }
     
-    /* INDICADOR DE HORA ACTUAL (Línea Roja) */
+    /* F. INDICADOR DE HORA ACTUAL */
     .fc-timegrid-now-indicator-line {
         border-color: #ef4444; 
         border-width: 2px;
@@ -174,7 +163,7 @@
         background-color: transparent !important;
     }
 
-    /* --- CORRECCIONES VISUALES --- */
+    /* CORRECCIONES VISUALES */
     .fc .fc-timegrid-axis-cushion,
     .fc .fc-timegrid-axis-frame,
     .fc .fc-timegrid-axis {
@@ -183,47 +172,36 @@
     .fc-theme-standard .fc-scrollgrid {
         border-color: #e5e7eb;
     }
+    /* Aseguramos que las COLUMNAS sean el referente relativo */
+    .fc-timegrid-col {
+        position: relative !important;
+    }
 
     /* =========================================
        NUEVO: EFECTO HOVER TIPO FRESHA 
        ========================================= */
-    /* 1. La barra flotante */
-#indicadorHoraHover {
-    position: absolute;
-    left: 0;
-    right: 0;
-    min-height: 20px; 
-    background-color: rgba(108, 99, 255, 0.25); 
-    border-left: 4px solid #5a52d6;
-    color: #5a52d6;
-    font-size: 0.8rem; /* Un poco más pequeño para que quepa bien */
-    font-weight: 800;
-    
-    /* ALINEACIÓN SUPERIOR IZQUIERDA */
-    display: none; /* Se activa con JS */
-    flex-direction: row;
-    align-items: flex-start; /* Alinea al TOP */
-    justify-content: flex-start; /* Alinea a la IZQUIERDA */
-    padding-top: 2px; /* Espacio desde arriba */
-    padding-left: 6px; /* Espacio desde la izquierda */
-    
-    pointer-events: none; 
-    z-index: 1000; 
-    border-radius: 2px;
-}
-
-/* 2. IMPORTANTE: Quitamos el position relative de los slots horizontales
-   para evitar conflictos de apilamiento */
-.fc-timegrid-slot {
-    position: static !important;
-    z-index: auto !important;
-}
-
-/* 3. Aseguramos que las COLUMNAS sean el referente relativo */
-.fc-timegrid-col {
-    position: relative !important;
-}
-
+    #indicadorHoraHover {
+        position: absolute;
+        left: 0;
+        right: 0;
+        min-height: 20px; 
+        background-color: rgba(108, 99, 255, 0.25); 
+        border-left: 4px solid #5a52d6;
+        color: #5a52d6;
+        font-size: 0.8rem;
+        font-weight: 800;
+        
+        display: none; /* Se activa con JS */
+        flex-direction: row;
+        align-items: flex-start;
+        justify-content: flex-start;
+        padding-top: 2px;
+        padding-left: 6px;
+        
+        pointer-events: none; 
+        z-index: 1000; 
+        border-radius: 2px;
+    }
 </style>
 {% endblock head_extra %}
 
@@ -280,23 +258,12 @@
 
 {% block scripts %}
 {{ super() }}
+
 <script>
-// Función auxiliar para iniciales (Global)
+// --- Función auxiliar para iniciales (Global) ---
 function crearIniciales(nombre) {
     const div = document.createElement('div');
-    div.style.width = '45px';
-    div.style.height = '45px';
-    div.style.borderRadius = '50%';
-    div.style.backgroundColor = '#6c63ff'; // Color morado
-    div.style.color = '#ffffff';
-    div.style.display = 'flex';
-    div.style.alignItems = 'center';
-    div.style.justifyContent = 'center';
-    div.style.fontWeight = 'bold';
-    div.style.fontSize = '1.1rem';
-    div.style.border = '2px solid #fff';
-    div.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
-    div.style.marginBottom = '5px';
+    div.className = 'staff-initials'; // Usamos la clase CSS definida arriba
     div.innerText = nombre ? nombre.charAt(0).toUpperCase() : '?';
     return div;
 }
@@ -345,7 +312,7 @@ document.addEventListener('DOMContentLoaded', function() {
             selectorFecha.value = localDate.toISOString().slice(0,10); 
         }
     }
-    // Ejecutar inmediatamente si está vacío
+    // Ejecutar si está vacío
     if (!selectorFecha.value) setFechaLocal();
 
     // 3. Inicializar FullCalendar
@@ -355,53 +322,29 @@ document.addEventListener('DOMContentLoaded', function() {
         locale: 'es',
         headerToolbar: false,
         
-        // --- AJUSTES DE SCROLL Y CABECERA ---
-        height: 'calc(100vh - 190px)', // Altura dinámica
-        stickyHeaderDates: true,      // Cabecera fija
-        
-        // --- CONFIGURACIÓN DE TIEMPO ---
+        // --- SCROLL Y ALTURA DINÁMICA ---
+        height: 'calc(100vh - 190px)',
+        stickyHeaderDates: true,
         allDaySlot: false,
-        slotDuration: '00:15:00',
-        slotMinTime: '08:00:00',
-        slotMaxTime: '22:00:00',
-        slotLabelInterval: '01:00',
-        nowIndicator: true,
-        
-        // --- EDICIÓN ---
-        editable: true,
-        droppable: true,
-        selectable: false, // Usamos dateClick propio
-        
-        // --- FORMATOS ---
-        slotLabelFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short', omitZeroMinute: false },
-        eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short' },
-        
-        // --- PERSONALIZACIÓN CABECERA (FOTOS/INICIALES) ---
+
+        // --- CONFIGURACIÓN DE IMÁGENES DE COLABORADORES ---
         resourceLabelContent: function(arg) {
             const recurso = arg.resource;
             const props = recurso.extendedProps || {};
             const imagenUrl = props.imagen_url || props.foto || null; 
             const nombre = recurso.title;
 
+            // Contenedor principal
             const container = document.createElement('div');
             container.className = 'staff-header-container'; 
-            container.style.display = 'flex';
-            container.style.flexDirection = 'column';
-            container.style.alignItems = 'center';
-            container.style.justifyContent = 'center';
-            container.style.padding = '10px 0';
-
+            
+            // 1. CÍRCULO (Foto o Iniciales)
             if (imagenUrl) {
                 const img = document.createElement('img');
                 img.src = imagenUrl;
-                img.style.width = '45px';
-                img.style.height = '45px';
-                img.style.borderRadius = '50%';
-                img.style.objectFit = 'cover';
-                img.style.border = '2px solid #fff';
-                img.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
-                img.style.marginBottom = '5px';
+                img.className = 'staff-avatar';
                 
+                // Si falla la carga, poner iniciales
                 img.onerror = function() {
                     this.style.display = 'none';
                     container.insertBefore(crearIniciales(nombre), container.firstChild);
@@ -411,17 +354,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 container.appendChild(crearIniciales(nombre));
             }
 
+            // 2. NOMBRE
             const nombreSpan = document.createElement('span');
+            nombreSpan.className = 'staff-name';
             nombreSpan.innerText = nombre;
-            nombreSpan.style.fontWeight = '700';
-            nombreSpan.style.fontSize = '0.9rem';
-            nombreSpan.style.color = '#374151';
-            nombreSpan.style.textTransform = 'uppercase';
             container.appendChild(nombreSpan);
 
+            // IMPORTANTE: Retornar los nodos DOM
             return { domNodes: [container] };
         },
-
+        
+        // --- CONFIGURACIÓN DE TIEMPO ---
+        slotDuration: '00:15:00',
+        slotMinTime: '08:00:00',
+        slotMaxTime: '22:00:00',
+        slotLabelInterval: '01:00',
+        nowIndicator: true,
+        editable: true,
+        droppable: true,
+        selectable: false, // Usamos dateClick customizado
+        slotLabelFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short', omitZeroMinute: false },
+        eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short' },
+        
         // --- FUENTES DE DATOS ---
         resources: function(fetchInfo, successCallback, failureCallback) {
             const sucursalId = selectorSucursal.value;
@@ -440,7 +394,7 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         
         // --- INTERACCIONES ---
-        
+
         // A. Clic en espacio vacío
         dateClick: function(info) {
             if (!datosApiAgenda || !datosApiAgenda.eventos) return;
@@ -515,7 +469,7 @@ document.addEventListener('DOMContentLoaded', function() {
         calendar.gotoDate(selectorFecha.value);
     }
 
-    // --- 5. LISTENERS BOTONES ---
+    // --- 5. LISTENERS BOTONES DE FECHA ---
     document.getElementById('btnDiaAnterior').addEventListener('click', () => { 
         const d = new Date(selectorFecha.value + 'T00:00:00'); d.setDate(d.getDate() - 1); 
         selectorFecha.value = d.toISOString().slice(0,10); actualizarAgenda(); 
@@ -530,7 +484,7 @@ document.addEventListener('DOMContentLoaded', function() {
     selectorFecha.addEventListener('change', actualizarAgenda);
     btnActualizar?.addEventListener('click', actualizarAgenda);
 
-    // --- 6. MODAL NUEVA RESERVA ---
+    // --- 6. GESTIÓN DE MODALES (Nueva / Editar) ---
     window.abrirModalNuevaReserva = function(empleadoId, empleadoNombre, fecha, hora) {
         formModalNuevaReserva.reset(); 
         document.getElementById('modalSucursalId').value = selectorSucursal.value; 
@@ -561,8 +515,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .finally(() => { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save me-1"></i>Guardar Reserva'; });
     });
 
-    // --- 7. MODAL GESTIONAR ---
-    window.abrirModalGestionarReserva = function(reservaId) {
+    function abrirModalGestionarReserva(reservaId) {
         const modalTitle = document.getElementById('modalGestionarReservaLabel');
         const vistaDiv = document.getElementById('detalleReservaVista');
         const formEditar = document.getElementById('formEditarReservaModal');
@@ -640,7 +593,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (btnCompletar) btnCompletar.onclick = () => {
              if(confirm('¿Completar?')) fetch(`/api/reservas/${reservaId}/completar`, {method:'POST'}).then(()=>{ modalGestionarInstancia.hide(); actualizarAgenda(); });
         };
-    };
+    }
     
     document.getElementById('formEditarReservaModal')?.addEventListener('submit', function(e) {
         e.preventDefault();
@@ -649,15 +602,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // =========================================================
-    // 🟢 EFECTO HOVER (BARRA MORADA) - CÁLCULO MATEMÁTICO
+    // 🟢 MAGIA: EFECTO HOVER (CÁLCULO MATEMÁTICO DE HORA)
     // =========================================================
     
     const indicadorDiv = document.createElement('div');
     indicadorDiv.id = 'indicadorHoraHover';
     
-    // Configuración de tu agenda (DEBE COINCIDIR con slotMinTime: '08:00:00' y slotDuration: '00:15:00')
-    const HORA_INICIO = 8; 
-    const MINUTOS_SLOT = 15; 
+    // Configuración de tu agenda (DEBE COINCIDIR con tu calendar options)
+    const HORA_INICIO = 8; // 08:00 AM
+    const MINUTOS_SLOT = 15; // 15 minutos
 
     agendaContainer.addEventListener('mousemove', function(e) {
         // 1. Detectar Columna
@@ -671,7 +624,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // 2. Detectar Altura de Slot
+        // 2. Detectar Altura de Slot (Referencia)
         const primerSlot = document.querySelector('.fc-timegrid-slot');
         const slotHeight = primerSlot ? primerSlot.offsetHeight : 22; 
 
@@ -692,12 +645,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         indicadorDiv.style.top = `${snappedY}px`;
 
-        // 5. CALCULAR HORA
+        // 5. CALCULAR LA HORA MATEMÁTICAMENTE (Infalible)
         const minutosDesdeInicio = slotIndex * MINUTOS_SLOT;
         const fechaBase = new Date();
-        fechaBase.setHours(HORA_INICIO, 0, 0, 0); 
+        fechaBase.setHours(HORA_INICIO, 0, 0, 0); // 08:00:00
         fechaBase.setMinutes(fechaBase.getMinutes() + minutosDesdeInicio);
 
+        // Formatear: 10:15 a. m.
         const horaStr = fechaBase.toLocaleTimeString('es-PE', {
             hour: 'numeric', 
             minute: '2-digit', 
@@ -712,4 +666,5 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
 {% endblock scripts %}
