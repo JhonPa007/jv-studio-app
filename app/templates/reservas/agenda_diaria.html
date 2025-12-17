@@ -334,12 +334,55 @@ document.addEventListener('DOMContentLoaded', function() {
         initialView: 'resourceTimeGridDay',
         locale: 'es',
         headerToolbar: false,
-        height: 'auto',
+        height: 'calc(100vh - 190px)',
         allDaySlot: false,
+
+        // 🟢 CONFIGURACIÓN DE IMÁGENES DE COLABORADORES
+        resourceLabelContent: function(arg) {
+            const recurso = arg.resource;
+            // Obtenemos los datos extra (Debug: mira la consola si salen errores)
+            const props = recurso.extendedProps || {};
+            const imagenUrl = props.imagen_url || props.foto || null; 
+            const nombre = recurso.title;
+
+            // Contenedor principal
+            const container = document.createElement('div');
+            container.className = 'staff-header-container'; 
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.alignItems = 'center';
+            container.style.justifyContent = 'center';
+            container.style.padding = '10px 0';
+
+            // 1. CÍRCULO (Foto o Iniciales)
+            if (imagenUrl) {
+                // Opción A: Tiene Foto
+                const img = document.createElement('img');
+                img.src = imagenUrl;
+                img.style.width = '50px';
+                img.style.height = '50px';
+                img.style.borderRadius = '50%';
+                img.style.objectFit = 'cover';
+                img.style.border = '2px solid #fff';
+                img.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+                img.style.marginBottom = '5px';
+                
+                // Si la imagen falla (404), mostramos iniciales
+                img.onerror = function() {
+                    this.style.display = 'none';
+                    container.insertBefore(crearIniciales(nombre), container.firstChild);
+                };
+                container.appendChild(img);
+            } else {
+                // Opción B: No tiene foto -> Iniciales
+                container.appendChild(crearIniciales(nombre));
+            }
+            
         slotDuration: '00:15:00',
         slotMinTime: '08:00:00',
         slotMaxTime: '22:00:00',
         slotLabelInterval: '01:00',
+        stickyHeaderDates: true,
         nowIndicator: true,
         editable: true,
         droppable: true,
@@ -639,7 +682,25 @@ document.addEventListener('DOMContentLoaded', function() {
     agendaContainer.addEventListener('mouseleave', function() {
         indicadorDiv.style.display = 'none';
     });
-
+    // Función para crear el círculo con iniciales
+    function crearIniciales(nombre) {
+        const div = document.createElement('div');
+        div.style.width = '50px';
+        div.style.height = '50px';
+        div.style.borderRadius = '50%';
+        div.style.backgroundColor = '#6c63ff'; // Tu color morado
+        div.style.color = '#ffffff';
+        div.style.display = 'flex';
+        div.style.alignItems = 'center';
+        div.style.justifyContent = 'center';
+        div.style.fontWeight = 'bold';
+        div.style.fontSize = '1.2rem';
+        div.style.border = '2px solid #fff';
+        div.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+        div.style.marginBottom = '5px';
+        div.innerText = nombre ? nombre.charAt(0).toUpperCase() : '?';
+        return div;
+    }
 });
 </script>
 {% endblock scripts %}

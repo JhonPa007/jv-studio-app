@@ -2213,15 +2213,10 @@ def api_get_datos_reserva(reserva_id):
 def api_agenda_dia_data():
     """
     API que alimenta el FullCalendar.
-    Devuelve:
-    1. 'recursos': Los empleados (columnas).
-    2. 'eventos': Turnos (Blanco), Ausencias (Rojo) y Reservas (Tarjetas).
     """
-    # Recibimos fecha y sucursal desde los parámetros GET del JavaScript
     fecha_str = request.args.get('fecha', date.today().isoformat())
     sucursal_id = request.args.get('sucursal_id', type=int)
     
-    # Validaciones básicas
     if not sucursal_id:
         return jsonify({"recursos": [], "eventos": []})
         
@@ -2235,29 +2230,46 @@ def api_agenda_dia_data():
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             
             # --- 1. OBTENER RECURSOS (COLABORADORES) ---
-            # Solo empleados activos de la sucursal solicitada y que brindan servicio
+            # 🟢 MODIFICADO: Agregamos la columna de la foto (e.foto o e.imagen)
             cursor.execute("""
-                SELECT e.id, e.nombre_display as title 
+                SELECT e.id, e.nombre_display as title, e.foto 
                 FROM empleados e
                 WHERE e.activo = TRUE 
                   AND e.realiza_servicios = TRUE  
                   AND e.id IN (SELECT empleado_id FROM empleado_sucursales WHERE sucursal_id = %s)
                 ORDER BY e.nombres
             """, (sucursal_id,))
-            recursos = cursor.fetchall()
+            
+            recursos_db = cursor.fetchall()
+            
+            # 🟢 PROCESAR IMÁGENES: Convertir nombre de archivo en URL completa
+            recursos = []
+            for r in recursos_db:
+                url_imagen = None
+                if r['foto']:
+                    # 🔴 CAMBIAR: Ajusta esta ruta según donde guardes tus imágenes
+                    # Si guardas solo el nombre "foto.jpg", agrégale la carpeta "/static/..."
+                    # Si ya guardas la URL completa (cloudinary/s3), déjalo como r['foto']
+                    url_imagen = f"/static/uploads/empleados/{r['foto']}" 
+                
+                recursos.append({
+                    "id": r['id'],
+                    "title": r['title'],
+                    # FullCalendar moverá esto automáticamente a 'extendedProps.imagen_url'
+                    "imagen_url": url_imagen 
+                })
             
             eventos = []
             
             if recursos:
                 recursos_ids = [r['id'] for r in recursos]
                 
-                # Preparamos placeholders para SQL (ej: %s, %s, %s)
+                # Preparamos placeholders
                 placeholders = ','.join(['%s'] * len(recursos_ids))
                 params_base = list(recursos_ids)
                 
-                # --- 2. FONDO BLANCO: HORARIOS DE TRABAJO ---
-                # 🟢 CAMBIO PRINCIPAL: Se usa blanco (#ffffff) para tapar las rayas de fondo
-                dia_semana_num = fecha_obj.isoweekday() # 1=Lunes, 7=Domingo
+                # --- 2. FONDO BLANCO: HORARIOS ---
+                dia_semana_num = fecha_obj.isoweekday()
                 
                 sql_turnos = f"""
                     SELECT empleado_id, hora_inicio, hora_fin 
@@ -2269,16 +2281,14 @@ def api_agenda_dia_data():
                 for turno in cursor.fetchall():
                     eventos.append({
                         "resourceId": turno['empleado_id'],
-                        # FullCalendar necesita fecha + hora en formato ISO
                         "start": f"{fecha_str}T{turno['hora_inicio']}", 
                         "end": f"{fecha_str}T{turno['hora_fin']}",
                         "display": "background", 
-                        "backgroundColor": "#ffffff", # <--- BLANCO SÓLIDO (Efecto Disponible)
-                        "classNames": ["turno-disponible"] # Clase auxiliar
+                        "backgroundColor": "#ffffff",
+                        "classNames": ["turno-disponible"]
                     })
                 
-                # --- 3. FONDO ROJO: AUSENCIAS / DESCANSOS ---
-                # Esto "tapa" el blanco indicando que no está disponible por permiso/vacación
+                # --- 3. FONDO ROJO: AUSENCIAS ---
                 sql_ausencias = f"""
                     SELECT empleado_id, fecha_hora_inicio, fecha_hora_fin 
                     FROM ausencias_empleado 
@@ -2295,12 +2305,11 @@ def api_agenda_dia_data():
                         "start": ausencia['fecha_hora_inicio'].isoformat(),
                         "end": ausencia['fecha_hora_fin'].isoformat(),
                         "display": "background", 
-                        "backgroundColor": "rgba(220, 53, 69, 0.5)", # Rojo semitransparente sobre blanco
+                        "backgroundColor": "rgba(220, 53, 69, 0.5)",
                         "title": "Ausente"
                     })
                 
-                # --- 4. EVENTOS: RESERVAS (CITAS) ---
-                # Las tarjetas reales que se pueden mover y clickear
+                # --- 4. EVENTOS: RESERVAS ---
                 sql_reservas = """
                     SELECT 
                         r.id, 
@@ -2319,12 +2328,11 @@ def api_agenda_dia_data():
                 cursor.execute(sql_reservas, (sucursal_id, fecha_str))
                 
                 for reserva in cursor.fetchall():
-                    # Definir color según estado
-                    color_fondo = '#D4AF37' # Dorado por defecto (Programada)
+                    color_fondo = '#D4AF37'
                     border_color = '#b49b4c'
                     
                     if reserva['estado'] == 'Completada':
-                        color_fondo = '#198754' # Verde fuerte
+                        color_fondo = '#198754'
                         border_color = '#146c43'
                     elif 'Cancelada' in reserva['estado']:
                         color_fondo = '#dc3545' 
@@ -2343,10 +2351,9 @@ def api_agenda_dia_data():
 
     except Exception as e:
         current_app.logger.error(f"Error fatal en api_agenda_dia_data: {e}", exc_info=True)
-        return jsonify({"error": "Error interno del servidor al procesar la solicitud."}), 500
+        return jsonify({"error": "Error interno del servidor."}), 500
 
-    return jsonify({"recursos": recursos, "eventos": eventos})
-   
+    return jsonify({"recursos": recursos, "eventos": eventos})   
     
 def timedelta_to_time_obj(obj):
     """
