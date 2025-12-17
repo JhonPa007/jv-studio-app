@@ -73,7 +73,7 @@
 
     /* Líneas de cuadrícula */
     .fc-theme-standard td, .fc-theme-standard th {
-        border-color: #313132 !important; /* Gris muy suave */
+        border-color: #ffffff !important; /* Gris muy suave */
     }
     
     /* D. ESTILO DE LAS TARJETAS DE CITAS */
@@ -118,6 +118,33 @@
     /* 2. Asegurar que el fondo rayado no afecte bordes */
     .fc-theme-standard .fc-scrollgrid {
         border-color: #e5e7eb;
+    }
+
+    /* --- EFECTO HOVER TIPO FRESHA (INDICADOR DE HORA) --- */
+    
+    /* Esta es la barra que se moverá */
+    #indicadorHoraHover {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 100%; /* Ocupa todo el alto de la celda */
+        background-color: rgba(108, 99, 255, 0.15); /* Morado suave transparente */
+        color: #5a52d6; /* Texto morado fuerte */
+        font-size: 0.85rem;
+        font-weight: bold;
+        padding-left: 8px;
+        display: flex;
+        align-items: center;
+        pointer-events: none; /* CRÍTICO: Permite hacer clic "a través" de la barra */
+        z-index: 5;
+        border-radius: 4px;
+        border-left: 3px solid #5a52d6; /* Línea decorativa a la izquierda */
+        display: none; /* Oculto por defecto */
+    }
+    
+    /* Aseguramos que las celdas tengan posición relativa para contener la barra */
+    .fc-timegrid-slot {
+        position: relative !important;
     }
 </style>
 
