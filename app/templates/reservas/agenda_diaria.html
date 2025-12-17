@@ -544,6 +544,59 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(err => { errDiv.innerHTML = `Error: ${err.message}`; errDiv.style.display = 'block'; })
         .finally(() => { btn.disabled = false; btn.textContent = 'Guardar Cambios'; });
     });
+
+    // =========================================================
+    // 🟢 NUEVO: EFECTO HOVER CON HORA (TIPO FRESHA)
+    // =========================================================
+    
+    // 1. Crear el elemento visual (la barrita) dinámicamente
+    const indicadorDiv = document.createElement('div');
+    indicadorDiv.id = 'indicadorHoraHover';
+    // Lo guardamos en memoria, lo inyectaremos cuando sea necesario
+    
+    // 2. Escuchar el movimiento del mouse sobre el calendario
+    agendaContainer.addEventListener('mousemove', function(e) {
+        // Detectamos el elemento bajo el mouse
+        const target = document.elementFromPoint(e.clientX, e.clientY);
+        
+        // Verificamos si es una celda de tiempo (o parte de ella)
+        const slot = target ? target.closest('.fc-timegrid-slot') : null;
+
+        // Solo actuamos si estamos sobre una celda válida de la cuadrícula
+        if (slot && slot.classList.contains('fc-timegrid-slot-lane')) {
+            
+            // A. Si la barra no está en esta celda, la movemos aquí
+            if (indicadorDiv.parentElement !== slot) {
+                slot.appendChild(indicadorDiv);
+                indicadorDiv.style.display = 'flex';
+            }
+
+            // B. Calcular la hora exacta usando la API de FullCalendar
+            const dateClick = calendar.getDateFromPoint(e.clientX, e.clientY);
+            
+            if (dateClick) {
+                // Formatear la hora (Ej: 3:15 p. m.)
+                const horaStr = dateClick.toLocaleTimeString('es-PE', {
+                    hour: 'numeric', 
+                    minute: '2-digit', 
+                    hour12: true 
+                });
+                
+                // Actualizar el texto de la barra
+                indicadorDiv.innerText = horaStr;
+            }
+        } else {
+            // Si salimos de las celdas, ocultamos la barra
+            indicadorDiv.style.display = 'none';
+        }
+    });
+
+    // 3. Ocultar al salir del calendario por completo
+    agendaContainer.addEventListener('mouseleave', function() {
+        indicadorDiv.style.display = 'none';
+    });
+
+
 });
 </script>
 {% endblock scripts %}
