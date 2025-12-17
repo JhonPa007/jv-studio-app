@@ -2343,20 +2343,34 @@ def api_agenda_dia_data():
     return jsonify({"recursos": recursos, "eventos": eventos})
    
     
-def timedelta_to_time_obj(td):
-    if td is None: return None
-    total_seconds = int(td.total_seconds())
-    hours = total_seconds // 3600
-    minutes = (total_seconds % 3600) // 60
-    return time(hours, minutes)
+def timedelta_to_time_obj(obj):
+    """
+    Convierte inteligentemente el dato de horario a un objeto time.
+    Maneja tanto si la BD devuelve timedelta como si devuelve time.
+    """
+    if obj is None: 
+        return None
+    
+    # 🟢 CORRECCIÓN: Si ya es un objeto time, lo devolvemos tal cual
+    if isinstance(obj, time):
+        return obj
+        
+    # Si es un timedelta (duración), lo convertimos a hora
+    if isinstance(obj, timedelta):
+        total_seconds = int(obj.total_seconds())
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        return time(hours, minutes)
+    
+    return obj
 
 
 @main_bp.route('/reservas/nueva', methods=['POST'])
 @login_required
 def nueva_reserva():
     """
-    Procesa la creación de una nueva reserva desde una petición AJAX (JSON).
-    Versión blindada contra errores de tipo y transacción.
+    Procesa la creación de una nueva reserva.
+    Versión blindada: Corrige error datetime.time y transaction rollback.
     """
     if not request.is_json:
         return jsonify({"success": False, "message": "Error: Se esperaba contenido JSON."}), 400
@@ -2383,13 +2397,15 @@ def nueva_reserva():
         if not empleado_id: errores.append("Colaborador es obligatorio.")
         if not servicio_id: errores.append("Debe seleccionar un servicio.")
         
-        # --- VALIDACIÓN DE ZONA HORARIA ---
+        # --- VALIDACIÓN DE ZONA HORARIA (PERÚ) ---
         if not fecha_hora_inicio_str:
             errores.append('Falta la fecha y hora de inicio.')
         else:
             try:
                 peru_tz = pytz.timezone('America/Lima')
                 ahora_peru = datetime.now(peru_tz)
+                
+                # Convertir input a fecha aware (con zona horaria)
                 fecha_hora_inicio = datetime.fromisoformat(fecha_hora_inicio_str)
                 fecha_hora_inicio_aware = peru_tz.localize(fecha_hora_inicio)
 
@@ -2422,7 +2438,7 @@ def nueva_reserva():
             
             esta_en_turno_valido = False
             for turno in turnos_del_dia:
-                # Usamos la función auxiliar corregida
+                # 🟢 AQUÍ SE USA LA FUNCIÓN CORREGIDA DEL PASO 1
                 turno_inicio_time_obj = timedelta_to_time_obj(turno['hora_inicio'])
                 turno_fin_time_obj = timedelta_to_time_obj(turno['hora_fin'])
                 
@@ -2438,7 +2454,7 @@ def nueva_reserva():
             if cursor.fetchone():
                 return jsonify({"success": False, "message": "El colaborador tiene una ausencia registrada en este horario."}), 409
 
-            # Validar Choques
+            # Validar Choques con otras reservas
             cursor.execute("SELECT id FROM reservas WHERE empleado_id = %s AND sucursal_id = %s AND estado NOT IN ('Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio', 'Completada') AND fecha_hora_inicio < %s AND fecha_hora_fin > %s", (empleado_id, sucursal_id, fecha_hora_fin, fecha_hora_inicio))
             if cursor.fetchone():
                 return jsonify({"success": False, "message": "El colaborador ya tiene otra reserva en el horario seleccionado."}), 409
@@ -2453,11 +2469,12 @@ def nueva_reserva():
             return jsonify({"success": True, "message": f'Reserva creada exitosamente para el {fecha_hora_inicio.strftime("%d/%m/%Y a las %H:%M")}.'}), 201
 
     except Exception as e:
-        # Manejo de error seguro
+        # 🟢 CORRECCIÓN: Rollback seguro sin verificar 'in_transaction' que causaba error
         if db_conn:
             db_conn.rollback()
         current_app.logger.error(f"Error procesando nueva reserva: {e}")
-        return jsonify({"success": False, "message": f"Error interno: {str(e)}"}), 500    
+        return jsonify({"success": False, "message": f"Error interno: {str(e)}"}), 500   
+   
         
 @main_bp.route('/reservas/editar/<int:reserva_id>', methods=['POST'])
 @login_required
