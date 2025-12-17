@@ -17,10 +17,12 @@
         /* CAMBIO CLAVE: Altura dinámica */
         /* 100vh es el alto total de la pantalla. Le restamos aprox 250px 
         (que es lo que ocupan tu barra negra superior + los controles de filtros) */
-        height: calc(100vh - 250px); 
+        /*height: calc(100vh - 250px); */
         
         /* Esto es vital: */
-        overflow: hidden; 
+        /*overflow: hidden; */
+        min-height: 500px; /* Solo por seguridad si falla el JS */
+        overflow: hidden; /* Mantiene bordes redondeados */
     }
 
     /* Opcional: Asegurar que el scroll interno se vea elegante */
