@@ -379,7 +379,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         
         },    
-        
+
         slotDuration: '00:15:00',
         slotMinTime: '08:00:00',
         slotMaxTime: '22:00:00',
@@ -684,25 +684,7 @@ document.addEventListener('DOMContentLoaded', function() {
     agendaContainer.addEventListener('mouseleave', function() {
         indicadorDiv.style.display = 'none';
     });
-    // Función para crear el círculo con iniciales
-    function crearIniciales(nombre) {
-        const div = document.createElement('div');
-        div.style.width = '50px';
-        div.style.height = '50px';
-        div.style.borderRadius = '50%';
-        div.style.backgroundColor = '#6c63ff'; // Tu color morado
-        div.style.color = '#ffffff';
-        div.style.display = 'flex';
-        div.style.alignItems = 'center';
-        div.style.justifyContent = 'center';
-        div.style.fontWeight = 'bold';
-        div.style.fontSize = '1.2rem';
-        div.style.border = '2px solid #fff';
-        div.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
-        div.style.marginBottom = '5px';
-        div.innerText = nombre ? nombre.charAt(0).toUpperCase() : '?';
-        return div;
-    }
+    
 });
 </script>
 
