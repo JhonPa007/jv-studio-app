@@ -126,20 +126,24 @@
     position: absolute;
     left: 0;
     right: 0;
-    /* La altura se calculará automáticamente con JS, pero ponemos un base por seguridad */
     min-height: 20px; 
-    background-color: rgba(108, 99, 255, 0.25); /* Un poco más visible */
+    background-color: rgba(108, 99, 255, 0.25); 
     border-left: 4px solid #5a52d6;
     color: #5a52d6;
-    font-size: 0.85rem;
-    font-weight: 700;
-    padding-left: 10px;
-    display: none; /* Oculto por defecto */
-    align-items: center;
-    pointer-events: none; /* CRÍTICO: Permite hacer clic a través de ella */
-    z-index: 1000; /* SUPERIOR A TODO (Eventos background suelen ser z-index 1 o 2) */
-    border-radius: 3px;
-    box-shadow: 0 2px 5px rgba(90, 82, 214, 0.15);
+    font-size: 0.8rem; /* Un poco más pequeño para que quepa bien */
+    font-weight: 800;
+    
+    /* ALINEACIÓN SUPERIOR IZQUIERDA */
+    display: none; /* Se activa con JS */
+    flex-direction: row;
+    align-items: flex-start; /* Alinea al TOP */
+    justify-content: flex-start; /* Alinea a la IZQUIERDA */
+    padding-top: 2px; /* Espacio desde arriba */
+    padding-left: 6px; /* Espacio desde la izquierda */
+    
+    pointer-events: none; 
+    z-index: 1000; 
+    border-radius: 2px;
 }
 
 /* 2. IMPORTANTE: Quitamos el position relative de los slots horizontales
@@ -504,73 +508,68 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // =========================================================
-    // 🟢 MAGIA: EFECTO HOVER TIPO FRESHA (CORREGIDO - COLUMNA)
+    // 🟢 MAGIA: EFECTO HOVER (CÁLCULO MATEMÁTICO DE HORA)
     // =========================================================
     
-    // 1. Crear el elemento visual
     const indicadorDiv = document.createElement('div');
     indicadorDiv.id = 'indicadorHoraHover';
     
-    // 2. Escuchar movimiento en el contenedor del calendario
+    // Configuración de tu agenda (DEBE COINCIDIR con tu calendar options)
+    const HORA_INICIO = 8; // 08:00 AM
+    const MINUTOS_SLOT = 15; // 15 minutos
+
     agendaContainer.addEventListener('mousemove', function(e) {
-        
-        // A. Obtener referencia de la columna bajo el mouse
-        // Usamos elementFromPoint para ver qué hay debajo del cursor
+        // 1. Detectar Columna
         const target = document.elementFromPoint(e.clientX, e.clientY);
         if (!target) return;
-
-        // Buscamos la COLUMNA vertical (.fc-timegrid-col)
-        // Esto asegura que la barra solo viva dentro de "Vivi" o "Renato", no en toda la fila
         const col = target.closest('.fc-timegrid-col');
-
-        // B. Verificaciones de seguridad
-        // Si no estamos en una columna o estamos sobre un header, ocultamos
+        
+        // Si no estamos en columna o estamos en cabecera, adiós
         if (!col || target.closest('.fc-col-header')) {
             indicadorDiv.style.display = 'none';
             return;
         }
 
-        // C. Obtener la altura de un "Slot" (celda de tiempo)
-        // FullCalendar renderiza filas, tomamos la altura de la primera para usarla de referencia
+        // 2. Detectar Altura de Slot (Referencia)
         const primerSlot = document.querySelector('.fc-timegrid-slot');
-        // Si no encuentra slots (ej: vista mes), usa 22px por defecto
         const slotHeight = primerSlot ? primerSlot.offsetHeight : 22; 
 
-        // D. Calcular la posición Vertical (Snap to Grid)
+        // 3. Cálculos de Posición
         const rectCol = col.getBoundingClientRect();
-        
-        // Posición del mouse relativa al inicio de la columna
         const relativeY = e.clientY - rectCol.top;
         
-        // Matemáticas para "imantar" la barra a la línea más cercana
-        // Ejemplo: Si el slot mide 20px y el mouse está en 25px -> redondea a 20px
-        const snappedY = Math.floor(relativeY / slotHeight) * slotHeight;
+        // "Imantar" al slot más cercano
+        // Math.floor(relativeY / slotHeight) nos da el índice del slot (0, 1, 2...)
+        const slotIndex = Math.floor(relativeY / slotHeight);
+        const snappedY = slotIndex * slotHeight;
 
-        // E. Inyectar y Posicionar
-        // Si la barra no está en esta columna, la movemos
+        // 4. Mover la Barra
         if (indicadorDiv.parentElement !== col) {
             col.appendChild(indicadorDiv);
             indicadorDiv.style.display = 'flex';
-            indicadorDiv.style.height = `${slotHeight}px`; // Altura exacta del slot
-            indicadorDiv.style.width = '100%'; // Ancho exacto de la columna
+            indicadorDiv.style.height = `${slotHeight}px`; 
+            indicadorDiv.style.width = '100%'; 
         }
-
-        // Aplicar la posición vertical calculada
         indicadorDiv.style.top = `${snappedY}px`;
 
-        // F. Actualizar Texto de Hora (Usando API FullCalendar)
-        const dateClick = calendar.getDateFromPoint(e.clientX, e.clientY);
-        if (dateClick) {
-            const horaStr = dateClick.toLocaleTimeString('es-PE', {
-                hour: 'numeric', 
-                minute: '2-digit', 
-                hour12: true 
-            });
-            indicadorDiv.innerHTML = `<i class="fas fa-plus me-2"></i> ${horaStr}`;
-        }
+        // 5. CALCULAR LA HORA MATEMÁTICAMENTE (Infalible)
+        // Total minutos desde el inicio (8:00) = index * 15
+        const minutosDesdeInicio = slotIndex * MINUTOS_SLOT;
+        
+        const fechaBase = new Date();
+        fechaBase.setHours(HORA_INICIO, 0, 0, 0); // 08:00:00
+        fechaBase.setMinutes(fechaBase.getMinutes() + minutosDesdeInicio);
+
+        // Formatear: 10:15 a. m.
+        const horaStr = fechaBase.toLocaleTimeString('es-PE', {
+            hour: 'numeric', 
+            minute: '2-digit', 
+            hour12: true 
+        });
+
+        indicadorDiv.innerHTML = `<i class="fas fa-clock me-1" style="font-size: 0.7rem; margin-top: 3px;"></i> ${horaStr}`;
     });
 
-    // 3. Limpieza al salir
     agendaContainer.addEventListener('mouseleave', function() {
         indicadorDiv.style.display = 'none';
     });
