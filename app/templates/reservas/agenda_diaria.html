@@ -10,9 +10,26 @@
     #calendar { 
         border: 1px solid #d1d5db; 
         border-radius: 8px; 
-        padding: 10px; 
-        background-color: #ffffff; /* Marco blanco */
-        min-height: 650px; 
+        /* padding: 10px;  <-- QUITAMOS el padding interno para que el scroll llegue al borde */
+        padding: 0;
+        background-color: #ffffff;
+        
+        /* CAMBIO CLAVE: Altura dinámica */
+        /* 100vh es el alto total de la pantalla. Le restamos aprox 250px 
+        (que es lo que ocupan tu barra negra superior + los controles de filtros) */
+        height: calc(100vh - 250px); 
+        
+        /* Esto es vital: */
+        overflow: hidden; 
+    }
+
+    /* Opcional: Asegurar que el scroll interno se vea elegante */
+    .fc-scroller::-webkit-scrollbar {
+        width: 8px;
+    }
+    .fc-scroller::-webkit-scrollbar-thumb {
+        background-color: #cbd5e1;
+        border-radius: 4px;
     }
     
     /* Barra de Herramientas */
@@ -26,6 +43,53 @@
         align-items: center; 
         flex-wrap: wrap; 
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    /* --- ESTILOS PARA AVATAR EN CABECERA (TIPO FRESHA) --- */
+
+    .staff-header-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding-bottom: 5px;
+    }
+
+    .staff-avatar {
+        width: 45px;
+        height: 45px;
+        border-radius: 50%; /* Círculo perfecto */
+        object-fit: cover; /* Evita que la foto se estire */
+        margin-bottom: 8px;
+        border: 2px solid #ffffff; /* Anillo blanco alrededor */
+        box-shadow: 0 3px 6px rgba(0,0,0,0.15); /* Sombra suave */
+        background-color: #f3f4f6;
+    }
+
+    /* Estilo para cuando NO hay foto (Iniciales) */
+    .staff-initials {
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #6c63ff 0%, #5a52d6 100%); /* Tu color morado */
+        color: white;
+        font-size: 1.2rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 8px;
+        border: 2px solid #ffffff;
+        box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+        text-transform: uppercase;
+    }
+
+    .staff-name {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #1f2937;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
     /* --- 2. ESTILO TIPO "FRESHA" (FullCalendar) --- */
