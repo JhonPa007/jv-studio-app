@@ -280,8 +280,27 @@
 
 {% block scripts %}
 {{ super() }}
-
 <script>
+// Función auxiliar para iniciales (Global)
+function crearIniciales(nombre) {
+    const div = document.createElement('div');
+    div.style.width = '45px';
+    div.style.height = '45px';
+    div.style.borderRadius = '50%';
+    div.style.backgroundColor = '#6c63ff'; // Color morado
+    div.style.color = '#ffffff';
+    div.style.display = 'flex';
+    div.style.alignItems = 'center';
+    div.style.justifyContent = 'center';
+    div.style.fontWeight = 'bold';
+    div.style.fontSize = '1.1rem';
+    div.style.border = '2px solid #fff';
+    div.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+    div.style.marginBottom = '5px';
+    div.innerText = nombre ? nombre.charAt(0).toUpperCase() : '?';
+    return div;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Selectores
     const selectorSucursal = document.getElementById('selectorSucursalAgenda');
@@ -326,6 +345,7 @@ document.addEventListener('DOMContentLoaded', function() {
             selectorFecha.value = localDate.toISOString().slice(0,10); 
         }
     }
+    // Ejecutar inmediatamente si está vacío
     if (!selectorFecha.value) setFechaLocal();
 
     // 3. Inicializar FullCalendar
@@ -334,18 +354,35 @@ document.addEventListener('DOMContentLoaded', function() {
         initialView: 'resourceTimeGridDay',
         locale: 'es',
         headerToolbar: false,
-        height: 'calc(100vh - 190px)',
+        
+        // --- AJUSTES DE SCROLL Y CABECERA ---
+        height: 'calc(100vh - 190px)', // Altura dinámica
+        stickyHeaderDates: true,      // Cabecera fija
+        
+        // --- CONFIGURACIÓN DE TIEMPO ---
         allDaySlot: false,
-
-        // 🟢 CONFIGURACIÓN DE IMÁGENES DE COLABORADORES
+        slotDuration: '00:15:00',
+        slotMinTime: '08:00:00',
+        slotMaxTime: '22:00:00',
+        slotLabelInterval: '01:00',
+        nowIndicator: true,
+        
+        // --- EDICIÓN ---
+        editable: true,
+        droppable: true,
+        selectable: false, // Usamos dateClick propio
+        
+        // --- FORMATOS ---
+        slotLabelFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short', omitZeroMinute: false },
+        eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short' },
+        
+        // --- PERSONALIZACIÓN CABECERA (FOTOS/INICIALES) ---
         resourceLabelContent: function(arg) {
             const recurso = arg.resource;
-            // Obtenemos los datos extra (Debug: mira la consola si salen errores)
             const props = recurso.extendedProps || {};
             const imagenUrl = props.imagen_url || props.foto || null; 
             const nombre = recurso.title;
 
-            // Contenedor principal
             const container = document.createElement('div');
             container.className = 'staff-header-container'; 
             container.style.display = 'flex';
@@ -354,43 +391,38 @@ document.addEventListener('DOMContentLoaded', function() {
             container.style.justifyContent = 'center';
             container.style.padding = '10px 0';
 
-            // 1. CÍRCULO (Foto o Iniciales)
             if (imagenUrl) {
-                // Opción A: Tiene Foto
                 const img = document.createElement('img');
                 img.src = imagenUrl;
-                img.style.width = '50px';
-                img.style.height = '50px';
+                img.style.width = '45px';
+                img.style.height = '45px';
                 img.style.borderRadius = '50%';
                 img.style.objectFit = 'cover';
                 img.style.border = '2px solid #fff';
                 img.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
                 img.style.marginBottom = '5px';
                 
-                // Si la imagen falla (404), mostramos iniciales
                 img.onerror = function() {
                     this.style.display = 'none';
                     container.insertBefore(crearIniciales(nombre), container.firstChild);
                 };
                 container.appendChild(img);
             } else {
-                // Opción B: No tiene foto -> Iniciales
                 container.appendChild(crearIniciales(nombre));
             }
-            
-        slotDuration: '00:15:00',
-        slotMinTime: '08:00:00',
-        slotMaxTime: '22:00:00',
-        slotLabelInterval: '01:00',
-        stickyHeaderDates: true,
-        nowIndicator: true,
-        editable: true,
-        droppable: true,
-        selectable: false, // Usamos dateClick customizado, no la selección nativa visual
-        slotLabelFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short', omitZeroMinute: false },
-        eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short' },
-        
-        // Fuentes de Datos
+
+            const nombreSpan = document.createElement('span');
+            nombreSpan.innerText = nombre;
+            nombreSpan.style.fontWeight = '700';
+            nombreSpan.style.fontSize = '0.9rem';
+            nombreSpan.style.color = '#374151';
+            nombreSpan.style.textTransform = 'uppercase';
+            container.appendChild(nombreSpan);
+
+            return { domNodes: [container] };
+        },
+
+        // --- FUENTES DE DATOS ---
         resources: function(fetchInfo, successCallback, failureCallback) {
             const sucursalId = selectorSucursal.value;
             if (!sucursalId) { successCallback([]); return; }
@@ -406,6 +438,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     successCallback(data.eventos);
                 }).catch(err => failureCallback(err));
         },
+        
+        // --- INTERACCIONES ---
         
         // A. Clic en espacio vacío
         dateClick: function(info) {
@@ -481,7 +515,7 @@ document.addEventListener('DOMContentLoaded', function() {
         calendar.gotoDate(selectorFecha.value);
     }
 
-    // --- 5. LISTENERS BOTONES DE FECHA ---
+    // --- 5. LISTENERS BOTONES ---
     document.getElementById('btnDiaAnterior').addEventListener('click', () => { 
         const d = new Date(selectorFecha.value + 'T00:00:00'); d.setDate(d.getDate() - 1); 
         selectorFecha.value = d.toISOString().slice(0,10); actualizarAgenda(); 
@@ -496,8 +530,7 @@ document.addEventListener('DOMContentLoaded', function() {
     selectorFecha.addEventListener('change', actualizarAgenda);
     btnActualizar?.addEventListener('click', actualizarAgenda);
 
-    // --- 6. GESTIÓN DE MODALES (Nueva / Editar) ---
-    // (Lógica idéntica a tu código original, resumida aquí para brevedad)
+    // --- 6. MODAL NUEVA RESERVA ---
     window.abrirModalNuevaReserva = function(empleadoId, empleadoNombre, fecha, hora) {
         formModalNuevaReserva.reset(); 
         document.getElementById('modalSucursalId').value = selectorSucursal.value; 
@@ -528,7 +561,8 @@ document.addEventListener('DOMContentLoaded', function() {
         .finally(() => { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save me-1"></i>Guardar Reserva'; });
     });
 
-    function abrirModalGestionarReserva(reservaId) {
+    // --- 7. MODAL GESTIONAR ---
+    window.abrirModalGestionarReserva = function(reservaId) {
         const modalTitle = document.getElementById('modalGestionarReservaLabel');
         const vistaDiv = document.getElementById('detalleReservaVista');
         const formEditar = document.getElementById('formEditarReservaModal');
@@ -560,7 +594,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (btnGuardar) btnGuardar.style.display = modoVista ? 'none' : 'inline-block';
 
             if (!modoVista && data) {
-                 // Lógica de poblado de formulario de edición (igual a tu código original)
                  modalTitle.innerHTML = `<i class="fas fa-edit me-2"></i>Editando Reserva #${data.id}`;
                  document.getElementById('editReservaId').value = data.id;
                  const poblar = (id, items, val) => {
@@ -601,14 +634,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (btnEditar) btnEditar.onclick = () => cambiarModo(false, datosReservaActualParaModal);
         if (btnCancelarEdicion) btnCancelarEdicion.onclick = () => cambiarModo(true, datosReservaActualParaModal);
         
-        // Listeners de Cancelar/Completar/Guardar (Iguales a tu código original)
         if (btnCancelar) btnCancelar.onclick = () => { 
              if(confirm('¿Cancelar?')) fetch(`/reservas/cancelar/${reservaId}`, {method:'POST'}).then(()=>{ modalGestionarInstancia.hide(); actualizarAgenda(); }); 
         };
         if (btnCompletar) btnCompletar.onclick = () => {
              if(confirm('¿Completar?')) fetch(`/api/reservas/${reservaId}/completar`, {method:'POST'}).then(()=>{ modalGestionarInstancia.hide(); actualizarAgenda(); });
         };
-    }
+    };
     
     document.getElementById('formEditarReservaModal')?.addEventListener('submit', function(e) {
         e.preventDefault();
@@ -617,15 +649,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // =========================================================
-    // 🟢 MAGIA: EFECTO HOVER (CÁLCULO MATEMÁTICO DE HORA)
+    // 🟢 EFECTO HOVER (BARRA MORADA) - CÁLCULO MATEMÁTICO
     // =========================================================
     
     const indicadorDiv = document.createElement('div');
     indicadorDiv.id = 'indicadorHoraHover';
     
-    // Configuración de tu agenda (DEBE COINCIDIR con tu calendar options)
-    const HORA_INICIO = 8; // 08:00 AM
-    const MINUTOS_SLOT = 15; // 15 minutos
+    // Configuración de tu agenda (DEBE COINCIDIR con slotMinTime: '08:00:00' y slotDuration: '00:15:00')
+    const HORA_INICIO = 8; 
+    const MINUTOS_SLOT = 15; 
 
     agendaContainer.addEventListener('mousemove', function(e) {
         // 1. Detectar Columna
@@ -633,13 +665,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!target) return;
         const col = target.closest('.fc-timegrid-col');
         
-        // Si no estamos en columna o estamos en cabecera, adiós
+        // Si no estamos en columna o estamos en cabecera, ocultar
         if (!col || target.closest('.fc-col-header')) {
             indicadorDiv.style.display = 'none';
             return;
         }
 
-        // 2. Detectar Altura de Slot (Referencia)
+        // 2. Detectar Altura de Slot
         const primerSlot = document.querySelector('.fc-timegrid-slot');
         const slotHeight = primerSlot ? primerSlot.offsetHeight : 22; 
 
@@ -648,7 +680,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const relativeY = e.clientY - rectCol.top;
         
         // "Imantar" al slot más cercano
-        // Math.floor(relativeY / slotHeight) nos da el índice del slot (0, 1, 2...)
         const slotIndex = Math.floor(relativeY / slotHeight);
         const snappedY = slotIndex * slotHeight;
 
@@ -661,15 +692,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         indicadorDiv.style.top = `${snappedY}px`;
 
-        // 5. CALCULAR LA HORA MATEMÁTICAMENTE (Infalible)
-        // Total minutos desde el inicio (8:00) = index * 15
+        // 5. CALCULAR HORA
         const minutosDesdeInicio = slotIndex * MINUTOS_SLOT;
-        
         const fechaBase = new Date();
-        fechaBase.setHours(HORA_INICIO, 0, 0, 0); // 08:00:00
+        fechaBase.setHours(HORA_INICIO, 0, 0, 0); 
         fechaBase.setMinutes(fechaBase.getMinutes() + minutosDesdeInicio);
 
-        // Formatear: 10:15 a. m.
         const horaStr = fechaBase.toLocaleTimeString('es-PE', {
             hour: 'numeric', 
             minute: '2-digit', 
@@ -682,25 +710,6 @@ document.addEventListener('DOMContentLoaded', function() {
     agendaContainer.addEventListener('mouseleave', function() {
         indicadorDiv.style.display = 'none';
     });
-    // Función para crear el círculo con iniciales
-    function crearIniciales(nombre) {
-        const div = document.createElement('div');
-        div.style.width = '50px';
-        div.style.height = '50px';
-        div.style.borderRadius = '50%';
-        div.style.backgroundColor = '#6c63ff'; // Tu color morado
-        div.style.color = '#ffffff';
-        div.style.display = 'flex';
-        div.style.alignItems = 'center';
-        div.style.justifyContent = 'center';
-        div.style.fontWeight = 'bold';
-        div.style.fontSize = '1.2rem';
-        div.style.border = '2px solid #fff';
-        div.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
-        div.style.marginBottom = '5px';
-        div.innerText = nombre ? nombre.charAt(0).toUpperCase() : '?';
-        return div;
-    }
 });
 </script>
 {% endblock scripts %}
