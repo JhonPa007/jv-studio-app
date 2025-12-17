@@ -6,20 +6,18 @@
 <script src='https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.10/index.global.min.js'></script>
 
 <style>
-    /* Contenedor del Calendario */
+    /* --- 1. Contenedor Principal --- */
     #calendar { 
-        border: 1px solid var(--color-secundario-gris); 
+        border: 1px solid #d1d5db; 
         border-radius: 8px; 
         padding: 10px; 
-        background-color: #302f2dda; 
-        
-        /* Altura Mínima para evitar colapso visual */
+        background-color: #ffffff; /* Marco blanco */
         min-height: 650px; 
     }
     
-    /* Barra de Herramientas Superior */
+    /* Barra de Herramientas */
     #controlesAgenda { 
-        background-color: #0e0d0d; 
+        background-color: #212529; /* Mantener oscuro el control superior */
         padding: 15px; 
         border-radius: 8px; 
         margin-bottom: 20px; 
@@ -27,34 +25,88 @@
         gap: 15px; 
         align-items: center; 
         flex-wrap: wrap; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    /* --- 2. ESTILO TIPO "FRESHA" (RAYAS Y BLANCO) --- */
+
+    /* A. FONDO RAYADO (NO DISPONIBLE) 
+       Esto se aplica a todas las columnas por defecto. */
+    .fc-timegrid-col {
+        background-color: #f3f4f6 !important; /* Gris muy claro de base */
+        background-image: repeating-linear-gradient(
+            45deg,
+            #e5e7eb,
+            #e5e7eb 10px,
+            #f3f4f6 10px,
+            #f3f4f6 20px
+        ) !important;
     }
     
-    /* --- Estilos Personalizados FullCalendar (Modo Oscuro) --- */
+    /* B. FONDO BLANCO (DISPONIBLE) 
+       FullCalendar pone esto encima del fondo rayado gracias al backend */
+    .fc-bg-event {
+        opacity: 1.0 !important; /* Forzar opacidad total para tapar las rayas */
+    }
     
-    .fc-timegrid-slot { background-color: rgba(0, 0, 0, 0.15); }
-    .fc-timegrid-slot-business { background-color: rgba(40, 167, 69, 0.2) !important; }
+    /* C. TEXTOS Y BORDES (Adaptación para fondo claro) */
+    
+    /* Nombres de Barberos (Encabezados) */
+    .fc-col-header-cell {
+        background-color: #ffffff !important;
+        border-bottom: 2px solid #e5e7eb !important;
+    }
+    .fc-col-header-cell-cushion { 
+        color: #111827 !important; /* Texto Negro Fuerte */
+        font-weight: 700 !important;
+        text-transform: uppercase;
+        font-size: 0.9rem;
+        padding: 15px 0 !important;
+    }
 
-    /* Estilo de Eventos (Citas) */
+    /* Horas (Eje izquierdo) */
+    .fc-timegrid-slot-label-cushion { 
+        color: #6b7280 !important; /* Gris medio */
+        font-size: 0.85em;
+        font-weight: 600;
+    }
+
+    /* Líneas de cuadrícula */
+    .fc-theme-standard td, .fc-theme-standard th {
+        border-color: #e5e7eb !important; /* Gris muy suave */
+    }
+    
+    /* D. ESTILO DE LAS TARJETAS DE CITAS */
     .fc-event { 
-        font-size: 0.85em !important; 
-        padding: 2px !important; 
         border: none !important; 
         border-radius: 4px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Sombra suave */
+        margin: 1px 2px !important; /* Separación pequeña */
     }
-    .fc-event-main { color: #212529 !important; font-weight: bold; }
-
-    /* Encabezados de Columna */
-    .fc-col-header-cell-cushion { 
-        color: var(--color-acento-dorado) !important; 
-        text-decoration: none !important; 
-        font-size: 1.1em;
-        padding: 10px 0 !important;
+    
+    /* Ajuste del texto dentro de la cita */
+    .fc-event-main { 
+        color: #ffffff !important; 
+        font-weight: 600;
+        padding: 2px 4px;
+        font-size: 0.85rem;
+    }
+    
+    /* Indicador de hora actual */
+    .fc-timegrid-now-indicator-line {
+        border-color: #ef4444; /* Rojo intenso */
+        border-width: 2px;
+    }
+    .fc-timegrid-now-indicator-arrow {
+        border-color: #ef4444;
     }
 
-    .fc-timegrid-slot-label-cushion { color: var(--color-secundario-gris); font-size: 0.9em; }
-    .fc .fc-timegrid-slot-minor { border-top-style: dotted !important; border-top-color: rgba(255, 255, 255, 0.1); }
+    /* Quitar color amarillo de "Hoy" en el header si existe */
+    .fc-day-today {
+        background-color: transparent !important;
+    }
 </style>
+
 {% endblock head_extra %}
 
 {% block content %}

@@ -2215,7 +2215,7 @@ def api_agenda_dia_data():
     API que alimenta el FullCalendar.
     Devuelve:
     1. 'recursos': Los empleados (columnas).
-    2. 'eventos': Turnos (verde), Ausencias (rojo) y Reservas (citas).
+    2. 'eventos': Turnos (Blanco), Ausencias (Rojo) y Reservas (Tarjetas).
     """
     # Recibimos fecha y sucursal desde los parámetros GET del JavaScript
     fecha_str = request.args.get('fecha', date.today().isoformat())
@@ -2235,7 +2235,7 @@ def api_agenda_dia_data():
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             
             # --- 1. OBTENER RECURSOS (COLABORADORES) ---
-            # Solo empleados activos de la sucursal solicitada
+            # Solo empleados activos de la sucursal solicitada y que brindan servicio
             cursor.execute("""
                 SELECT e.id, e.nombre_display as title 
                 FROM empleados e
@@ -2255,8 +2255,8 @@ def api_agenda_dia_data():
                 placeholders = ','.join(['%s'] * len(recursos_ids))
                 params_base = list(recursos_ids)
                 
-                # --- 2. FONDO VERDE: HORARIOS DE TRABAJO ---
-                # Esto le dice al calendario cuándo el barbero está disponible
+                # --- 2. FONDO BLANCO: HORARIOS DE TRABAJO ---
+                # 🟢 CAMBIO PRINCIPAL: Se usa blanco (#ffffff) para tapar las rayas de fondo
                 dia_semana_num = fecha_obj.isoweekday() # 1=Lunes, 7=Domingo
                 
                 sql_turnos = f"""
@@ -2272,12 +2272,13 @@ def api_agenda_dia_data():
                         # FullCalendar necesita fecha + hora en formato ISO
                         "start": f"{fecha_str}T{turno['hora_inicio']}", 
                         "end": f"{fecha_str}T{turno['hora_fin']}",
-                        "display": "background", # Se muestra al fondo
-                        "backgroundColor": "rgba(40, 167, 69, 0.15)" # Verde suave
+                        "display": "background", 
+                        "backgroundColor": "#ffffff", # <--- BLANCO SÓLIDO (Efecto Disponible)
+                        "classNames": ["turno-disponible"] # Clase auxiliar
                     })
                 
                 # --- 3. FONDO ROJO: AUSENCIAS / DESCANSOS ---
-                # Esto "tapa" el verde indicando que no está disponible
+                # Esto "tapa" el blanco indicando que no está disponible por permiso/vacación
                 sql_ausencias = f"""
                     SELECT empleado_id, fecha_hora_inicio, fecha_hora_fin 
                     FROM ausencias_empleado 
@@ -2293,8 +2294,9 @@ def api_agenda_dia_data():
                         "resourceId": ausencia['empleado_id'],
                         "start": ausencia['fecha_hora_inicio'].isoformat(),
                         "end": ausencia['fecha_hora_fin'].isoformat(),
-                        "display": "background", # Fondo
-                        "backgroundColor": "rgba(220, 53, 69, 0.4)" # Rojo semitransparente
+                        "display": "background", 
+                        "backgroundColor": "rgba(220, 53, 69, 0.5)", # Rojo semitransparente sobre blanco
+                        "title": "Ausente"
                     })
                 
                 # --- 4. EVENTOS: RESERVAS (CITAS) ---
@@ -2325,7 +2327,7 @@ def api_agenda_dia_data():
                         color_fondo = '#198754' # Verde fuerte
                         border_color = '#146c43'
                     elif 'Cancelada' in reserva['estado']:
-                        color_fondo = '#dc3545' # Rojo (aunque filtramos las canceladas, por seguridad)
+                        color_fondo = '#dc3545' 
                     
                     eventos.append({
                         "id": reserva['id'],
@@ -2335,7 +2337,8 @@ def api_agenda_dia_data():
                         "end": reserva['end'].isoformat(),
                         "backgroundColor": color_fondo,
                         "borderColor": border_color,
-                        "textColor": "#fff"
+                        "textColor": "#fff",
+                        "classNames": ["reserva-card"]
                     })
 
     except Exception as e:
