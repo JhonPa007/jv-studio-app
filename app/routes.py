@@ -2154,7 +2154,7 @@ def render_agenda_diaria():
                 SELECT e.id, e.nombres, e.apellidos, e.nombre_display 
                 FROM empleados e
                 WHERE e.activo = TRUE 
-                  AND e.brinda_servicio = TRUE
+                  AND e.realiza_servicios = TRUE  
                   AND e.id IN (SELECT empleado_id FROM empleado_sucursales WHERE sucursal_id = %s)
                 ORDER BY e.apellidos, e.nombres
             """, (sucursal_id,))
@@ -2240,7 +2240,7 @@ def api_agenda_dia_data():
                 SELECT e.id, e.nombre_display as title 
                 FROM empleados e
                 WHERE e.activo = TRUE 
-                  AND e.brinda_servicio = TRUE  
+                  AND e.realiza_servicios = TRUE  
                   AND e.id IN (SELECT empleado_id FROM empleado_sucursales WHERE sucursal_id = %s)
                 ORDER BY e.nombres
             """, (sucursal_id,))
