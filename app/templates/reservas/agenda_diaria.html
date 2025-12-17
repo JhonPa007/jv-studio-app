@@ -121,25 +121,38 @@
     /* =========================================
        NUEVO: EFECTO HOVER TIPO FRESHA 
        ========================================= */
-    #indicadorHoraHover {
-        position: absolute;
-        left: 0;
-        right: 0;
-        height: 100%; /* Llena la celda verticalmente */
-        background-color: rgba(108, 99, 255, 0.2); /* Morado suave y transparente */
-        color: #5a52d6; /* Texto morado fuerte */
-        font-size: 0.85rem;
-        font-weight: 700;
-        padding-left: 10px;
-        display: none; /* Se activa con JS */
-        align-items: center;
-        pointer-events: none; /* CRÍTICO: Permite hacer clic "a través" de la barra */
-        z-index: 20; /* Encima del fondo blanco (2), debajo de los eventos (50) */
-        border-radius: 3px;
-        border-left: 4px solid #5a52d6; /* Borde de acento izquierdo */
-        box-shadow: 0 2px 5px rgba(90, 82, 214, 0.1);
-        transition: top 0.1s ease; /* Suavizado opcional */
-    }
+    /* 1. La barra flotante */
+#indicadorHoraHover {
+    position: absolute;
+    left: 0;
+    right: 0;
+    /* La altura se calculará automáticamente con JS, pero ponemos un base por seguridad */
+    min-height: 20px; 
+    background-color: rgba(108, 99, 255, 0.25); /* Un poco más visible */
+    border-left: 4px solid #5a52d6;
+    color: #5a52d6;
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding-left: 10px;
+    display: none; /* Oculto por defecto */
+    align-items: center;
+    pointer-events: none; /* CRÍTICO: Permite hacer clic a través de ella */
+    z-index: 1000; /* SUPERIOR A TODO (Eventos background suelen ser z-index 1 o 2) */
+    border-radius: 3px;
+    box-shadow: 0 2px 5px rgba(90, 82, 214, 0.15);
+}
+
+/* 2. IMPORTANTE: Quitamos el position relative de los slots horizontales
+   para evitar conflictos de apilamiento */
+.fc-timegrid-slot {
+    position: static !important;
+    z-index: auto !important;
+}
+
+/* 3. Aseguramos que las COLUMNAS sean el referente relativo */
+.fc-timegrid-col {
+    position: relative !important;
+}
 
 </style>
 {% endblock head_extra %}
@@ -491,54 +504,73 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // =========================================================
-    // 🟢 MAGIA: EFECTO HOVER TIPO FRESHA
+    // 🟢 MAGIA: EFECTO HOVER TIPO FRESHA (CORREGIDO - COLUMNA)
     // =========================================================
     
-    // 1. Crear el elemento visual (la barrita) dinámicamente
-    // No lo ponemos en HTML estático para no ensuciar el DOM innecesariamente
+    // 1. Crear el elemento visual
     const indicadorDiv = document.createElement('div');
     indicadorDiv.id = 'indicadorHoraHover';
     
-    // 2. Escuchar el movimiento del mouse sobre TODO el calendario
-    // Usamos 'mousemove' para seguimiento fluido
+    // 2. Escuchar movimiento en el contenedor del calendario
     agendaContainer.addEventListener('mousemove', function(e) {
         
-        // Detectamos el elemento real bajo el mouse
-        // "pointer-events: none" en el indicador asegura que detectemos la celda debajo de él
+        // A. Obtener referencia de la columna bajo el mouse
+        // Usamos elementFromPoint para ver qué hay debajo del cursor
         const target = document.elementFromPoint(e.clientX, e.clientY);
-        
-        // Buscamos si el mouse está sobre una celda de tiempo (fc-timegrid-slot)
-        // .fc-timegrid-slot-lane filtra para que no se active en los números de la hora a la izquierda
-        const slot = target ? target.closest('.fc-timegrid-slot-lane') : null;
+        if (!target) return;
 
-        if (slot) {
-            // A. Si estamos en una celda nueva, movemos la barra allí
-            if (indicadorDiv.parentElement !== slot) {
-                slot.appendChild(indicadorDiv); // Esto automáticamente lo quita del anterior
-                indicadorDiv.style.display = 'flex';
-            }
+        // Buscamos la COLUMNA vertical (.fc-timegrid-col)
+        // Esto asegura que la barra solo viva dentro de "Vivi" o "Renato", no en toda la fila
+        const col = target.closest('.fc-timegrid-col');
 
-            // B. Calcular la hora exacta
-            // Usamos la API de FullCalendar para traducir coordenadas a fecha
-            const dateClick = calendar.getDateFromPoint(e.clientX, e.clientY);
-            
-            if (dateClick) {
-                const horaStr = dateClick.toLocaleTimeString('es-PE', {
-                    hour: 'numeric', 
-                    minute: '2-digit', 
-                    hour12: true 
-                });
-                
-                // Agregamos un '+' para incitar a la acción de crear
-                indicadorDiv.innerHTML = `<i class="fas fa-plus me-2"></i> ${horaStr}`;
-            }
-        } else {
-            // Si el mouse sale de las celdas (va al header, o fuera del calendario)
+        // B. Verificaciones de seguridad
+        // Si no estamos en una columna o estamos sobre un header, ocultamos
+        if (!col || target.closest('.fc-col-header')) {
             indicadorDiv.style.display = 'none';
+            return;
+        }
+
+        // C. Obtener la altura de un "Slot" (celda de tiempo)
+        // FullCalendar renderiza filas, tomamos la altura de la primera para usarla de referencia
+        const primerSlot = document.querySelector('.fc-timegrid-slot');
+        // Si no encuentra slots (ej: vista mes), usa 22px por defecto
+        const slotHeight = primerSlot ? primerSlot.offsetHeight : 22; 
+
+        // D. Calcular la posición Vertical (Snap to Grid)
+        const rectCol = col.getBoundingClientRect();
+        
+        // Posición del mouse relativa al inicio de la columna
+        const relativeY = e.clientY - rectCol.top;
+        
+        // Matemáticas para "imantar" la barra a la línea más cercana
+        // Ejemplo: Si el slot mide 20px y el mouse está en 25px -> redondea a 20px
+        const snappedY = Math.floor(relativeY / slotHeight) * slotHeight;
+
+        // E. Inyectar y Posicionar
+        // Si la barra no está en esta columna, la movemos
+        if (indicadorDiv.parentElement !== col) {
+            col.appendChild(indicadorDiv);
+            indicadorDiv.style.display = 'flex';
+            indicadorDiv.style.height = `${slotHeight}px`; // Altura exacta del slot
+            indicadorDiv.style.width = '100%'; // Ancho exacto de la columna
+        }
+
+        // Aplicar la posición vertical calculada
+        indicadorDiv.style.top = `${snappedY}px`;
+
+        // F. Actualizar Texto de Hora (Usando API FullCalendar)
+        const dateClick = calendar.getDateFromPoint(e.clientX, e.clientY);
+        if (dateClick) {
+            const horaStr = dateClick.toLocaleTimeString('es-PE', {
+                hour: 'numeric', 
+                minute: '2-digit', 
+                hour12: true 
+            });
+            indicadorDiv.innerHTML = `<i class="fas fa-plus me-2"></i> ${horaStr}`;
         }
     });
 
-    // 3. Limpieza al salir del componente
+    // 3. Limpieza al salir
     agendaContainer.addEventListener('mouseleave', function() {
         indicadorDiv.style.display = 'none';
     });
