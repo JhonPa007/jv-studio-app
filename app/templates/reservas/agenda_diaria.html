@@ -105,6 +105,20 @@
     .fc-day-today {
         background-color: transparent !important;
     }
+    /* --- CORRECCIÓN FINAL VISUAL --- */
+
+    /* 1. Columna de Horas (Eje Y) en Blanco Puro */
+    .fc .fc-timegrid-axis-cushion,
+    .fc .fc-timegrid-axis-frame,
+    .fc .fc-timegrid-axis {
+        background-color: #ffffff !important;
+        background-image: none !important;
+    }
+
+    /* 2. Asegurar que el fondo rayado no afecte bordes */
+    .fc-theme-standard .fc-scrollgrid {
+        border-color: #e5e7eb;
+    }
 </style>
 
 {% endblock head_extra %}
@@ -255,26 +269,41 @@ document.addEventListener('DOMContentLoaded', function() {
         // A. Clic en espacio vacío (Nueva Reserva)
         dateClick: function(info) {
             if (!datosApiAgenda || !datosApiAgenda.eventos) return;
+
             const slotDT = new Date(info.dateStr).getTime();
             const colaboradorId = info.resource.id;
 
+            // --- 🟢 VALIDACIÓN CORREGIDA ---
+            
+            // 1. Validar si es Horario Laboral (Ahora buscamos color BLANCO o la clase 'turno-disponible')
             const esHorarioHabil = datosApiAgenda.eventos.some(evento => 
-                evento.resourceId == colaboradorId && evento.display === 'background' &&
-                evento.backgroundColor.includes('40, 167, 69') &&
-                new Date(evento.start).getTime() <= slotDT && new Date(evento.end).getTime() > slotDT
+                evento.resourceId == colaboradorId &&
+                evento.display === 'background' &&
+                // AQUI ESTABA EL ERROR: Antes buscaba verde, ahora validamos blanco o la clase
+                (evento.backgroundColor === '#ffffff' || (evento.classNames && evento.classNames.includes('turno-disponible'))) &&
+                new Date(evento.start).getTime() <= slotDT &&
+                new Date(evento.end).getTime() > slotDT
             );
+
+            // 2. Validar si es Ausencia/Refrigerio (Fondo Rojo)
             const enAusencia = datosApiAgenda.eventos.some(evento => 
-                evento.resourceId == colaboradorId && evento.display === 'background' &&
-                evento.backgroundColor.includes('220, 53, 69') &&
-                new Date(evento.start).getTime() <= slotDT && new Date(evento.end).getTime() > slotDT
+                evento.resourceId == colaboradorId &&
+                evento.display === 'background' &&
+                evento.backgroundColor.includes('220, 53, 69') && // Rojo
+                new Date(evento.start).getTime() <= slotDT &&
+                new Date(evento.end).getTime() > slotDT
             );
             
+            // Solo abrir modal si es horario hábil Y NO hay ausencia
             if (esHorarioHabil && !enAusencia) {
-                const hora = info.dateStr.slice(11, 16);
+                const hora = info.dateStr.slice(11, 16); // Extraer HH:MM
                 abrirModalNuevaReserva(info.resource.id, info.resource.title, info.dateStr.slice(0, 10), hora);
+            } else {
+                // Opcional: Feedback para el usuario
+                console.log("Clic en zona no disponible");
             }
         },
-
+        
         // B. Clic en Evento (Gestionar)
         eventClick: function(info) {
             if (info.event.id) abrirModalGestionarReserva(info.event.id);
