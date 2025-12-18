@@ -129,6 +129,7 @@
     .fc-col-header-cell {
         background-color: #ffffff !important;
         border-bottom: 2px solid #e5e7eb !important;
+        vertical-align: middle; 
     }
     .fc-col-header-cell-cushion { 
         color: #111827 !important; 
@@ -378,6 +379,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Opción B: No tiene foto -> Iniciales
                 container.appendChild(crearIniciales(nombre));
             }
+
+            // 3. Nombre del Colaborador (FALTABA ESTO)
+            const nombreSpan = document.createElement('span');
+            nombreSpan.className = 'staff-name';
+            nombreSpan.innerText = nombre;
+            container.appendChild(nombreSpan);
+
+            // 4. Retorno (FALTABA ESTO)
+            return { domNodes: [container] };
         
         },    
         
