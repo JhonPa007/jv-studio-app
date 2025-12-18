@@ -2212,7 +2212,7 @@ def api_get_datos_reserva(reserva_id):
 @login_required
 def api_agenda_dia_data():
     """
-    API que alimenta el FullCalendar.
+    API Corregida: Carga agenda sin buscar la columna 'foto' para evitar errores.
     """
     fecha_str = request.args.get('fecha', date.today().isoformat())
     sucursal_id = request.args.get('sucursal_id', type=int)
@@ -2230,9 +2230,9 @@ def api_agenda_dia_data():
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             
             # --- 1. OBTENER RECURSOS (COLABORADORES) ---
-            # 🟢 MODIFICADO: Agregamos la columna de la foto (e.foto o e.imagen)
+            # 🟢 CORRECCIÓN: Quitamos reference a 'e.foto' porque no existe en la BD
             cursor.execute("""
-                SELECT e.id, e.nombre_display as title, e.foto 
+                SELECT e.id, e.nombre_display as title
                 FROM empleados e
                 WHERE e.activo = TRUE 
                   AND e.realiza_servicios = TRUE  
@@ -2242,21 +2242,14 @@ def api_agenda_dia_data():
             
             recursos_db = cursor.fetchall()
             
-            # 🟢 PROCESAR IMÁGENES: Convertir nombre de archivo en URL completa
             recursos = []
             for r in recursos_db:
-                url_imagen = None
-                if r['foto']:
-                    # 🔴 CAMBIAR: Ajusta esta ruta según donde guardes tus imágenes
-                    # Si guardas solo el nombre "foto.jpg", agrégale la carpeta "/static/..."
-                    # Si ya guardas la URL completa (cloudinary/s3), déjalo como r['foto']
-                    url_imagen = f"/static/uploads/empleados/{r['foto']}" 
-                
+                # 🟢 Como no hay columna foto, enviamos None.
+                # El Javascript detectará esto y mostrará el círculo con la INICIAL.
                 recursos.append({
                     "id": r['id'],
                     "title": r['title'],
-                    # FullCalendar moverá esto automáticamente a 'extendedProps.imagen_url'
-                    "imagen_url": url_imagen 
+                    "imagen_url": None 
                 })
             
             eventos = []
@@ -2264,11 +2257,10 @@ def api_agenda_dia_data():
             if recursos:
                 recursos_ids = [r['id'] for r in recursos]
                 
-                # Preparamos placeholders
                 placeholders = ','.join(['%s'] * len(recursos_ids))
                 params_base = list(recursos_ids)
                 
-                # --- 2. FONDO BLANCO: HORARIOS ---
+                # --- 2. HORARIOS (FONDO BLANCO) ---
                 dia_semana_num = fecha_obj.isoweekday()
                 
                 sql_turnos = f"""
@@ -2288,7 +2280,7 @@ def api_agenda_dia_data():
                         "classNames": ["turno-disponible"]
                     })
                 
-                # --- 3. FONDO ROJO: AUSENCIAS ---
+                # --- 3. AUSENCIAS (FONDO ROJO) ---
                 sql_ausencias = f"""
                     SELECT empleado_id, fecha_hora_inicio, fecha_hora_fin 
                     FROM ausencias_empleado 
@@ -2309,7 +2301,7 @@ def api_agenda_dia_data():
                         "title": "Ausente"
                     })
                 
-                # --- 4. EVENTOS: RESERVAS ---
+                # --- 4. RESERVAS (TARJETAS) ---
                 sql_reservas = """
                     SELECT 
                         r.id, 
@@ -2353,7 +2345,8 @@ def api_agenda_dia_data():
         current_app.logger.error(f"Error fatal en api_agenda_dia_data: {e}", exc_info=True)
         return jsonify({"error": "Error interno del servidor."}), 500
 
-    return jsonify({"recursos": recursos, "eventos": eventos})   
+    return jsonify({"recursos": recursos, "eventos": eventos})
+   
     
 def timedelta_to_time_obj(obj):
     """
