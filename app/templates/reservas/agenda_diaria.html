@@ -342,53 +342,39 @@ document.addEventListener('DOMContentLoaded', function() {
         // 🟢 CONFIGURACIÓN DE IMÁGENES DE COLABORADORES
         resourceLabelContent: function(arg) {
             const recurso = arg.resource;
-            // Obtenemos los datos extra (Debug: mira la consola si salen errores)
             const props = recurso.extendedProps || {};
             const imagenUrl = props.imagen_url || props.foto || null; 
             const nombre = recurso.title;
 
-            // Contenedor principal
+            // 1. Crear el contenedor
             const container = document.createElement('div');
             container.className = 'staff-header-container'; 
-            container.style.display = 'flex';
-            container.style.flexDirection = 'column';
-            container.style.alignItems = 'center';
-            container.style.justifyContent = 'center';
-            container.style.padding = '10px 0';
 
-            // 1. CÍRCULO (Foto o Iniciales)
+            // 2. Lógica de Imagen vs Iniciales
             if (imagenUrl) {
-                // Opción A: Tiene Foto
                 const img = document.createElement('img');
                 img.src = imagenUrl;
-                img.style.width = '50px';
-                img.style.height = '50px';
-                img.style.borderRadius = '50%';
-                img.style.objectFit = 'cover';
-                img.style.border = '2px solid #fff';
-                img.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
-                img.style.marginBottom = '5px';
+                img.className = 'staff-avatar';
                 
-                // Si la imagen falla (404), mostramos iniciales
+                // Si la imagen falla al cargar, mostramos las iniciales
                 img.onerror = function() {
                     this.style.display = 'none';
                     container.insertBefore(crearIniciales(nombre), container.firstChild);
                 };
                 container.appendChild(img);
             } else {
-                // Opción B: No tiene foto -> Iniciales
+                // Si no hay URL de imagen, mostramos iniciales
                 container.appendChild(crearIniciales(nombre));
             }
 
-            // 3. Nombre del Colaborador (FALTABA ESTO)
+            // 3. Agregar el Nombre (ESTO FALTABA)
             const nombreSpan = document.createElement('span');
             nombreSpan.className = 'staff-name';
             nombreSpan.innerText = nombre;
             container.appendChild(nombreSpan);
 
-            // 4. Retorno (FALTABA ESTO)
+            // 4. Devolver el DOM al calendario (ESTO FALTABA)
             return { domNodes: [container] };
-        
         },    
         
         slotDuration: '00:15:00',
