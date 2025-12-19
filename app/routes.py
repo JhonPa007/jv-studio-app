@@ -2492,10 +2492,10 @@ def nueva_reserva():
             
             # --- 4. 🟢 RECOLECTAR DATOS PARA WHATSAPP ---
             # Obtenemos teléfonos y nombres antes de confirmar la transacción
-            cursor.execute("SELECT razon_social_nombres, telefono, celular FROM clientes WHERE id = %s", (cliente_id,))
+            cursor.execute("SELECT razon_social_nombres, telefono FROM clientes WHERE id = %s", (cliente_id,))
             datos_cliente = cursor.fetchone()
             
-            cursor.execute("SELECT nombres, apellidos, telefono, celular FROM empleados WHERE id = %s", (empleado_id,))
+            cursor.execute("SELECT nombres, apellidos, telefono FROM empleados WHERE id = %s", (empleado_id,))
             datos_empleado = cursor.fetchone()
             
             db_conn.commit()
