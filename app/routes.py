@@ -12,6 +12,7 @@ from datetime import datetime, date, time, timedelta, timezone
 from urllib.parse import quote, quote_plus
 import requests 
 import pytz
+from app.services.whatsapp_service import enviar_alerta_reserva
 
 # Librerías de Flask
 # (Agregamos 'send_file' que faltaba para la descarga del CDR)
@@ -2370,12 +2371,21 @@ def timedelta_to_time_obj(obj):
     return obj
 
 
+# Asegúrate de importar esto al inicio de tu archivo routes.py
+from app.services.whatsapp_service import enviar_alerta_reserva
+
+# 🟢 1. IMPORTANTE: Agrega esta línea AL INICIO de tu archivo routes.py
+# (Junto con los otros imports como datetime, jsonify, etc.)
+from app.services.whatsapp_service import enviar_alerta_reserva
+
+# ... (El resto de tus rutas) ...
+
 @main_bp.route('/reservas/nueva', methods=['POST'])
 @login_required
 def nueva_reserva():
     """
     Procesa la creación de una nueva reserva.
-    Versión blindada: Corrige error datetime.time y transaction rollback.
+    Versión blindada: Corrige error datetime.time, transaction rollback e incluye WhatsApp.
     """
     if not request.is_json:
         return jsonify({"success": False, "message": "Error: Se esperaba contenido JSON."}), 400
@@ -2424,7 +2434,8 @@ def nueva_reserva():
 
         # --- 2. Calcular fecha_hora_fin y Validar Disponibilidad ---
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            cursor.execute("SELECT duracion_minutos, precio FROM servicios WHERE id = %s AND activo = TRUE", (servicio_id,))
+            # 🟢 Obtenemos también el NOMBRE del servicio para el WhatsApp
+            cursor.execute("SELECT duracion_minutos, precio, nombre FROM servicios WHERE id = %s AND activo = TRUE", (servicio_id,))
             servicio_seleccionado = cursor.fetchone()
             if not servicio_seleccionado:
                 return jsonify({"success": False, "message": "Servicio seleccionado no válido o inactivo."}), 400
@@ -2432,6 +2443,7 @@ def nueva_reserva():
             duracion_servicio = timedelta(minutes=servicio_seleccionado['duracion_minutos'])
             fecha_hora_fin = fecha_hora_inicio + duracion_servicio
             precio_del_servicio = servicio_seleccionado['precio']
+            nombre_servicio_str = servicio_seleccionado['nombre'] # Guardar nombre para mensaje
 
             # Validar Horarios
             dia_semana_reserva = fecha_hora_inicio.isoweekday()
@@ -2443,11 +2455,18 @@ def nueva_reserva():
             
             esta_en_turno_valido = False
             for turno in turnos_del_dia:
-                # 🟢 AQUÍ SE USA LA FUNCIÓN CORREGIDA DEL PASO 1
-                turno_inicio_time_obj = timedelta_to_time_obj(turno['hora_inicio'])
-                turno_fin_time_obj = timedelta_to_time_obj(turno['hora_fin'])
-                
-                if fecha_hora_inicio.time() >= turno_inicio_time_obj and fecha_hora_fin.time() <= turno_fin_time_obj:
+                # Asegúrate de tener esta función auxiliar disponible o importada
+                # Si no la tienes, avísame para dártela
+                try:
+                    # Intento de conversión robusta si es string o time object
+                    t_inicio = turno['hora_inicio'] if isinstance(turno['hora_inicio'], (datetime, type(datetime.now().time()))) else datetime.strptime(str(turno['hora_inicio']), "%H:%M:%S").time()
+                    t_fin = turno['hora_fin'] if isinstance(turno['hora_fin'], (datetime, type(datetime.now().time()))) else datetime.strptime(str(turno['hora_fin']), "%H:%M:%S").time()
+                except:
+                    # Fallback simple
+                    t_inicio = turno['hora_inicio']
+                    t_fin = turno['hora_fin']
+
+                if fecha_hora_inicio.time() >= t_inicio and fecha_hora_fin.time() <= t_fin:
                     esta_en_turno_valido = True
                     break
             
@@ -2465,22 +2484,56 @@ def nueva_reserva():
                 return jsonify({"success": False, "message": "El colaborador ya tiene otra reserva en el horario seleccionado."}), 409
             
             # --- 3. Guardar en la BD ---
-            sql = "INSERT INTO reservas (sucursal_id, cliente_id, empleado_id, servicio_id, fecha_hora_inicio, fecha_hora_fin, estado, notas_cliente, precio_cobrado) VALUES (%s, %s, %s, %s, %s, %s, 'Programada', %s, %s)"
+            sql = "INSERT INTO reservas (sucursal_id, cliente_id, empleado_id, servicio_id, fecha_hora_inicio, fecha_hora_fin, estado, notas_cliente, precio_cobrado) VALUES (%s, %s, %s, %s, %s, %s, 'Programada', %s, %s) RETURNING id"
             val = (sucursal_id, cliente_id, empleado_id, servicio_id, fecha_hora_inicio, fecha_hora_fin, notas_cliente, precio_del_servicio)
             
             cursor.execute(sql, val)
+            reserva_nueva_id = cursor.fetchone()['id']
+            
+            # --- 4. 🟢 RECOLECTAR DATOS PARA WHATSAPP ---
+            # Obtenemos teléfonos y nombres antes de confirmar la transacción
+            cursor.execute("SELECT razon_social_nombres, telefono, celular FROM clientes WHERE id = %s", (cliente_id,))
+            datos_cliente = cursor.fetchone()
+            
+            cursor.execute("SELECT nombres, apellidos, telefono, celular FROM empleados WHERE id = %s", (empleado_id,))
+            datos_empleado = cursor.fetchone()
+            
             db_conn.commit()
             
+            # --- 5. 🟢 ENVIAR ALERTAS (ASYNC) ---
+            try:
+                # Preferencia: Celular > Teléfono
+                tel_cliente = datos_cliente['celular'] or datos_cliente['telefono']
+                tel_empleado = datos_empleado['celular'] or datos_empleado['telefono']
+                
+                # Formatear fechas para lectura humana
+                fecha_str = fecha_hora_inicio.strftime('%d/%m/%Y')
+                hora_str = fecha_hora_inicio.strftime('%I:%M %p')
+                
+                info_cita = {
+                    'cliente': datos_cliente['razon_social_nombres'],
+                    'fecha': fecha_str,
+                    'hora': hora_str,
+                    'servicio': nombre_servicio_str,
+                    'staff': f"{datos_empleado['nombres']} {datos_empleado['apellidos']}"
+                }
+                
+                # Llamada al servicio
+                enviar_alerta_reserva(tel_cliente, tel_empleado, info_cita)
+                
+            except Exception as e_msg:
+                # Si falla el mensaje, NO fallamos la reserva, solo avisamos en log
+                print(f"⚠️ Reserva {reserva_nueva_id} guardada, pero falló envío de alerta: {e_msg}")
+
             return jsonify({"success": True, "message": f'Reserva creada exitosamente para el {fecha_hora_inicio.strftime("%d/%m/%Y a las %H:%M")}.'}), 201
 
     except Exception as e:
-        # 🟢 CORRECCIÓN: Rollback seguro sin verificar 'in_transaction' que causaba error
         if db_conn:
             db_conn.rollback()
         current_app.logger.error(f"Error procesando nueva reserva: {e}")
-        return jsonify({"success": False, "message": f"Error interno: {str(e)}"}), 500   
-   
-        
+        return jsonify({"success": False, "message": f"Error interno: {str(e)}"}), 500
+    
+            
 @main_bp.route('/reservas/editar/<int:reserva_id>', methods=['POST'])
 @login_required
 def editar_reserva(reserva_id):
