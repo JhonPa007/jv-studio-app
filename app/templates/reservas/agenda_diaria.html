@@ -514,17 +514,44 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         const btn = this.querySelector('button[type="submit"]');
         const errDiv = document.getElementById('modalErrores');
-        btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+        
+        // 1. Recopilar datos básicos
+        const formData = new FormData(this);
+        const data = Object.fromEntries(formData);
+
+        // 2. 🟢 AGREGAR VALOR DEL CHECKBOX (True/False)
+        const chk = document.getElementById('chkEnviarWhatsApp');
+        data.enviar_whatsapp = chk ? chk.checked : false;
+
+        btn.disabled = true; 
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
         errDiv.style.display = 'none';
         
-        fetch("{{ url_for('main.nueva_reserva') }}", { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(Object.fromEntries(new FormData(this))) })
+        // 3. Enviar al Backend
+        fetch("{{ url_for('main.nueva_reserva') }}", { 
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'}, 
+            body: JSON.stringify(data) 
+        })
         .then(res => res.json().then(d => ({ok: res.ok, data: d})))
         .then(res => {
-            if (res.ok && res.data.success) { modalNuevaReservaInstancia.hide(); actualizarAgenda(); }
-            else { errDiv.innerHTML = (res.data.errors || [res.data.message]).join('<br>'); errDiv.style.display = 'block'; }
+            if (res.ok && res.data.success) { 
+                modalNuevaReservaInstancia.hide(); 
+                actualizarAgenda(); 
+            }
+            else { 
+                errDiv.innerHTML = (res.data.errors || [res.data.message]).join('<br>'); 
+                errDiv.style.display = 'block'; 
+            }
         })
-        .catch(err => { errDiv.innerHTML = `Error: ${err.message}`; errDiv.style.display = 'block'; })
-        .finally(() => { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save me-1"></i>Guardar Reserva'; });
+        .catch(err => { 
+            errDiv.innerHTML = `Error de conexión: ${err.message}`; 
+            errDiv.style.display = 'block'; 
+        })
+        .finally(() => { 
+            btn.disabled = false; 
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Guardar Reserva'; 
+        });
     });
 
     function abrirModalGestionarReserva(reservaId) {
