@@ -2520,7 +2520,7 @@ def nueva_reserva():
                             telefono = f"51{telefono}"
                         
                         # Codificar URL (convertir espacios a %20, etc.)
-                        whatsapp_url = f"https://wa.me/{telefono}?text={quote(mensaje_final)}"
+                        whatsapp_url = f"whatsapp://wa.me/{telefono}?text={quote(mensaje_final)}"
                         
                     except Exception as e_link:
                         print(f"Error generando link: {e_link}")
