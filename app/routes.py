@@ -8795,7 +8795,7 @@ def importar_clientes():
     procesado = False
 
     if request.method == 'POST':
-        # --- 1. VALIDACIONES INICIALES ---
+        # --- 1. VERIFICACIONES ---
         sucursal_id = session.get('sucursal_id') or getattr(current_user, 'sucursal_id', None)
         
         if not sucursal_id:
@@ -8811,12 +8811,13 @@ def importar_clientes():
             flash('Formato inválido. Solo .xlsx y .xls.', 'danger')
             return redirect(request.url)
 
-        # --- 2. PROCESAMIENTO OPTIMIZADO ---
+        # --- 2. PROCESAMIENTO ---
         db = get_db()
         cursor = None
         procesado = True
 
         try:
+            # Leemos el Excel
             df = pd.read_excel(file)
             df.columns = [str(c).strip().upper() for c in df.columns]
 
@@ -8825,48 +8826,57 @@ def importar_clientes():
                 flash(f'Faltan columnas obligatorias: {", ".join(required_cols)}.', 'danger')
                 return render_template('clientes/importar_clientes.html', titulo_pagina="Importar Clientes", resultados=resultados, procesado=procesado)
 
-            # Limpieza preventiva de la conexión
             db.rollback()
             cursor = db.cursor()
 
-            # 🟢 OPTIMIZACIÓN 1: Cargar datos existentes en MEMORIA (1 sola consulta)
-            # Esto evita consultar la BD fila por fila para validar duplicados
+            # Cargamos datos para validaciones
             cursor.execute("SELECT numero_documento FROM clientes WHERE numero_documento IS NOT NULL")
-            docs_existentes = {row[0] for row in cursor.fetchall()}
+            docs_existentes = {str(row[0]).strip() for row in cursor.fetchall()}
 
-            cursor.execute("SELECT telefono FROM clientes WHERE telefono IS NOT NULL")
-            telefonos_existentes = {row[0] for row in cursor.fetchall()}
+            # Validación de "Cliente Único" (Nombre + Teléfono)
+            # Permite que un mismo teléfono se repita si el nombre es diferente (ej: Madre e hijos)
+            cursor.execute("SELECT LOWER(razon_social_nombres), telefono FROM clientes")
+            # Creamos un set de tuplas para búsqueda rápida: {('juan perez', '999123'), ...}
+            clientes_registrados = {(row[0], str(row[1]).strip()) for row in cursor.fetchall() if row[0] and row[1]}
 
             lista_para_insertar = []
             
-            # 🟢 OPTIMIZACIÓN 2: Procesar todo en Python primero
+            # Helpers
             def clean_value(v): return str(v).strip() if pd.notna(v) and str(v).strip().lower() not in ['nan', ''] else None
             def parse_date(v): return pd.to_datetime(v).date() if pd.notna(v) else None
 
             for index, row in df.iterrows():
                 try:
-                    nombre = str(row.get('RAZONSOCIALNOMBRES', '')).strip()
-                    telefono = str(row.get('TELEFONO', '')).strip()
+                    nombre_raw = str(row.get('RAZONSOCIALNOMBRES', '')).strip()
+                    
+                    # 🟢 CORRECCIÓN DEL TELÉFONO (.0)
+                    raw_tel = row.get('TELEFONO', '')
+                    telefono = str(raw_tel).strip()
+                    if telefono.endswith('.0'):
+                        telefono = telefono[:-2] # Corta los últimos 2 caracteres (.0)
+                    
                     num_doc = clean_value(row.get('NUMERODOCUMENTO'))
 
-                    # Validaciones rápidas en memoria
-                    if not nombre or not telefono:
+                    # 1. Validación básica
+                    if not nombre_raw or not telefono or telefono == 'nan':
                         resultados['errores'].append(f"Fila {index + 2}: Falta Nombre o Teléfono.")
                         continue
 
+                    # 2. Validación de Documento único
                     if num_doc and num_doc in docs_existentes:
                         resultados['errores'].append(f"Fila {index + 2}: Documento '{num_doc}' ya existe.")
                         continue
                     
-                    if telefono in telefonos_existentes:
-                        # Nota: Validación simple por teléfono para velocidad
-                        resultados['errores'].append(f"Fila {index + 2}: Teléfono '{telefono}' ya existe.")
+                    # 3. Validación: ¿Existe ya esa persona con ese número?
+                    clave_unica = (nombre_raw.lower(), telefono)
+                    
+                    if clave_unica in clientes_registrados:
+                        resultados['errores'].append(f"Fila {index + 2}: El cliente '{nombre_raw}' ya está registrado con este teléfono.")
                         continue
 
-                    # Preparar tupla para inserción masiva
-                    # El orden debe coincidir con la query SQL de abajo
+                    # Preparar fila
                     fila_datos = (
-                        nombre, 
+                        nombre_raw, 
                         telefono, 
                         sucursal_id,
                         clean_value(row.get('APELLIDOS')), 
@@ -8881,14 +8891,14 @@ def importar_clientes():
                     )
                     lista_para_insertar.append(fila_datos)
                     
-                    # Actualizamos sets locales para evitar duplicados dentro del mismo Excel
+                    # Actualizar sets locales para evitar duplicados dentro del mismo Excel
                     if num_doc: docs_existentes.add(num_doc)
-                    telefonos_existentes.add(telefono)
+                    clientes_registrados.add(clave_unica)
 
                 except Exception as row_e:
                     resultados['errores'].append(f"Fila {index + 2}: Error datos. ({str(row_e)})")
 
-            # 🟢 OPTIMIZACIÓN 3: INSERT MASIVO (1 sola consulta para todos)
+            # 4. INSERT MASIVO
             if lista_para_insertar:
                 sql = """
                     INSERT INTO clientes (
@@ -8896,14 +8906,17 @@ def importar_clientes():
                         email, direccion, fecha_nacimiento, fecha_registro, genero, preferencia_servicio
                     ) VALUES %s
                 """
-                # execute_values es súper rápido para esto
                 execute_values(cursor, sql, lista_para_insertar)
                 resultados['insertados'] = len(lista_para_insertar)
 
             db.commit()
             
-            if results_summary(resultados): # Helper o lógica de flash
-                pass # (Tu lógica de mensajes flash original va aquí)
+            if resultados['insertados'] > 0:
+                flash(f"Se importaron {resultados['insertados']} clientes correctamente.", 'success')
+            elif resultados['errores']:
+                flash(f"Se encontraron {len(resultados['errores'])} errores (ver detalle abajo).", 'warning')
+            else:
+                flash("No se encontraron clientes nuevos para importar.", "info")
 
         except (Exception, psycopg2.Error) as e:
             if db: db.rollback()
@@ -8912,12 +8925,6 @@ def importar_clientes():
         finally:
             if cursor: cursor.close()
     
-    # Reutiliza tu lógica final de mensajes flash
-    if resultados['insertados'] > 0:
-        flash(f"Se importaron {resultados['insertados']} clientes.", 'success')
-    elif resultados['errores']:
-        flash(f"Errores encontrados: {len(resultados['errores'])}", 'warning')
-        
     return render_template('clientes/importar_clientes.html', titulo_pagina="Importar Clientes", resultados=resultados, procesado=procesado)
 
 
