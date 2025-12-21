@@ -2503,10 +2503,11 @@ def nueva_reserva():
                 # C. Construir el Link
                 if c_data and c_data['telefono'] and tpl_row:
                     try:
-                        plantilla = tpl_row['contenido']
+                        plantilla_raw = tpl_row['contenido']
+                        plantilla_limpia = plantilla_raw.replace('%0A', '\n').replace('\\n', '\n')
                         
                         # Formatear mensaje reemplazando variables
-                        mensaje_final = plantilla.format(
+                        mensaje_final = plantilla_limpia.format(
                             cliente=c_data['razon_social_nombres'],
                             fecha=fecha_hora_inicio.strftime('%d/%m/%Y'),
                             hora=fecha_hora_inicio.strftime('%I:%M %p'),
