@@ -2384,21 +2384,22 @@ from app.services.whatsapp_service import enviar_alerta_reserva
 @login_required
 def nueva_reserva():
     """
-    Crea una reserva y opcionalmente envía WhatsApp.
-    Corregido: Manejo de checkbox y columna 'telefono' única.
+    Crea una reserva y genera un Link de WhatsApp (Click-to-Chat)
+    basado en plantillas de base de datos.
     """
     if not request.is_json:
-        return jsonify({"success": False, "message": "Error formato JSON."}), 400
+        return jsonify({"success": False, "message": "Error: Se esperaba contenido JSON."}), 400
     
     data = request.get_json()
     if not data:
-        return jsonify({"success": False, "message": "Sin datos."}), 400
+        return jsonify({"success": False, "message": "Error: No se recibieron datos."}), 400
 
     db_conn = get_db()
     
     try:
+        # --- 1. Recoger y Validar Datos ---
         errores = []
-        # --- 1. Recoger Datos ---
+        
         sucursal_id = int(data.get('sucursal_id') or 0)
         cliente_id = int(data.get('cliente_id') or 0)
         empleado_id = int(data.get('empleado_id') or 0)
@@ -2406,21 +2407,28 @@ def nueva_reserva():
         fecha_hora_inicio_str = data.get('fecha_hora_inicio')
         notas_cliente = data.get('notas_cliente', '').strip() or None
         
-        # 🟢 Leemos el checkbox (True si está marcado, False si no)
+        # Checkbox del usuario (True/False)
         enviar_whatsapp_flag = data.get('enviar_whatsapp', False)
 
-        if not sucursal_id: errores.append("Sucursal requerida.")
-        if not cliente_id: errores.append("Cliente requerido.")
-        if not empleado_id: errores.append("Colaborador requerido.")
-        if not servicio_id: errores.append("Servicio requerido.")
-        if not fecha_hora_inicio_str: errores.append("Fecha requerida.")
-
-        # Validación básica de fecha
-        if fecha_hora_inicio_str:
+        if not sucursal_id: errores.append("La sucursal es requerida.")
+        if not cliente_id: errores.append("Debe seleccionar un cliente.")
+        if not empleado_id: errores.append("Colaborador es obligatorio.")
+        if not servicio_id: errores.append("Debe seleccionar un servicio.")
+        
+        # Validación de Zona Horaria (Perú)
+        if not fecha_hora_inicio_str:
+            errores.append('Falta la fecha y hora de inicio.')
+        else:
             try:
+                peru_tz = pytz.timezone('America/Lima')
+                ahora_peru = datetime.now(peru_tz)
                 fecha_hora_inicio = datetime.fromisoformat(fecha_hora_inicio_str)
+                fecha_hora_inicio_aware = peru_tz.localize(fecha_hora_inicio)
+
+                if fecha_hora_inicio_aware < ahora_peru:
+                    errores.append('La fecha y hora de inicio no puede ser en el pasado.')
             except ValueError:
-                errores.append("Formato de fecha inválido.")
+                errores.append('Formato de fecha y hora de inicio inválido.')
 
         if errores:
             return jsonify({"success": False, "errors": errores}), 400
@@ -2428,88 +2436,110 @@ def nueva_reserva():
         # --- 2. Validaciones de Negocio ---
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Obtener datos del servicio
-            cursor.execute("SELECT duracion_minutos, precio, nombre FROM servicios WHERE id = %s", (servicio_id,))
-            servicio_data = cursor.fetchone()
-            if not servicio_data:
+            cursor.execute("SELECT duracion_minutos, precio, nombre FROM servicios WHERE id = %s AND activo = TRUE", (servicio_id,))
+            servicio_seleccionado = cursor.fetchone()
+            if not servicio_seleccionado:
                 return jsonify({"success": False, "message": "Servicio no válido."}), 400
             
-            duracion = timedelta(minutes=servicio_data['duracion_minutos'])
-            fecha_hora_fin = fecha_hora_inicio + duracion
-            precio = servicio_data['precio']
-            nombre_servicio = servicio_data['nombre']
+            duracion_servicio = timedelta(minutes=servicio_seleccionado['duracion_minutos'])
+            fecha_hora_fin = fecha_hora_inicio + duracion_servicio
+            precio_del_servicio = servicio_seleccionado['precio']
+            nombre_servicio_str = servicio_seleccionado['nombre'] 
 
-            # Validar Cruce de Horarios (Resumido para brevedad, mantén tu lógica si es más compleja)
-            cursor.execute("""
-                SELECT id FROM reservas 
-                WHERE empleado_id = %s 
-                  AND estado NOT IN ('Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio', 'Completada')
-                  AND fecha_hora_inicio < %s AND fecha_hora_fin > %s
-            """, (empleado_id, fecha_hora_fin, fecha_hora_inicio))
+            # Validar Horarios
+            dia_semana_reserva = fecha_hora_inicio.isoweekday()
+            cursor.execute("SELECT hora_inicio, hora_fin FROM horarios_empleado WHERE empleado_id = %s AND dia_semana = %s", (empleado_id, dia_semana_reserva))
+            turnos_del_dia = cursor.fetchall()
             
-            if cursor.fetchone():
-                return jsonify({"success": False, "message": "El colaborador ya tiene una reserva en ese horario."}), 409
+            if not turnos_del_dia:
+                return jsonify({"success": False, "message": f"El colaborador no trabaja el día seleccionado."}), 409
+            
+            esta_en_turno_valido = False
+            for turno in turnos_del_dia:
+                try:
+                    # Intento robusto de conversión de hora
+                    t_in = turno['hora_inicio'] if isinstance(turno['hora_inicio'], (datetime, type(datetime.now().time()))) else datetime.strptime(str(turno['hora_inicio']), "%H:%M:%S").time()
+                    t_out = turno['hora_fin'] if isinstance(turno['hora_fin'], (datetime, type(datetime.now().time()))) else datetime.strptime(str(turno['hora_fin']), "%H:%M:%S").time()
+                except:
+                    t_in = turno['hora_inicio']
+                    t_out = turno['hora_fin']
 
+                if fecha_hora_inicio.time() >= t_in and fecha_hora_fin.time() <= t_out:
+                    esta_en_turno_valido = True
+                    break
+            
+            if not esta_en_turno_valido:
+                return jsonify({"success": False, "message": "Fuera de horario laboral del colaborador."}), 409
+
+            # Validar Ausencias y Choques (Resumido)
+            cursor.execute("SELECT id FROM ausencias_empleado WHERE empleado_id=%s AND aprobado=TRUE AND fecha_hora_inicio<%s AND fecha_hora_fin>%s", (empleado_id, fecha_hora_fin, fecha_hora_inicio))
+            if cursor.fetchone(): return jsonify({"success": False, "message": "Colaborador ausente."}), 409
+
+            cursor.execute("SELECT id FROM reservas WHERE empleado_id=%s AND sucursal_id=%s AND estado NOT IN ('Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio', 'Completada') AND fecha_hora_inicio<%s AND fecha_hora_fin>%s", (empleado_id, sucursal_id, fecha_hora_fin, fecha_hora_inicio))
+            if cursor.fetchone(): return jsonify({"success": False, "message": "Horario ocupado."}), 409
+            
             # --- 3. Insertar Reserva ---
-            sql = """
-                INSERT INTO reservas (sucursal_id, cliente_id, empleado_id, servicio_id, fecha_hora_inicio, fecha_hora_fin, estado, notas_cliente, precio_cobrado) 
-                VALUES (%s, %s, %s, %s, %s, %s, 'Programada', %s, %s) 
-                RETURNING id
-            """
-            vals = (sucursal_id, cliente_id, empleado_id, servicio_id, fecha_hora_inicio, fecha_hora_fin, notas_cliente, precio)
-            cursor.execute(sql, vals)
-            reserva_id = cursor.fetchone()['id']
-
-            # --- 4. 🟢 PREPARAR DATOS WHATSAPP (Solo si el usuario lo pidió) ---
-            datos_ws = None
+            sql = "INSERT INTO reservas (sucursal_id, cliente_id, empleado_id, servicio_id, fecha_hora_inicio, fecha_hora_fin, estado, notas_cliente, precio_cobrado) VALUES (%s, %s, %s, %s, %s, %s, 'Programada', %s, %s) RETURNING id"
+            val = (sucursal_id, cliente_id, empleado_id, servicio_id, fecha_hora_inicio, fecha_hora_fin, notas_cliente, precio_del_servicio)
+            
+            cursor.execute(sql, val)
+            
+            # --- 4. 🟢 GENERAR LINK DE WHATSAPP ---
+            whatsapp_url = None
+            
             if enviar_whatsapp_flag:
-                # CORRECCIÓN CRÍTICA: Solo pedimos 'telefono', no 'celular'
+                # A. Obtener datos Cliente y Staff
                 cursor.execute("SELECT razon_social_nombres, telefono FROM clientes WHERE id = %s", (cliente_id,))
                 c_data = cursor.fetchone()
                 
-                cursor.execute("SELECT nombres, apellidos, telefono FROM empleados WHERE id = %s", (empleado_id,))
+                cursor.execute("SELECT nombres FROM empleados WHERE id = %s", (empleado_id,))
                 e_data = cursor.fetchone()
                 
-                if c_data and e_data:
-                    datos_ws = {
-                        'cliente_nombre': c_data['razon_social_nombres'],
-                        'cliente_tel': c_data['telefono'],
-                        'staff_nombre': f"{e_data['nombres']} {e_data['apellidos']}",
-                        'staff_tel': e_data['telefono']
-                    }
+                # B. Obtener Plantilla de la BD
+                # Asegúrate de haber creado la tabla 'plantillas_whatsapp' y el registro 'reserva_nueva'
+                cursor.execute("SELECT contenido FROM plantillas_whatsapp WHERE tipo = 'reserva_nueva'")
+                tpl_row = cursor.fetchone()
+                
+                # C. Construir el Link
+                if c_data and c_data['telefono'] and tpl_row:
+                    try:
+                        plantilla = tpl_row['contenido']
+                        
+                        # Formatear mensaje reemplazando variables
+                        mensaje_final = plantilla.format(
+                            cliente=c_data['razon_social_nombres'],
+                            fecha=fecha_hora_inicio.strftime('%d/%m/%Y'),
+                            hora=fecha_hora_inicio.strftime('%I:%M %p'),
+                            servicio=nombre_servicio_str,
+                            staff=e_data['nombres']
+                        )
+                        
+                        # Preparar teléfono (Asegurar prefijo 51 Perú)
+                        telefono = str(c_data['telefono']).strip().replace(' ', '')
+                        if len(telefono) == 9: 
+                            telefono = f"51{telefono}"
+                        
+                        # Codificar URL (convertir espacios a %20, etc.)
+                        whatsapp_url = f"https://wa.me/{telefono}?text={quote(mensaje_final)}"
+                        
+                    except Exception as e_link:
+                        print(f"Error generando link: {e_link}")
 
             db_conn.commit()
-
-            # --- 5. 🟢 ENVIAR WHATSAPP (Async) ---
-            if datos_ws:
-                try:
-                    fecha_fmt = fecha_hora_inicio.strftime('%d/%m/%Y')
-                    hora_fmt = fecha_hora_inicio.strftime('%I:%M %p')
-                    
-                    info_msg = {
-                        'cliente': datos_ws['cliente_nombre'],
-                        'fecha': fecha_fmt,
-                        'hora': hora_fmt,
-                        'servicio': nombre_servicio,
-                        'staff': datos_ws['staff_nombre']
-                    }
-                    
-                    # Log para verificar en Railway
-                    print(f"🚀 Enviando WhatsApp a: {datos_ws['cliente_tel']}")
-                    
-                    enviar_alerta_reserva(
-                        cliente_tel=datos_ws['cliente_tel'],
-                        staff_tel=datos_ws['staff_tel'],
-                        datos_cita=info_msg
-                    )
-                except Exception as e_ws:
-                    print(f"⚠️ Error enviando WhatsApp: {e_ws}")
-
-            return jsonify({"success": True, "message": "Reserva creada exitosamente."}), 201
+            
+            # D. Retornar URL al JavaScript
+            return jsonify({
+                "success": True, 
+                "message": f'Reserva creada exitosamente.',
+                "whatsapp_url": whatsapp_url 
+            }), 201
 
     except Exception as e:
-        if db_conn: db_conn.rollback()
-        current_app.logger.error(f"Error nueva_reserva: {e}")
-        return jsonify({"success": False, "message": f"Error interno: {str(e)}"}), 500    
+        if db_conn:
+            db_conn.rollback()
+        current_app.logger.error(f"Error procesando nueva reserva: {e}")
+        return jsonify({"success": False, "message": f"Error interno: {str(e)}"}), 500
+       
             
 @main_bp.route('/reservas/editar/<int:reserva_id>', methods=['POST'])
 @login_required

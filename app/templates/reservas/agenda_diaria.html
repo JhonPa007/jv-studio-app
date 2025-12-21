@@ -515,7 +515,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const btn = this.querySelector('button[type="submit"]');
         const errDiv = document.getElementById('modalErrores');
         
-        // 1. Recopilar datos básicos
+        // 1. Recopilar datos básicos del formulario
         const formData = new FormData(this);
         const data = Object.fromEntries(formData);
 
@@ -536,10 +536,21 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(res => res.json().then(d => ({ok: res.ok, data: d})))
         .then(res => {
             if (res.ok && res.data.success) { 
+                // A. Cerrar modal y refrescar calendario
                 modalNuevaReservaInstancia.hide(); 
                 actualizarAgenda(); 
+                
+                // B. 🟢 LÓGICA DE WHATSAPP CLICK-TO-CHAT
+                if (res.data.whatsapp_url) {
+                    // Si el backend devolvió una URL, la abrimos en nueva pestaña
+                    window.open(res.data.whatsapp_url, '_blank');
+                } else if (data.enviar_whatsapp) {
+                    // Si el usuario marcó el check pero no hubo URL (ej: cliente sin teléfono)
+                    alert("Reserva guardada correctamente, pero no se pudo generar el enlace de WhatsApp (verifique que el cliente tenga teléfono registrado).");
+                }
             }
             else { 
+                // C. Mostrar errores del servidor
                 errDiv.innerHTML = (res.data.errors || [res.data.message]).join('<br>'); 
                 errDiv.style.display = 'block'; 
             }
@@ -553,6 +564,7 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.innerHTML = '<i class="fas fa-save me-1"></i>Guardar Reserva'; 
         });
     });
+
 
     function abrirModalGestionarReserva(reservaId) {
         const modalTitle = document.getElementById('modalGestionarReservaLabel');
