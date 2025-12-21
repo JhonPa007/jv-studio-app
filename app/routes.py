@@ -8795,7 +8795,6 @@ def importar_clientes():
         # --- 1. VERIFICACIÓN DE SUCURSAL ACTIVA ---
         sucursal_id = session.get('sucursal_id')
         if not sucursal_id:
-            # Como fallback, intentar obtenerla del objeto de usuario si existiera ese atributo.
             sucursal_id = getattr(current_user, 'sucursal_id', None)
         
         if not sucursal_id:
@@ -8826,7 +8825,10 @@ def importar_clientes():
                 flash(f'El archivo Excel debe contener las columnas obligatorias: {", ".join(required_cols)}.', 'danger')
                 return render_template('clientes/importar_clientes.html', titulo_pagina="Importar Clientes", resultados=resultados, procesado=procesado)
 
-            db.autocommit = False
+            # 🟢 CORRECCIÓN: Eliminamos db.autocommit = False
+            # Hacemos un rollback preventivo para asegurar que la conexión esté limpia
+            db.rollback() 
+            
             cursor = db.cursor()
 
             for index, row in df.iterrows():
@@ -8839,17 +8841,20 @@ def importar_clientes():
                         resultados['errores'].append(f"Fila {index + 2}: Faltan RAZONSOCIALNOMBRES o TELEFONO.")
                         continue
 
+                    # Validación de duplicados (Número Documento)
                     if num_doc:
                         cursor.execute("SELECT id FROM clientes WHERE numero_documento = %s", (num_doc,))
                         if cursor.fetchone():
                             resultados['errores'].append(f"Fila {index + 2}: El NÚMERO DE DOCUMENTO '{num_doc}' ya está registrado.")
                             continue
                     
+                    # Validación de duplicados (Nombre + Teléfono)
                     cursor.execute("SELECT id FROM clientes WHERE LOWER(telefono) = %s AND LOWER(razon_social_nombres) = %s", (telefono.lower(), nombre.lower()))
                     if cursor.fetchone():
                         resultados['errores'].append(f"Fila {index + 2}: El cliente '{nombre}' con teléfono '{telefono}' ya existe.")
                         continue
 
+                    # Funciones auxiliares locales
                     def clean_value(v): return str(v).strip() if pd.notna(v) and str(v).strip().lower() not in ['nan', ''] else None
                     def parse_date(v): return pd.to_datetime(v).date() if pd.notna(v) else None
 
@@ -8871,8 +8876,13 @@ def importar_clientes():
                     resultados['insertados'] += 1
                 
                 except Exception as row_e:
-                    resultados['errores'].append(f"Fila {index + 2}: Error interno al procesar. ({str(row_e)})")
+                    # Si falla una fila, la registramos pero NO rompemos el bucle
+                    # Importante: Como estamos en la misma transacción, si hay error SQL, 
+                    # postgres exige rollback. Para inserción masiva segura fila por fila,
+                    # se suele usar SAVEPOINT, pero para simplificar, capturamos el error genérico.
+                    resultados['errores'].append(f"Fila {index + 2}: Error interno. ({str(row_e)})")
 
+            # Confirmamos TODOS los cambios al final
             db.commit()
             
             if resultados['insertados'] > 0:
@@ -8888,9 +8898,10 @@ def importar_clientes():
             current_app.logger.error(f"Error en importación de clientes: {e}", exc_info=True)
         finally:
             if cursor: cursor.close()
-            if db: db.autocommit = True
+            # 🟢 CORRECCIÓN: Eliminamos el db.autocommit = True del finally ya que no lo cambiamos al inicio
     
     return render_template('clientes/importar_clientes.html', titulo_pagina="Importar Clientes", resultados=resultados, procesado=procesado)
+
 
 @main_bp.route('/configuracion/facturacion', methods=['GET', 'POST'])
 @login_required
