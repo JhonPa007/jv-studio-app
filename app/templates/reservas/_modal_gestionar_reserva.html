@@ -1,6 +1,6 @@
 <div class="modal fade" id="modalGestionarReserva" tabindex="-1" aria-labelledby="modalGestionarReservaLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content text-dark" style="background-color: #484848fe;">
+        <div class="modal-content text-dark" style="background-color: #f8f9fa;">
             
             <div class="modal-header" style="background-color: var(--color-predominante); color: var(--color-acento-dorado);">
                 <h5 class="modal-title" id="modalGestionarReservaLabel"><i class="fas fa-calendar-check me-2"></i>Detalles de la Reserva</h5>
@@ -9,7 +9,7 @@
             
             <div class="modal-body">
                 
-                <div id="detalleReservaVista">
+                <div id="detalleReservaVista" class="p-2">
                     <p class="text-center text-muted">Cargando detalles...</p>
                 </div>
                 
@@ -54,6 +54,10 @@
 
             <div class="modal-footer" style="background-color: #e9ecef;">
                 
+                <button type="button" class="btn btn-success btn-sm shadow-sm me-auto" id="btnModalRecordarWhatsApp">
+                    <i class="fab fa-whatsapp me-1"></i> Recordar
+                </button>
+
                 <button type="button" class="btn btn-warning btn-sm shadow-sm" id="btnModalEditarReserva">
                     <i class="fas fa-edit me-1"></i>Editar
                 </button>

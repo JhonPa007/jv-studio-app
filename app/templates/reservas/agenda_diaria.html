@@ -570,12 +570,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const modalTitle = document.getElementById('modalGestionarReservaLabel');
         const vistaDiv = document.getElementById('detalleReservaVista');
         const formEditar = document.getElementById('formEditarReservaModal');
+        
+        // Botones existentes
         const btnEditar = document.getElementById('btnModalEditarReserva');
         const btnCancelar = document.getElementById('btnModalCancelarReserva');
         const btnCompletar = document.getElementById('btnModalCompletarReserva');
         const btnVenta = document.getElementById('btnModalRegistrarVenta');
         const btnCancelarEdicion = document.getElementById('btnModalCancelarEdicion');
         const btnGuardar = document.getElementById('btnModalGuardarCambios');
+        
+        // 🟢 NUEVO BOTÓN: WhatsApp Recordatorio
+        const btnRecordarWs = document.getElementById('btnModalRecordarWhatsApp');
 
         function cambiarModo(modoVista, data = null) {
             if(vistaDiv) vistaDiv.style.display = modoVista ? 'block' : 'none';
@@ -590,6 +595,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else { esFinal = true; }
 
             const mostrarAcciones = modoVista && !esFinal;
+            
             if (btnEditar) btnEditar.style.display = mostrarAcciones ? 'inline-block' : 'none';
             if (btnCancelar) btnCancelar.style.display = mostrarAcciones ? 'inline-block' : 'none';
             if (btnCompletar) btnCompletar.style.display = mostrarAcciones ? 'inline-block' : 'none';
@@ -597,8 +603,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (btnCancelarEdicion) btnCancelarEdicion.style.display = modoVista ? 'none' : 'inline-block';
             if (btnGuardar) btnGuardar.style.display = modoVista ? 'none' : 'inline-block';
 
+            // 🟢 Lógica de visibilidad del botón WhatsApp Recordar
+            if (btnRecordarWs) {
+                // Solo mostrar si estamos en modo vista y la reserva NO ha finalizado
+                btnRecordarWs.style.display = (modoVista && !esFinal) ? 'inline-block' : 'none';
+            }
+
             if (!modoVista && data) {
-                 // Lógica de poblado de formulario de edición (igual a tu código original)
                  modalTitle.innerHTML = `<i class="fas fa-edit me-2"></i>Editando Reserva #${data.id}`;
                  document.getElementById('editReservaId').value = data.id;
                  const poblar = (id, items, val) => {
@@ -633,13 +644,38 @@ document.addEventListener('DOMContentLoaded', function() {
                         </dl>`;
                 }
                 if(btnVenta) btnVenta.href = `{{ url_for('main.nueva_venta') }}?reserva_id=${reservaId}`;
+                
+                // 🟢 CONFIGURACIÓN DEL EVENTO CLICK PARA WHATSAPP
+                if (btnRecordarWs) {
+                    btnRecordarWs.onclick = function() {
+                        const originalHtml = this.innerHTML;
+                        this.disabled = true;
+                        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
+                        
+                        // Llamada a la API para obtener el link
+                        fetch(`/api/reservas/${reservaId}/whatsapp-link?tipo=recordatorio`)
+                            .then(r => r.json())
+                            .then(resp => {
+                                if (resp.success && resp.url) {
+                                    window.open(resp.url, '_blank');
+                                } else {
+                                    alert("No se pudo generar el enlace: " + (resp.message || "Error desconocido"));
+                                }
+                            })
+                            .catch(err => alert("Error de conexión al generar enlace"))
+                            .finally(() => {
+                                this.disabled = false;
+                                this.innerHTML = originalHtml;
+                            });
+                    };
+                }
+
                 cambiarModo(true, data);
             });
 
         if (btnEditar) btnEditar.onclick = () => cambiarModo(false, datosReservaActualParaModal);
         if (btnCancelarEdicion) btnCancelarEdicion.onclick = () => cambiarModo(true, datosReservaActualParaModal);
         
-        // Listeners de Cancelar/Completar/Guardar (Iguales a tu código original)
         if (btnCancelar) btnCancelar.onclick = () => { 
              if(confirm('¿Cancelar?')) fetch(`/reservas/cancelar/${reservaId}`, {method:'POST'}).then(()=>{ modalGestionarInstancia.hide(); actualizarAgenda(); }); 
         };

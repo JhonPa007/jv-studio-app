@@ -9956,4 +9956,68 @@ def descargar_cdr(venta_id):
         return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id)) 
  
   
-  
+  # Agrega esto en routes.py
+
+@main_bp.route('/api/reservas/<int:reserva_id>/whatsapp-link', methods=['GET'])
+@login_required
+def obtener_link_whatsapp_reserva(reserva_id):
+    """Genera link de WhatsApp para una reserva existente (Recordatorio o Info)."""
+    tipo_mensaje = request.args.get('tipo', 'recordatorio') # Por defecto recordatorio
+    
+    db = get_db()
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+        # 1. Obtener datos completos de la reserva
+        sql = """
+            SELECT 
+                r.id, r.fecha_hora_inicio, 
+                c.razon_social_nombres as cliente, c.telefono,
+                s.nombre as servicio,
+                e.nombres as staff
+            FROM reservas r
+            JOIN clientes c ON r.cliente_id = c.id
+            JOIN servicios s ON r.servicio_id = s.id
+            JOIN empleados e ON r.empleado_id = e.id
+            WHERE r.id = %s
+        """
+        cursor.execute(sql, (reserva_id,))
+        reserva = cursor.fetchone()
+        
+        if not reserva:
+            return jsonify({'success': False, 'message': 'Reserva no encontrada'}), 404
+            
+        if not reserva['telefono']:
+            return jsonify({'success': False, 'message': 'El cliente no tiene teléfono registrado'}), 400
+
+        # 2. Obtener plantilla
+        cursor.execute("SELECT contenido FROM plantillas_whatsapp WHERE tipo = %s", (tipo_mensaje,))
+        tpl = cursor.fetchone()
+        
+        if not tpl:
+            return jsonify({'success': False, 'message': 'Plantilla no encontrada'}), 404
+
+        # 3. Construir mensaje
+        try:
+            plantilla_raw = tpl['contenido']
+            plantilla_limpia = plantilla_raw.replace('%0A', '\n').replace('\\n', '\n')
+            
+            # Formatos de fecha
+            fecha_dt = reserva['fecha_hora_inicio']
+            msg = plantilla_limpia.format(
+                cliente=reserva['cliente'],
+                fecha=fecha_dt.strftime('%d/%m/%Y'),
+                hora=fecha_dt.strftime('%I:%M %p'),
+                servicio=reserva['servicio'],
+                staff=reserva['staff']
+            )
+            
+            # Formato teléfono
+            tel = str(reserva['telefono']).strip().replace(' ', '').replace('.0', '')
+            if len(tel) == 9: tel = f"51{tel}"
+            
+            # Generar URL App
+            url = f"whatsapp://send?phone={tel}&text={quote(msg)}"
+            
+            return jsonify({'success': True, 'url': url})
+            
+        except Exception as e:
+            return jsonify({'success': False, 'message': str(e)}), 500
