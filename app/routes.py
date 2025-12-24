@@ -10037,19 +10037,12 @@ def generar_link_google_calendar(titulo, inicio, fin, detalle, ubicacion="JV Stu
 @main_bp.route('/api/reservas/<int:reserva_id>/whatsapp-link', methods=['GET'])
 @login_required
 def generar_link_reserva_existente(reserva_id):
-    """
-    Genera links de WhatsApp.
-    CORRECCIÓN: Garantiza que 'link_calendar' siempre exista para evitar KeyError.
-    """
     tipo = request.args.get('tipo', 'recordatorio') 
     db = get_db()
     
-    # 🔍 DEBUG: Imprimir en logs de Railway
-    print(f"DEBUG: Generando link para Reserva ID: {reserva_id}, Tipo: {tipo}")
-    
     try:
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # 1. Obtener datos
+            # 1. Obtener datos de la reserva
             cursor.execute("""
                 SELECT 
                     r.id, r.fecha_hora_inicio, r.fecha_hora_fin, r.notas_cliente,
@@ -10064,90 +10057,77 @@ def generar_link_reserva_existente(reserva_id):
             """, (reserva_id,))
             res = cursor.fetchone()
             
-            if not res: 
-                return jsonify({'success': False, 'message': 'Reserva no encontrada'}), 404
+            if not res: return jsonify({'success': False, 'message': 'Reserva no encontrada'}), 404
 
-            # 2. 🟢 INICIALIZACIÓN DE VARIABLES POR DEFECTO (EL BLINDAJE)
-            # Definimos link_calendar como vacío desde el principio.
-            # Así, si es un recordatorio de cliente, existe pero está vacío.
-            link_cal_generado = "" 
-            telefono_destino = None
-            tpl_tipo = 'recordatorio'
+            # 2. Preparar variables BASE (Inicializar todo para evitar errores)
+            telefono_destino = ""
+            plantilla_nombre = ""
+            link_cal_final = ""  # <--- IMPORTANTE: Empieza vacía, no nula.
 
-            # 3. Lógica por Tipo
+            # 3. Lógica según el botón presionado
             if tipo == 'aviso_staff':
                 telefono_destino = res['tel_staff']
-                tpl_tipo = 'aviso_staff'
-                
-                # Solo generamos el link de Google si es para el staff
+                plantilla_nombre = 'aviso_staff'
+                # Calcular Link de Google Calendar
                 try:
-                    link_cal_generado = generar_link_google_calendar(
+                    link_cal_final = generar_link_google_calendar(
                         titulo=f"Cita: {res['cliente']} - {res['servicio']}",
                         inicio=res['fecha_hora_inicio'],
                         fin=res['fecha_hora_fin'],
-                        detalle=f"Servicio: {res['servicio']}\nCliente: {res['cliente']}\nNotas: {res['notas_cliente'] or ''}"
+                        detalle=f"Servicio: {res['servicio']}\nCliente: {res['cliente']}\nNotas: {res['notas_cliente'] or 'Sin notas'}"
                     )
                 except Exception as e:
                     print(f"Error generando calendario: {e}")
-            
+                    link_cal_final = " (Error enlace) "
             else:
-                # Es recordatorio Cliente
+                # Es Recordatorio Cliente
                 telefono_destino = res['tel_cliente']
-                tpl_tipo = 'recordatorio'
-                # link_cal_generado se mantiene como "" (cadena vacía)
+                plantilla_nombre = 'recordatorio'
+                link_cal_final = "" # El cliente no recibe link de calendario interno
 
-            # Validar teléfono
-            if not telefono_destino: 
+            # 4. Validar teléfono
+            if not telefono_destino:
                 return jsonify({'success': False, 'message': 'El destinatario no tiene teléfono registrado'}), 400
 
-            # 4. Obtener Plantilla de BD
-            cursor.execute("SELECT contenido FROM plantillas_whatsapp WHERE tipo = %s", (tpl_tipo,))
-            tpl = cursor.fetchone()
+            # 5. Obtener Plantilla de BD
+            cursor.execute("SELECT contenido FROM plantillas_whatsapp WHERE tipo = %s", (plantilla_nombre,))
+            tpl_row = cursor.fetchone()
             
-            # Texto base por defecto si falla la BD
-            if tpl:
-                texto_base = tpl['contenido']
+            # Plantilla por defecto (Fallback)
+            if tpl_row:
+                texto_plantilla = tpl_row['contenido']
             else:
-                texto_base = "Hola {cliente}, cita de {servicio} el {fecha} a las {hora}."
+                texto_plantilla = "Hola {cliente}, cita de {servicio} el {fecha} a las {hora}."
 
-            # Limpiar saltos de línea extraños
-            texto_base = texto_base.replace('%0A', '\n').replace('\\n', '\n')
+            # Limpiar saltos de línea de la BD (%0A -> \n)
+            texto_plantilla = texto_plantilla.replace('%0A', '\n').replace('\\n', '\n')
 
-            # 5. 🟢 RELLENADO DE DATOS (AQUÍ OCURRÍA EL ERROR)
-            # Creamos un diccionario MAESTRO con TODAS las variables posibles
-            datos_completos = {
+            # 6. RELLENAR DATOS (Aquí estaba el error)
+            # Creamos un diccionario con TODAS las posibles variables que la plantilla podría pedir
+            datos_seguros = {
                 'cliente': res['cliente'] or "",
                 'staff': res['staff'] or "",
                 'servicio': res['servicio'] or "",
                 'fecha': res['fecha_hora_inicio'].strftime('%d/%m/%Y'),
                 'hora': res['fecha_hora_inicio'].strftime('%I:%M %p'),
-                'link_calendar': link_cal_generado  # <--- ¡AQUÍ ESTÁ LA SOLUCIÓN!
+                'link_calendar': link_cal_final # <--- SIEMPRE presente, aunque sea ""
             }
 
-            # Debug para ver qué estamos enviando
-            print(f"DEBUG: Datos para format: {datos_completos.keys()}")
-
             try:
-                # El ** desempaqueta el diccionario. Si la plantilla pide {link_calendar},
-                # ahora SÍ lo encontrará (aunque sea vacío).
-                msg = texto_base.format(**datos_completos)
-            
-            except KeyError as e_key:
-                # Si falla aquí, es porque la plantilla pide una variable RARA que no está en la lista de arriba
-                error_msg = f"Tu plantilla pide la variable {{{e_key}}} pero no la tenemos calculada."
-                print(f"ERROR FATAL: {error_msg}")
-                return jsonify({'success': False, 'message': error_msg}), 500
+                # El método .format usará las claves del diccionario
+                mensaje_final = texto_plantilla.format(**datos_seguros)
+            except KeyError as e:
+                # Si esto salta, es porque la plantilla pide una variable que NO está en la lista de arriba (ej: {precio})
+                return jsonify({'success': False, 'message': f"Error: La plantilla pide una variable desconocida: {str(e)}"}), 500
 
-            # 6. Generar URL WhatsApp
+            # 7. Generar URL WhatsApp
             tel_clean = str(telefono_destino).strip().replace(' ', '').replace('.0', '')
             if len(tel_clean) == 9: tel_clean = "51" + tel_clean
             
-            url = f"whatsapp://send?phone={tel_clean}&text={quote(msg)}"
+            url = f"whatsapp://send?phone={tel_clean}&text={quote(mensaje_final)}"
             
             return jsonify({'success': True, 'url': url})
 
     except Exception as e:
-        print(f"ERROR INTERNO: {e}")
-        return jsonify({'success': False, 'message': f'Error sistema: {str(e)}'}), 500
-    
+        return jsonify({'success': False, 'message': f'Error interno: {str(e)}'}), 500    
     
