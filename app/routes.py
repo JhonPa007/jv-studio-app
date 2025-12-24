@@ -10148,6 +10148,6 @@ def generar_link_reserva_existente(reserva_id):
 
     except Exception as e:
         print(f"ERROR INTERNO: {e}")
-        return jsonify({'success': False, 'message': f'Error sistema: {str(e)}'}), 500    
+        return jsonify({'success': False, 'message': f'Error sistema: {str(e)}'}), 500
     
     
