@@ -571,7 +571,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const vistaDiv = document.getElementById('detalleReservaVista');
         const formEditar = document.getElementById('formEditarReservaModal');
         
-        // Botones existentes
+        // Botones existentes del HTML
         const btnEditar = document.getElementById('btnModalEditarReserva');
         const btnCancelar = document.getElementById('btnModalCancelarReserva');
         const btnCompletar = document.getElementById('btnModalCompletarReserva');
@@ -579,8 +579,31 @@ document.addEventListener('DOMContentLoaded', function() {
         const btnCancelarEdicion = document.getElementById('btnModalCancelarEdicion');
         const btnGuardar = document.getElementById('btnModalGuardarCambios');
         
-        // 🟢 NUEVO BOTÓN: WhatsApp Recordatorio
-        const btnRecordarWs = document.getElementById('btnModalRecordarWhatsApp');
+        // 🟢 INYECCIÓN DINÁMICA DE BOTONES WHATSAPP
+        // Buscamos el footer para insertar los botones si no existen
+        const modalFooter = document.querySelector('#modalGestionarReserva .modal-footer');
+        
+        // 1. Botón Recordar (Cliente)
+        let btnRecordarWs = document.getElementById('btnDynamicRecordar');
+        if (!btnRecordarWs) {
+            btnRecordarWs = document.createElement('button');
+            btnRecordarWs.id = 'btnDynamicRecordar';
+            btnRecordarWs.className = 'btn btn-success btn-sm shadow-sm me-1';
+            btnRecordarWs.innerHTML = '<i class="fab fa-whatsapp me-1"></i> Recordar';
+            // Insertamos al principio del footer
+            modalFooter.insertBefore(btnRecordarWs, modalFooter.firstChild);
+        }
+
+        // 2. Botón Avisar Staff (Google Calendar)
+        let btnAvisarStaff = document.getElementById('btnDynamicStaff');
+        if (!btnAvisarStaff) {
+            btnAvisarStaff = document.createElement('button');
+            btnAvisarStaff.id = 'btnDynamicStaff';
+            btnAvisarStaff.className = 'btn btn-info btn-sm shadow-sm me-auto text-white';
+            btnAvisarStaff.innerHTML = '<i class="fas fa-user-clock me-1"></i> Avisar Staff';
+            // Insertamos después del de recordar
+            btnRecordarWs.after(btnAvisarStaff);
+        }
 
         function cambiarModo(modoVista, data = null) {
             if(vistaDiv) vistaDiv.style.display = modoVista ? 'block' : 'none';
@@ -603,11 +626,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (btnCancelarEdicion) btnCancelarEdicion.style.display = modoVista ? 'none' : 'inline-block';
             if (btnGuardar) btnGuardar.style.display = modoVista ? 'none' : 'inline-block';
 
-            // 🟢 Lógica de visibilidad del botón WhatsApp Recordar
-            if (btnRecordarWs) {
-                // Solo mostrar si estamos en modo vista y la reserva NO ha finalizado
-                btnRecordarWs.style.display = (modoVista && !esFinal) ? 'inline-block' : 'none';
-            }
+            // 🟢 VISIBILIDAD DE BOTONES WHATSAPP
+            // Solo visibles en modo lectura y si la reserva está activa
+            const showWs = modoVista && !esFinal;
+            if (btnRecordarWs) btnRecordarWs.style.display = showWs ? 'inline-block' : 'none';
+            if (btnAvisarStaff) btnAvisarStaff.style.display = showWs ? 'inline-block' : 'none';
 
             if (!modoVista && data) {
                  modalTitle.innerHTML = `<i class="fas fa-edit me-2"></i>Editando Reserva #${data.id}`;
@@ -634,41 +657,48 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 datosReservaActualParaModal = data;
                 if(modalTitle) modalTitle.innerHTML = `<i class="fas fa-calendar-check me-2"></i>Reserva #${data.id}`;
+                
                 if(vistaDiv) {
+                    // Agregamos teléfonos al detalle para referencia visual
+                    const telC = data.tel_cliente || 'Sin registrar';
+                    const telS = data.tel_staff || 'Sin registrar';
+                    
                     vistaDiv.innerHTML = `
-                        <dl class="row">
-                            <dt class="col-4">Estado</dt><dd class="col-8">${data.estado}</dd>
-                            <dt class="col-4">Cliente</dt><dd class="col-8">${data.cliente_nombre_completo}</dd>
+                        <dl class="row mb-0">
+                            <dt class="col-4">Estado</dt><dd class="col-8"><span class="badge bg-secondary">${data.estado}</span></dd>
+                            <dt class="col-4">Cliente</dt><dd class="col-8">${data.cliente_nombre_completo} <small class="text-muted">(${telC})</small></dd>
                             <dt class="col-4">Servicio</dt><dd class="col-8">${data.servicio_nombre}</dd>
-                            <dt class="col-4">Hora</dt><dd class="col-8">${new Date(data.fecha_hora_inicio).toLocaleString()}</dd>
+                            <dt class="col-4">Hora</dt><dd class="col-8 fw-bold">${new Date(data.fecha_hora_inicio).toLocaleString()}</dd>
+                            <dt class="col-4">Staff</dt><dd class="col-8">${data.empleado_nombre || 'N/A'} <small class="text-muted">(${telS})</small></dd>
                         </dl>`;
                 }
                 if(btnVenta) btnVenta.href = `{{ url_for('main.nueva_venta') }}?reserva_id=${reservaId}`;
                 
-                // 🟢 CONFIGURACIÓN DEL EVENTO CLICK PARA WHATSAPP
-                if (btnRecordarWs) {
-                    btnRecordarWs.onclick = function() {
-                        const originalHtml = this.innerHTML;
-                        this.disabled = true;
-                        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
-                        
-                        // Llamada a la API para obtener el link
-                        fetch(`/api/reservas/${reservaId}/whatsapp-link?tipo=recordatorio`)
-                            .then(r => r.json())
-                            .then(resp => {
-                                if (resp.success && resp.url) {
-                                    window.open(resp.url, '_blank');
-                                } else {
-                                    alert("No se pudo generar el enlace: " + (resp.message || "Error desconocido"));
-                                }
-                            })
-                            .catch(err => alert("Error de conexión al generar enlace"))
-                            .finally(() => {
-                                this.disabled = false;
-                                this.innerHTML = originalHtml;
-                            });
-                    };
-                }
+                // 🟢 EVENTO CLICK: RECORDAR CLIENTE
+                btnRecordarWs.onclick = function() {
+                    const originalHtml = this.innerHTML;
+                    this.disabled = true; this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
+                    fetch(`/api/reservas/${reservaId}/whatsapp-link?tipo=recordatorio`)
+                        .then(r => r.json())
+                        .then(resp => {
+                            if (resp.success) window.open(resp.url, '_blank');
+                            else alert("Error: " + resp.message);
+                        })
+                        .finally(() => { this.disabled = false; this.innerHTML = originalHtml; });
+                };
+
+                // 🟢 EVENTO CLICK: AVISAR STAFF (Calendario)
+                btnAvisarStaff.onclick = function() {
+                    const originalHtml = this.innerHTML;
+                    this.disabled = true; this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
+                    fetch(`/api/reservas/${reservaId}/whatsapp-link?tipo=aviso_staff`)
+                        .then(r => r.json())
+                        .then(resp => {
+                            if (resp.success) window.open(resp.url, '_blank');
+                            else alert("Error: " + resp.message);
+                        })
+                        .finally(() => { this.disabled = false; this.innerHTML = originalHtml; });
+                };
 
                 cambiarModo(true, data);
             });
@@ -677,13 +707,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (btnCancelarEdicion) btnCancelarEdicion.onclick = () => cambiarModo(true, datosReservaActualParaModal);
         
         if (btnCancelar) btnCancelar.onclick = () => { 
-             if(confirm('¿Cancelar?')) fetch(`/reservas/cancelar/${reservaId}`, {method:'POST'}).then(()=>{ modalGestionarInstancia.hide(); actualizarAgenda(); }); 
+             if(confirm('¿Cancelar reserva?')) fetch(`/reservas/cancelar/${reservaId}`, {method:'POST'}).then(()=>{ modalGestionarInstancia.hide(); actualizarAgenda(); }); 
         };
         if (btnCompletar) btnCompletar.onclick = () => {
-             if(confirm('¿Completar?')) fetch(`/api/reservas/${reservaId}/completar`, {method:'POST'}).then(()=>{ modalGestionarInstancia.hide(); actualizarAgenda(); });
+             if(confirm('¿Marcar como completada?')) fetch(`/api/reservas/${reservaId}/completar`, {method:'POST'}).then(()=>{ modalGestionarInstancia.hide(); actualizarAgenda(); });
         };
     }
-    
+        
     document.getElementById('formEditarReservaModal')?.addEventListener('submit', function(e) {
         e.preventDefault();
         fetch(`/reservas/editar/${datosReservaActualParaModal.id}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(Object.fromEntries(new FormData(this))) })
