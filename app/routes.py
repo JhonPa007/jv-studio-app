@@ -10067,19 +10067,26 @@ def generar_link_reserva_existente(reserva_id):
             # 2. Configurar según el tipo de mensaje
             telefono = None
             tpl_tipo = 'recordatorio'
-            extra_context = {}
+            
+            # Inicializamos link_calendar vacío por defecto para evitar KeyError
+            extra_context = {'link_calendar': ''} 
 
             if tipo == 'aviso_staff':
                 telefono = res['tel_staff']
                 tpl_tipo = 'aviso_staff'
-                # Generar Link Mágico de Calendario
-                link_cal = generar_link_google_calendar(
-                    titulo=f"Cita: {res['cliente']} - {res['servicio']}",
-                    inicio=res['fecha_hora_inicio'],
-                    fin=res['fecha_hora_fin'],
-                    detalle=f"Servicio: {res['servicio']}\nCliente: {res['cliente']}\nNotas: {res['notas_cliente'] or ''}"
-                )
-                extra_context['link_calendar'] = link_cal
+                
+                # Generar Link Mágico de Calendario SOLO para staff
+                try:
+                    link_cal = generar_link_google_calendar(
+                        titulo=f"Cita: {res['cliente']} - {res['servicio']}",
+                        inicio=res['fecha_hora_inicio'],
+                        fin=res['fecha_hora_fin'],
+                        detalle=f"Servicio: {res['servicio']}\nCliente: {res['cliente']}\nNotas: {res['notas_cliente'] or ''}"
+                    )
+                    extra_context['link_calendar'] = link_cal
+                except Exception as e_cal:
+                    current_app.logger.error(f"Error generando link calendar: {e_cal}")
+                    extra_context['link_calendar'] = "(Error generando link)"
             else:
                 telefono = res['tel_cliente']
                 tpl_tipo = 'recordatorio'
@@ -10087,28 +10094,42 @@ def generar_link_reserva_existente(reserva_id):
             if not telefono: 
                 return jsonify({'success': False, 'message': 'El destinatario no tiene teléfono registrado'}), 400
 
-            # 3. Buscar y Procesar Plantilla
+            # 3. Buscar Plantilla
             cursor.execute("SELECT contenido FROM plantillas_whatsapp WHERE tipo = %s", (tpl_tipo,))
             tpl = cursor.fetchone()
             
-            # Plantilla por defecto si falla la BD
-            texto_base = tpl['contenido'] if tpl else "Hola, recordatorio de cita: {servicio} el {fecha} a las {hora}."
+            # Plantilla por defecto si no existe en BD
+            if not tpl:
+                if tpl_tipo == 'aviso_staff':
+                    texto_base = "Nueva cita: {cliente} - {servicio} a las {hora}. {link_calendar}"
+                else:
+                    texto_base = "Hola {cliente}, recuerda tu cita de {servicio} el {fecha} a las {hora}."
+            else:
+                texto_base = tpl['contenido']
             
             # Limpiar saltos de línea (%0A -> \n)
             texto_limpio = texto_base.replace('%0A', '\n').replace('\\n', '\n')
 
-            # Rellenar datos
-            msg = texto_limpio.format(
-                cliente=res['cliente'],
-                staff=res['staff'],
-                servicio=res['servicio'],
-                fecha=res['fecha_hora_inicio'].strftime('%d/%m/%Y'),
-                hora=res['fecha_hora_inicio'].strftime('%I:%M %p'),
-                **extra_context # Inyecta link_calendar si existe
-            )
+            # 4. Rellenar datos (Usando .format seguro)
+            # Usamos un diccionario completo con todos los datos posibles
+            datos_relleno = {
+                'cliente': res['cliente'],
+                'staff': res['staff'],
+                'servicio': res['servicio'],
+                'fecha': res['fecha_hora_inicio'].strftime('%d/%m/%Y'),
+                'hora': res['fecha_hora_inicio'].strftime('%I:%M %p'),
+                'link_calendar': extra_context['link_calendar'] # Aquí está la clave que faltaba
+            }
+
+            try:
+                msg = texto_limpio.format(**datos_relleno)
+            except KeyError as e_key:
+                # Si la plantilla pide algo que no tenemos, fallback seguro
+                return jsonify({'success': False, 'message': f"Error en plantilla: falta la variable {str(e_key)}"}), 500
             
-            # 4. Generar Link
-            tel_clean = str(telefono).strip().replace('.0', '')
+            # 5. Generar Link WhatsApp
+            # Limpiar teléfono (.0 y espacios)
+            tel_clean = str(telefono).strip().replace(' ', '').replace('.0', '')
             if len(tel_clean) == 9: tel_clean = "51" + tel_clean
             
             url = f"whatsapp://send?phone={tel_clean}&text={quote(msg)}"
@@ -10117,4 +10138,7 @@ def generar_link_reserva_existente(reserva_id):
 
     except Exception as e:
         current_app.logger.error(f"Error generando link WhatsApp: {e}")
-        return jsonify({'success': False, 'message': 'Error interno al generar enlace'}), 500
+        return jsonify({'success': False, 'message': f'Error interno: {str(e)}'}), 500    
+    
+    
+    
