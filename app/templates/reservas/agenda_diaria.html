@@ -578,6 +578,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const btnVenta = document.getElementById('btnModalRegistrarVenta');
         const btnCancelarEdicion = document.getElementById('btnModalCancelarEdicion');
         const btnGuardar = document.getElementById('btnModalGuardarCambios');
+
+        const footer = document.querySelector('#modalGestionarReserva .modal-footer');
+        const btnPrevioRec = document.getElementById('btnDynamicRecordar');
+        const btnPrevioStaff = document.getElementById('btnDynamicStaff');
+        if (btnPrevioRec) btnPrevioRec.remove();
+        if (btnPrevioStaff) btnPrevioStaff.remove();
         
         // 🟢 INYECCIÓN DINÁMICA DE BOTONES WHATSAPP
         // Buscamos el footer para insertar los botones si no existen
