@@ -10039,14 +10039,14 @@ def generar_link_google_calendar(titulo, inicio, fin, detalle, ubicacion="JV Stu
 def generar_link_reserva_existente(reserva_id):
     """
     Genera links de WhatsApp.
-    Versión corregida: Maneja Staff N/A y asegura variables.
+    Versión corregida: Maneja Staff N/A (Null) y asegura variables para evitar KeyError.
     """
     tipo = request.args.get('tipo', 'recordatorio') 
     db = get_db()
     
     try:
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # 1. Obtener datos (Usamos LEFT JOIN para que no falle si falta empleado)
+            # 1. Obtener datos (Usamos LEFT JOIN para que no falle si falta empleado o cliente)
             cursor.execute("""
                 SELECT 
                     r.id, r.fecha_hora_inicio, r.fecha_hora_fin, r.notas_cliente,
@@ -10064,8 +10064,7 @@ def generar_link_reserva_existente(reserva_id):
             if not res: 
                 return jsonify({'success': False, 'message': 'Reserva no encontrada'}), 404
 
-            # 2. Preparar Datos Seguros (Evita Nulos)
-            # Si staff es None, ponemos un texto por defecto
+            # 2. Preparar Datos Seguros (Evita Nulos/None)
             staff_nombre = res['staff'] if res['staff'] else "El Equipo"
             cliente_nombre = res['cliente'] if res['cliente'] else "Cliente"
             servicio_nombre = res['servicio'] if res['servicio'] else "Servicio"
@@ -10075,16 +10074,16 @@ def generar_link_reserva_existente(reserva_id):
             plantilla_nombre = ""
             link_cal_final = "" # IMPORTANTE: Empieza vacía siempre
 
-            # 3. Lógica según botón
+            # 3. Lógica según botón presionado
             if tipo == 'aviso_staff':
-                # Validar si existe Staff real
+                # Validar si existe Staff real y tiene teléfono
                 if not res['tel_staff']:
-                     return jsonify({'success': False, 'message': 'Esta reserva no tiene un colaborador asignado con teléfono.'}), 400
+                     return jsonify({'success': False, 'message': 'Esta reserva no tiene un colaborador asignado o no tiene teléfono registrado.'}), 400
                 
                 telefono_destino = res['tel_staff']
                 plantilla_nombre = 'aviso_staff'
                 
-                # Generar link calendario
+                # Generar link calendario solo para el staff
                 try:
                     link_cal_final = generar_link_google_calendar(
                         titulo=f"Cita: {cliente_nombre} - {servicio_nombre}",
@@ -10101,7 +10100,7 @@ def generar_link_reserva_existente(reserva_id):
                     
                 telefono_destino = res['tel_cliente']
                 plantilla_nombre = 'recordatorio'
-                link_cal_final = ""
+                link_cal_final = "" # Al cliente NO le mandamos link interno
 
             # 4. Obtener Plantilla
             cursor.execute("SELECT contenido FROM plantillas_whatsapp WHERE tipo = %s", (plantilla_nombre,))
@@ -10110,6 +10109,7 @@ def generar_link_reserva_existente(reserva_id):
             if tpl_row:
                 texto_plantilla = tpl_row['contenido']
             else:
+                # Fallback si no hay plantilla en BD
                 texto_plantilla = "Hola {cliente}, cita de {servicio} el {fecha} a las {hora}."
 
             texto_plantilla = texto_plantilla.replace('%0A', '\n').replace('\\n', '\n')
@@ -10121,7 +10121,7 @@ def generar_link_reserva_existente(reserva_id):
                 'servicio': servicio_nombre,
                 'fecha': res['fecha_hora_inicio'].strftime('%d/%m/%Y'),
                 'hora': res['fecha_hora_inicio'].strftime('%I:%M %p'),
-                'link_calendar': link_cal_final 
+                'link_calendar': link_cal_final  # <--- Siempre presente
             }
 
             try:
@@ -10129,7 +10129,7 @@ def generar_link_reserva_existente(reserva_id):
             except KeyError as e:
                 return jsonify({'success': False, 'message': f"Error en plantilla: Falta variable {str(e)}"}), 500
 
-            # 6. Generar URL
+            # 6. Generar URL WhatsApp
             tel_clean = str(telefono_destino).strip().replace(' ', '').replace('.0', '')
             if len(tel_clean) == 9: tel_clean = "51" + tel_clean
             
@@ -10137,7 +10137,7 @@ def generar_link_reserva_existente(reserva_id):
             return jsonify({'success': True, 'url': url})
 
     except Exception as e:
-        return jsonify({'success': False, 'message': f'Error interno: {str(e)}'}), 500    
-
+        return jsonify({'success': False, 'message': f'Error interno: {str(e)}'}), 500
+    
 
     

@@ -581,7 +581,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const btnCancelarEdicion = document.getElementById('btnModalCancelarEdicion');
         const btnGuardar = document.getElementById('btnModalGuardarCambios');
         
-        // 🟢 1. LIMPIEZA DE BOTONES ANTIGUOS (Para no tener duplicados)
+        // 🟢 1. LIMPIEZA DE BOTONES ANTIGUOS (SOLUCIÓN A DUPLICADOS)
         const btnPrevioRec = document.getElementById('btnDynamicRecordar');
         const btnPrevioStaff = document.getElementById('btnDynamicStaff');
         if (btnPrevioRec) btnPrevioRec.remove();
@@ -593,6 +593,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btnRecordarWs.id = 'btnDynamicRecordar';
         btnRecordarWs.className = 'btn btn-success btn-sm shadow-sm me-1';
         btnRecordarWs.innerHTML = '<i class="fab fa-whatsapp me-1"></i> Recordar';
+        // Insertamos al principio del footer
         modalFooter.insertBefore(btnRecordarWs, modalFooter.firstChild);
 
         // Botón Staff
@@ -600,6 +601,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btnAvisarStaff.id = 'btnDynamicStaff';
         btnAvisarStaff.className = 'btn btn-info btn-sm shadow-sm me-auto text-white';
         btnAvisarStaff.innerHTML = '<i class="fas fa-user-clock me-1"></i> Avisar Staff';
+        // Insertamos después del de recordar
         btnRecordarWs.after(btnAvisarStaff);
 
         function cambiarModo(modoVista, data = null) {
@@ -686,8 +688,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // 🟢 CLICK: AVISAR STAFF
                 btnAvisarStaff.onclick = () => {
-                    // Validación visual rápida
-                    if (!data.empleado_nombre) {
+                    // Validación visual rápida para no llamar a la API si ya sabemos que no hay staff
+                    if (!data.empleado_id || data.empleado_nombre === 'Sin asignar' || data.empleado_nombre === 'N/A') {
                         alert("⚠️ No puedes avisar al staff porque esta reserva no tiene colaborador asignado.");
                         return;
                     }
@@ -715,7 +717,8 @@ document.addEventListener('DOMContentLoaded', function() {
              if(confirm('¿Completar?')) fetch(`/api/reservas/${reservaId}/completar`, {method:'POST'}).then(()=>{ modalGestionarInstancia.hide(); actualizarAgenda(); });
         };
     }
-        
+
+
     document.getElementById('formEditarReservaModal')?.addEventListener('submit', function(e) {
         e.preventDefault();
         fetch(`/reservas/editar/${datosReservaActualParaModal.id}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(Object.fromEntries(new FormData(this))) })
