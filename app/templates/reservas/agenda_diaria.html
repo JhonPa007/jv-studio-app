@@ -567,60 +567,50 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     function abrirModalGestionarReserva(reservaId) {
+        // ... selectores básicos ...
         const modalTitle = document.getElementById('modalGestionarReservaLabel');
         const vistaDiv = document.getElementById('detalleReservaVista');
         const formEditar = document.getElementById('formEditarReservaModal');
+        const modalFooter = document.querySelector('#modalGestionarReserva .modal-footer');
         
-        // Botones existentes del HTML
+        // Botones nativos
         const btnEditar = document.getElementById('btnModalEditarReserva');
         const btnCancelar = document.getElementById('btnModalCancelarReserva');
         const btnCompletar = document.getElementById('btnModalCompletarReserva');
         const btnVenta = document.getElementById('btnModalRegistrarVenta');
         const btnCancelarEdicion = document.getElementById('btnModalCancelarEdicion');
         const btnGuardar = document.getElementById('btnModalGuardarCambios');
-
-        const footer = document.querySelector('#modalGestionarReserva .modal-footer');
+        
+        // 🟢 1. LIMPIEZA DE BOTONES ANTIGUOS (Para no tener duplicados)
         const btnPrevioRec = document.getElementById('btnDynamicRecordar');
         const btnPrevioStaff = document.getElementById('btnDynamicStaff');
         if (btnPrevioRec) btnPrevioRec.remove();
         if (btnPrevioStaff) btnPrevioStaff.remove();
-        
-        // 🟢 INYECCIÓN DINÁMICA DE BOTONES WHATSAPP
-        // Buscamos el footer para insertar los botones si no existen
-        const modalFooter = document.querySelector('#modalGestionarReserva .modal-footer');
-        
-        // 1. Botón Recordar (Cliente)
-        let btnRecordarWs = document.getElementById('btnDynamicRecordar');
-        if (!btnRecordarWs) {
-            btnRecordarWs = document.createElement('button');
-            btnRecordarWs.id = 'btnDynamicRecordar';
-            btnRecordarWs.className = 'btn btn-success btn-sm shadow-sm me-1';
-            btnRecordarWs.innerHTML = '<i class="fab fa-whatsapp me-1"></i> Recordar';
-            // Insertamos al principio del footer
-            modalFooter.insertBefore(btnRecordarWs, modalFooter.firstChild);
-        }
 
-        // 2. Botón Avisar Staff (Google Calendar)
-        let btnAvisarStaff = document.getElementById('btnDynamicStaff');
-        if (!btnAvisarStaff) {
-            btnAvisarStaff = document.createElement('button');
-            btnAvisarStaff.id = 'btnDynamicStaff';
-            btnAvisarStaff.className = 'btn btn-info btn-sm shadow-sm me-auto text-white';
-            btnAvisarStaff.innerHTML = '<i class="fas fa-user-clock me-1"></i> Avisar Staff';
-            // Insertamos después del de recordar
-            btnRecordarWs.after(btnAvisarStaff);
-        }
+        // 🟢 2. CREACIÓN DE NUEVOS BOTONES
+        // Botón Recordar
+        const btnRecordarWs = document.createElement('button');
+        btnRecordarWs.id = 'btnDynamicRecordar';
+        btnRecordarWs.className = 'btn btn-success btn-sm shadow-sm me-1';
+        btnRecordarWs.innerHTML = '<i class="fab fa-whatsapp me-1"></i> Recordar';
+        modalFooter.insertBefore(btnRecordarWs, modalFooter.firstChild);
+
+        // Botón Staff
+        const btnAvisarStaff = document.createElement('button');
+        btnAvisarStaff.id = 'btnDynamicStaff';
+        btnAvisarStaff.className = 'btn btn-info btn-sm shadow-sm me-auto text-white';
+        btnAvisarStaff.innerHTML = '<i class="fas fa-user-clock me-1"></i> Avisar Staff';
+        btnRecordarWs.after(btnAvisarStaff);
 
         function cambiarModo(modoVista, data = null) {
+            // ... lógica de visualización ...
             if(vistaDiv) vistaDiv.style.display = modoVista ? 'block' : 'none';
             if(formEditar) formEditar.style.display = modoVista ? 'none' : 'block';
             
             let esFinal = false;
-            let estadoActual = '';
             if (data) {
-                estadoActual = data.estado || '';
-                const estadosFinales = ['Completada', 'Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio'];
-                esFinal = estadosFinales.some(s => estadoActual.includes(s));
+                const est = data.estado || '';
+                esFinal = ['Completada', 'Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio'].some(s => est.includes(s));
             } else { esFinal = true; }
 
             const mostrarAcciones = modoVista && !esFinal;
@@ -628,17 +618,17 @@ document.addEventListener('DOMContentLoaded', function() {
             if (btnEditar) btnEditar.style.display = mostrarAcciones ? 'inline-block' : 'none';
             if (btnCancelar) btnCancelar.style.display = mostrarAcciones ? 'inline-block' : 'none';
             if (btnCompletar) btnCompletar.style.display = mostrarAcciones ? 'inline-block' : 'none';
-            if (btnVenta) btnVenta.style.display = (data && estadoActual === 'Completada') ? 'inline-block' : 'none';
+            if (btnVenta) btnVenta.style.display = (data && data.estado === 'Completada') ? 'inline-block' : 'none';
             if (btnCancelarEdicion) btnCancelarEdicion.style.display = modoVista ? 'none' : 'inline-block';
             if (btnGuardar) btnGuardar.style.display = modoVista ? 'none' : 'inline-block';
 
-            // 🟢 VISIBILIDAD DE BOTONES WHATSAPP
-            // Solo visibles en modo lectura y si la reserva está activa
+            // Mostrar Whatsapp solo en modo vista y activa
             const showWs = modoVista && !esFinal;
-            if (btnRecordarWs) btnRecordarWs.style.display = showWs ? 'inline-block' : 'none';
-            if (btnAvisarStaff) btnAvisarStaff.style.display = showWs ? 'inline-block' : 'none';
+            btnRecordarWs.style.display = showWs ? 'inline-block' : 'none';
+            btnAvisarStaff.style.display = showWs ? 'inline-block' : 'none';
 
             if (!modoVista && data) {
+                 // ... lógica de poblado del formulario de edición ...
                  modalTitle.innerHTML = `<i class="fas fa-edit me-2"></i>Editando Reserva #${data.id}`;
                  document.getElementById('editReservaId').value = data.id;
                  const poblar = (id, items, val) => {
@@ -665,45 +655,51 @@ document.addEventListener('DOMContentLoaded', function() {
                 if(modalTitle) modalTitle.innerHTML = `<i class="fas fa-calendar-check me-2"></i>Reserva #${data.id}`;
                 
                 if(vistaDiv) {
-                    // Agregamos teléfonos al detalle para referencia visual
-                    const telC = data.tel_cliente || 'Sin registrar';
-                    const telS = data.tel_staff || 'Sin registrar';
+                    // Mostrar nombres y teléfonos para debug visual
+                    const telC = data.tel_cliente || 'Sin cel';
+                    const staffName = data.empleado_nombre || 'Sin asignar';
                     
                     vistaDiv.innerHTML = `
                         <dl class="row mb-0">
-                            <dt class="col-4">Estado</dt><dd class="col-8"><span class="badge bg-secondary">${data.estado}</span></dd>
-                            <dt class="col-4">Cliente</dt><dd class="col-8">${data.cliente_nombre_completo} <small class="text-muted">(${telC})</small></dd>
+                            <dt class="col-4">Estado</dt><dd class="col-8">${data.estado}</dd>
+                            <dt class="col-4">Cliente</dt><dd class="col-8">${data.cliente_nombre_completo}</dd>
                             <dt class="col-4">Servicio</dt><dd class="col-8">${data.servicio_nombre}</dd>
                             <dt class="col-4">Hora</dt><dd class="col-8 fw-bold">${new Date(data.fecha_hora_inicio).toLocaleString()}</dd>
-                            <dt class="col-4">Staff</dt><dd class="col-8">${data.empleado_nombre || 'N/A'} <small class="text-muted">(${telS})</small></dd>
+                            <dt class="col-4">Staff</dt><dd class="col-8 text-primary">${staffName}</dd>
                         </dl>`;
                 }
-                if(btnVenta) btnVenta.href = `{{ url_for('main.nueva_venta') }}?reserva_id=${reservaId}`;
                 
-                // 🟢 EVENTO CLICK: RECORDAR CLIENTE
-                btnRecordarWs.onclick = function() {
-                    const originalHtml = this.innerHTML;
-                    this.disabled = true; this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
+                if(btnVenta) btnVenta.href = `{{ url_for('main.nueva_venta') }}?reserva_id=${reservaId}`;
+
+                // 🟢 CLICK: RECORDAR CLIENTE
+                btnRecordarWs.onclick = () => {
+                    const orig = btnRecordarWs.innerHTML;
+                    btnRecordarWs.disabled = true; btnRecordarWs.innerHTML = '...';
                     fetch(`/api/reservas/${reservaId}/whatsapp-link?tipo=recordatorio`)
                         .then(r => r.json())
-                        .then(resp => {
-                            if (resp.success) window.open(resp.url, '_blank');
-                            else alert("Error: " + resp.message);
+                        .then(d => {
+                            if(d.success) window.open(d.url, '_blank');
+                            else alert("Aviso: " + d.message);
                         })
-                        .finally(() => { this.disabled = false; this.innerHTML = originalHtml; });
+                        .finally(() => { btnRecordarWs.disabled = false; btnRecordarWs.innerHTML = orig; });
                 };
 
-                // 🟢 EVENTO CLICK: AVISAR STAFF (Calendario)
-                btnAvisarStaff.onclick = function() {
-                    const originalHtml = this.innerHTML;
-                    this.disabled = true; this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
+                // 🟢 CLICK: AVISAR STAFF
+                btnAvisarStaff.onclick = () => {
+                    // Validación visual rápida
+                    if (!data.empleado_nombre) {
+                        alert("⚠️ No puedes avisar al staff porque esta reserva no tiene colaborador asignado.");
+                        return;
+                    }
+                    const orig = btnAvisarStaff.innerHTML;
+                    btnAvisarStaff.disabled = true; btnAvisarStaff.innerHTML = '...';
                     fetch(`/api/reservas/${reservaId}/whatsapp-link?tipo=aviso_staff`)
                         .then(r => r.json())
-                        .then(resp => {
-                            if (resp.success) window.open(resp.url, '_blank');
-                            else alert("Error: " + resp.message);
+                        .then(d => {
+                            if(d.success) window.open(d.url, '_blank');
+                            else alert("Aviso: " + d.message);
                         })
-                        .finally(() => { this.disabled = false; this.innerHTML = originalHtml; });
+                        .finally(() => { btnAvisarStaff.disabled = false; btnAvisarStaff.innerHTML = orig; });
                 };
 
                 cambiarModo(true, data);
@@ -711,12 +707,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (btnEditar) btnEditar.onclick = () => cambiarModo(false, datosReservaActualParaModal);
         if (btnCancelarEdicion) btnCancelarEdicion.onclick = () => cambiarModo(true, datosReservaActualParaModal);
-        
+        // ... listeners de cancelar/completar ...
         if (btnCancelar) btnCancelar.onclick = () => { 
-             if(confirm('¿Cancelar reserva?')) fetch(`/reservas/cancelar/${reservaId}`, {method:'POST'}).then(()=>{ modalGestionarInstancia.hide(); actualizarAgenda(); }); 
+             if(confirm('¿Cancelar?')) fetch(`/reservas/cancelar/${reservaId}`, {method:'POST'}).then(()=>{ modalGestionarInstancia.hide(); actualizarAgenda(); }); 
         };
         if (btnCompletar) btnCompletar.onclick = () => {
-             if(confirm('¿Marcar como completada?')) fetch(`/api/reservas/${reservaId}/completar`, {method:'POST'}).then(()=>{ modalGestionarInstancia.hide(); actualizarAgenda(); });
+             if(confirm('¿Completar?')) fetch(`/api/reservas/${reservaId}/completar`, {method:'POST'}).then(()=>{ modalGestionarInstancia.hide(); actualizarAgenda(); });
         };
     }
         

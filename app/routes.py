@@ -10037,12 +10037,16 @@ def generar_link_google_calendar(titulo, inicio, fin, detalle, ubicacion="JV Stu
 @main_bp.route('/api/reservas/<int:reserva_id>/whatsapp-link', methods=['GET'])
 @login_required
 def generar_link_reserva_existente(reserva_id):
+    """
+    Genera links de WhatsApp.
+    Versión corregida: Maneja Staff N/A y asegura variables.
+    """
     tipo = request.args.get('tipo', 'recordatorio') 
     db = get_db()
     
     try:
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # 1. Obtener datos de la reserva
+            # 1. Obtener datos (Usamos LEFT JOIN para que no falle si falta empleado)
             cursor.execute("""
                 SELECT 
                     r.id, r.fecha_hora_inicio, r.fecha_hora_fin, r.notas_cliente,
@@ -10050,84 +10054,90 @@ def generar_link_reserva_existente(reserva_id):
                     s.nombre as servicio, 
                     e.nombres as staff, e.telefono as tel_staff
                 FROM reservas r
-                JOIN clientes c ON r.cliente_id = c.id
-                JOIN servicios s ON r.servicio_id = s.id
-                JOIN empleados e ON r.empleado_id = e.id
+                LEFT JOIN clientes c ON r.cliente_id = c.id
+                LEFT JOIN servicios s ON r.servicio_id = s.id
+                LEFT JOIN empleados e ON r.empleado_id = e.id
                 WHERE r.id = %s
             """, (reserva_id,))
             res = cursor.fetchone()
             
-            if not res: return jsonify({'success': False, 'message': 'Reserva no encontrada'}), 404
+            if not res: 
+                return jsonify({'success': False, 'message': 'Reserva no encontrada'}), 404
 
-            # 2. Preparar variables BASE (Inicializar todo para evitar errores)
+            # 2. Preparar Datos Seguros (Evita Nulos)
+            # Si staff es None, ponemos un texto por defecto
+            staff_nombre = res['staff'] if res['staff'] else "El Equipo"
+            cliente_nombre = res['cliente'] if res['cliente'] else "Cliente"
+            servicio_nombre = res['servicio'] if res['servicio'] else "Servicio"
+            
+            # Variables de control
             telefono_destino = ""
             plantilla_nombre = ""
-            link_cal_final = ""  # <--- IMPORTANTE: Empieza vacía, no nula.
+            link_cal_final = "" # IMPORTANTE: Empieza vacía siempre
 
-            # 3. Lógica según el botón presionado
+            # 3. Lógica según botón
             if tipo == 'aviso_staff':
+                # Validar si existe Staff real
+                if not res['tel_staff']:
+                     return jsonify({'success': False, 'message': 'Esta reserva no tiene un colaborador asignado con teléfono.'}), 400
+                
                 telefono_destino = res['tel_staff']
                 plantilla_nombre = 'aviso_staff'
-                # Calcular Link de Google Calendar
+                
+                # Generar link calendario
                 try:
                     link_cal_final = generar_link_google_calendar(
-                        titulo=f"Cita: {res['cliente']} - {res['servicio']}",
+                        titulo=f"Cita: {cliente_nombre} - {servicio_nombre}",
                         inicio=res['fecha_hora_inicio'],
                         fin=res['fecha_hora_fin'],
-                        detalle=f"Servicio: {res['servicio']}\nCliente: {res['cliente']}\nNotas: {res['notas_cliente'] or 'Sin notas'}"
+                        detalle=f"Servicio: {servicio_nombre}\nCliente: {cliente_nombre}\nNotas: {res['notas_cliente'] or ''}"
                     )
-                except Exception as e:
-                    print(f"Error generando calendario: {e}")
-                    link_cal_final = " (Error enlace) "
+                except:
+                    link_cal_final = ""
             else:
-                # Es Recordatorio Cliente
+                # Recordatorio Cliente
+                if not res['tel_cliente']:
+                    return jsonify({'success': False, 'message': 'El cliente no tiene teléfono registrado.'}), 400
+                    
                 telefono_destino = res['tel_cliente']
                 plantilla_nombre = 'recordatorio'
-                link_cal_final = "" # El cliente no recibe link de calendario interno
+                link_cal_final = ""
 
-            # 4. Validar teléfono
-            if not telefono_destino:
-                return jsonify({'success': False, 'message': 'El destinatario no tiene teléfono registrado'}), 400
-
-            # 5. Obtener Plantilla de BD
+            # 4. Obtener Plantilla
             cursor.execute("SELECT contenido FROM plantillas_whatsapp WHERE tipo = %s", (plantilla_nombre,))
             tpl_row = cursor.fetchone()
             
-            # Plantilla por defecto (Fallback)
             if tpl_row:
                 texto_plantilla = tpl_row['contenido']
             else:
                 texto_plantilla = "Hola {cliente}, cita de {servicio} el {fecha} a las {hora}."
 
-            # Limpiar saltos de línea de la BD (%0A -> \n)
             texto_plantilla = texto_plantilla.replace('%0A', '\n').replace('\\n', '\n')
 
-            # 6. RELLENAR DATOS (Aquí estaba el error)
-            # Creamos un diccionario con TODAS las posibles variables que la plantilla podría pedir
+            # 5. Rellenar Datos (BLINDADO CONTRA ERROR LINK_CALENDAR)
             datos_seguros = {
-                'cliente': res['cliente'] or "",
-                'staff': res['staff'] or "",
-                'servicio': res['servicio'] or "",
+                'cliente': cliente_nombre,
+                'staff': staff_nombre,
+                'servicio': servicio_nombre,
                 'fecha': res['fecha_hora_inicio'].strftime('%d/%m/%Y'),
                 'hora': res['fecha_hora_inicio'].strftime('%I:%M %p'),
-                'link_calendar': link_cal_final # <--- SIEMPRE presente, aunque sea ""
+                'link_calendar': link_cal_final 
             }
 
             try:
-                # El método .format usará las claves del diccionario
-                mensaje_final = texto_plantilla.format(**datos_seguros)
+                msg = texto_plantilla.format(**datos_seguros)
             except KeyError as e:
-                # Si esto salta, es porque la plantilla pide una variable que NO está en la lista de arriba (ej: {precio})
-                return jsonify({'success': False, 'message': f"Error: La plantilla pide una variable desconocida: {str(e)}"}), 500
+                return jsonify({'success': False, 'message': f"Error en plantilla: Falta variable {str(e)}"}), 500
 
-            # 7. Generar URL WhatsApp
+            # 6. Generar URL
             tel_clean = str(telefono_destino).strip().replace(' ', '').replace('.0', '')
             if len(tel_clean) == 9: tel_clean = "51" + tel_clean
             
-            url = f"whatsapp://send?phone={tel_clean}&text={quote(mensaje_final)}"
-            
+            url = f"whatsapp://send?phone={tel_clean}&text={quote(msg)}"
             return jsonify({'success': True, 'url': url})
 
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error interno: {str(e)}'}), 500    
+
+
     
