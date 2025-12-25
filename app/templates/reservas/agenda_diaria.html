@@ -567,13 +567,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     function abrirModalGestionarReserva(reservaId) {
-        // ... selectores básicos ...
+        // --- 1. Selectores ---
         const modalTitle = document.getElementById('modalGestionarReservaLabel');
         const vistaDiv = document.getElementById('detalleReservaVista');
         const formEditar = document.getElementById('formEditarReservaModal');
         const modalFooter = document.querySelector('#modalGestionarReserva .modal-footer');
         
-        // Botones nativos
+        // Botones nativos del HTML
         const btnEditar = document.getElementById('btnModalEditarReserva');
         const btnCancelar = document.getElementById('btnModalCancelarReserva');
         const btnCompletar = document.getElementById('btnModalCompletarReserva');
@@ -581,34 +581,37 @@ document.addEventListener('DOMContentLoaded', function() {
         const btnCancelarEdicion = document.getElementById('btnModalCancelarEdicion');
         const btnGuardar = document.getElementById('btnModalGuardarCambios');
         
-        // 🟢 1. LIMPIEZA DE BOTONES ANTIGUOS (SOLUCIÓN A DUPLICADOS)
+        // --- 2. 🟢 LIMPIEZA DE BOTONES DUPLICADOS ---
+        // Buscamos si ya existen y los borramos antes de crear nuevos
         const btnPrevioRec = document.getElementById('btnDynamicRecordar');
         const btnPrevioStaff = document.getElementById('btnDynamicStaff');
         if (btnPrevioRec) btnPrevioRec.remove();
         if (btnPrevioStaff) btnPrevioStaff.remove();
 
-        // 🟢 2. CREACIÓN DE NUEVOS BOTONES
-        // Botón Recordar
+        // --- 3. 🟢 CREACIÓN DE NUEVOS BOTONES ---
+        
+        // Botón Recordar (Cliente)
         const btnRecordarWs = document.createElement('button');
         btnRecordarWs.id = 'btnDynamicRecordar';
         btnRecordarWs.className = 'btn btn-success btn-sm shadow-sm me-1';
         btnRecordarWs.innerHTML = '<i class="fab fa-whatsapp me-1"></i> Recordar';
-        // Insertamos al principio del footer
+        // Lo insertamos al inicio del footer
         modalFooter.insertBefore(btnRecordarWs, modalFooter.firstChild);
 
-        // Botón Staff
+        // Botón Avisar Staff (Colaborador)
         const btnAvisarStaff = document.createElement('button');
         btnAvisarStaff.id = 'btnDynamicStaff';
         btnAvisarStaff.className = 'btn btn-info btn-sm shadow-sm me-auto text-white';
         btnAvisarStaff.innerHTML = '<i class="fas fa-user-clock me-1"></i> Avisar Staff';
-        // Insertamos después del de recordar
+        // Lo ponemos después del botón de recordar
         btnRecordarWs.after(btnAvisarStaff);
 
         function cambiarModo(modoVista, data = null) {
-            // ... lógica de visualización ...
+            // Lógica de visualización de divs
             if(vistaDiv) vistaDiv.style.display = modoVista ? 'block' : 'none';
             if(formEditar) formEditar.style.display = modoVista ? 'none' : 'block';
             
+            // Determinar si la reserva está finalizada
             let esFinal = false;
             if (data) {
                 const est = data.estado || '';
@@ -617,6 +620,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const mostrarAcciones = modoVista && !esFinal;
             
+            // Mostrar/Ocultar botones nativos
             if (btnEditar) btnEditar.style.display = mostrarAcciones ? 'inline-block' : 'none';
             if (btnCancelar) btnCancelar.style.display = mostrarAcciones ? 'inline-block' : 'none';
             if (btnCompletar) btnCompletar.style.display = mostrarAcciones ? 'inline-block' : 'none';
@@ -624,13 +628,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (btnCancelarEdicion) btnCancelarEdicion.style.display = modoVista ? 'none' : 'inline-block';
             if (btnGuardar) btnGuardar.style.display = modoVista ? 'none' : 'inline-block';
 
-            // Mostrar Whatsapp solo en modo vista y activa
+            // 🟢 Mostrar Whatsapp solo en modo vista y activa
             const showWs = modoVista && !esFinal;
             btnRecordarWs.style.display = showWs ? 'inline-block' : 'none';
             btnAvisarStaff.style.display = showWs ? 'inline-block' : 'none';
 
             if (!modoVista && data) {
-                 // ... lógica de poblado del formulario de edición ...
+                 // Poblar formulario de edición
                  modalTitle.innerHTML = `<i class="fas fa-edit me-2"></i>Editando Reserva #${data.id}`;
                  document.getElementById('editReservaId').value = data.id;
                  const poblar = (id, items, val) => {
@@ -644,12 +648,15 @@ document.addEventListener('DOMContentLoaded', function() {
                  poblar('editServicioId', todosLosServiciosActivos, data.servicio_id);
                  if(document.getElementById('editFechaHoraInicio')) document.getElementById('editFechaHoraInicio').value = data.fecha_hora_inicio.slice(0, 16);
                  if(document.getElementById('editPrecioCobrado')) document.getElementById('editPrecioCobrado').value = data.precio_cobrado;
+                 if(document.getElementById('editNotasCliente')) document.getElementById('editNotasCliente').value = data.notas_cliente || '';
+                 if(document.getElementById('editNotasInternas')) document.getElementById('editNotasInternas').value = data.notas_internas || '';
             }
         }
         
         cambiarModo(true);
         if(modalGestionarInstancia) modalGestionarInstancia.show();
 
+        // --- 4. Cargar Datos de la API ---
         fetch(`/api/reservas/${reservaId}`)
             .then(r => r.json())
             .then(data => {
@@ -657,8 +664,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 if(modalTitle) modalTitle.innerHTML = `<i class="fas fa-calendar-check me-2"></i>Reserva #${data.id}`;
                 
                 if(vistaDiv) {
-                    // Mostrar nombres y teléfonos para debug visual
-                    const telC = data.tel_cliente || 'Sin cel';
                     const staffName = data.empleado_nombre || 'Sin asignar';
                     
                     vistaDiv.innerHTML = `
@@ -672,6 +677,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 if(btnVenta) btnVenta.href = `{{ url_for('main.nueva_venta') }}?reserva_id=${reservaId}`;
+
+                // --- 5. Configurar Eventos Click ---
 
                 // 🟢 CLICK: RECORDAR CLIENTE
                 btnRecordarWs.onclick = () => {
@@ -688,11 +695,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // 🟢 CLICK: AVISAR STAFF
                 btnAvisarStaff.onclick = () => {
-                    // Validación visual rápida para no llamar a la API si ya sabemos que no hay staff
-                    if (!data.empleado_id || data.empleado_nombre === 'Sin asignar' || data.empleado_nombre === 'N/A') {
+                    // Validación en Frontend para evitar llamadas innecesarias
+                    // Verificamos si empleado_id es nulo o el nombre es 'Sin asignar'
+                    if (!data.empleado_id || data.empleado_nombre === 'Sin asignar' || data.empleado_nombre === 'N/A' || !data.empleado_nombre) {
                         alert("⚠️ No puedes avisar al staff porque esta reserva no tiene colaborador asignado.");
                         return;
                     }
+                    
                     const orig = btnAvisarStaff.innerHTML;
                     btnAvisarStaff.disabled = true; btnAvisarStaff.innerHTML = '...';
                     fetch(`/api/reservas/${reservaId}/whatsapp-link?tipo=aviso_staff`)
@@ -707,9 +716,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 cambiarModo(true, data);
             });
 
+        // Listeners de botones nativos
         if (btnEditar) btnEditar.onclick = () => cambiarModo(false, datosReservaActualParaModal);
         if (btnCancelarEdicion) btnCancelarEdicion.onclick = () => cambiarModo(true, datosReservaActualParaModal);
-        // ... listeners de cancelar/completar ...
         if (btnCancelar) btnCancelar.onclick = () => { 
              if(confirm('¿Cancelar?')) fetch(`/reservas/cancelar/${reservaId}`, {method:'POST'}).then(()=>{ modalGestionarInstancia.hide(); actualizarAgenda(); }); 
         };

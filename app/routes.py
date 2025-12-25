@@ -10039,14 +10039,14 @@ def generar_link_google_calendar(titulo, inicio, fin, detalle, ubicacion="JV Stu
 def generar_link_reserva_existente(reserva_id):
     """
     Genera links de WhatsApp.
-    Versión corregida: Maneja Staff N/A (Null) y asegura variables para evitar KeyError.
+    CORRECCIÓN: Maneja Staff vacíos y asegura que 'link_calendar' siempre exista.
     """
     tipo = request.args.get('tipo', 'recordatorio') 
     db = get_db()
     
     try:
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # 1. Obtener datos (Usamos LEFT JOIN para que no falle si falta empleado o cliente)
+            # 1. Obtener datos (Usamos LEFT JOIN para evitar fallos si faltan datos)
             cursor.execute("""
                 SELECT 
                     r.id, r.fecha_hora_inicio, r.fecha_hora_fin, r.notas_cliente,
@@ -10064,15 +10064,15 @@ def generar_link_reserva_existente(reserva_id):
             if not res: 
                 return jsonify({'success': False, 'message': 'Reserva no encontrada'}), 404
 
-            # 2. Preparar Datos Seguros (Evita Nulos/None)
+            # 2. Manejo de Nulos (Si no hay staff, ponemos texto genérico)
             staff_nombre = res['staff'] if res['staff'] else "El Equipo"
             cliente_nombre = res['cliente'] if res['cliente'] else "Cliente"
             servicio_nombre = res['servicio'] if res['servicio'] else "Servicio"
             
-            # Variables de control
+            # Variables de control (Inicializadas vacías para evitar KeyError)
             telefono_destino = ""
             plantilla_nombre = ""
-            link_cal_final = "" # IMPORTANTE: Empieza vacía siempre
+            link_cal_final = "" # <--- ESTO SOLUCIONA TU ERROR
 
             # 3. Lógica según botón presionado
             if tipo == 'aviso_staff':
@@ -10114,7 +10114,7 @@ def generar_link_reserva_existente(reserva_id):
 
             texto_plantilla = texto_plantilla.replace('%0A', '\n').replace('\\n', '\n')
 
-            # 5. Rellenar Datos (BLINDADO CONTRA ERROR LINK_CALENDAR)
+            # 5. Rellenar Datos (BLINDADO)
             datos_seguros = {
                 'cliente': cliente_nombre,
                 'staff': staff_nombre,
@@ -10137,7 +10137,6 @@ def generar_link_reserva_existente(reserva_id):
             return jsonify({'success': True, 'url': url})
 
     except Exception as e:
-        return jsonify({'success': False, 'message': f'Error interno: {str(e)}'}), 500
-    
+        return jsonify({'success': False, 'message': f'Error interno: {str(e)}'}), 500    
 
     
