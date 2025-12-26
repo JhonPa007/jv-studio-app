@@ -567,7 +567,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     function abrirModalGestionarReserva(reservaId) {
-        // Selectores
+        // --- 1. Selectores ---
         const modalTitle = document.getElementById('modalGestionarReservaLabel');
         const vistaDiv = document.getElementById('detalleReservaVista');
         const formEditar = document.getElementById('formEditarReservaModal');
@@ -581,26 +581,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const btnCancelarEdicion = document.getElementById('btnModalCancelarEdicion');
         const btnGuardar = document.getElementById('btnModalGuardarCambios');
         
-        // 🟢 1. LIMPIEZA AGRESIVA (Adiós duplicados)
-        // Buscamos cualquier botón que tenga nuestros IDs y lo eliminamos del DOM
-        const btnOldRec = document.getElementById('btnDynamicRecordar');
-        if (btnOldRec) btnOldRec.remove();
-        
-        const btnOldStaff = document.getElementById('btnDynamicStaff');
-        if (btnOldStaff) btnOldStaff.remove();
+        // --- 2. 🟢 LIMPIEZA TOTAL DE BOTONES WHATSAPP (Anti-Duplicados) ---
+        // Buscamos cualquier botón que tenga nuestra clase especial y lo borramos
+        const botonesViejos = modalFooter.querySelectorAll('.btn-whatsapp-dynamic');
+        botonesViejos.forEach(btn => btn.remove());
 
-        // 🟢 2. CREAR BOTONES NUEVOS
-        // Botón Recordar
+        // --- 3. 🟢 CREACIÓN DE NUEVOS BOTONES ---
+        
+        // A. Botón Recordar (Cliente)
         const btnRecordarWs = document.createElement('button');
-        btnRecordarWs.id = 'btnDynamicRecordar';
-        btnRecordarWs.className = 'btn btn-success btn-sm shadow-sm me-1';
+        btnRecordarWs.className = 'btn btn-success btn-sm shadow-sm me-1 btn-whatsapp-dynamic'; // Agregamos clase identificadora
         btnRecordarWs.innerHTML = '<i class="fab fa-whatsapp me-1"></i> Recordar';
         modalFooter.insertBefore(btnRecordarWs, modalFooter.firstChild);
 
-        // Botón Avisar Staff
+        // B. Botón Avisar Staff
         const btnAvisarStaff = document.createElement('button');
-        btnAvisarStaff.id = 'btnDynamicStaff';
-        btnAvisarStaff.className = 'btn btn-info btn-sm shadow-sm me-auto text-white';
+        btnAvisarStaff.className = 'btn btn-info btn-sm shadow-sm me-auto text-white btn-whatsapp-dynamic'; // Agregamos clase identificadora
         btnAvisarStaff.innerHTML = '<i class="fas fa-user-clock me-1"></i> Avisar Staff';
         btnRecordarWs.after(btnAvisarStaff);
 
@@ -623,15 +619,17 @@ document.addEventListener('DOMContentLoaded', function() {
             if (btnCancelarEdicion) btnCancelarEdicion.style.display = modoVista ? 'none' : 'inline-block';
             if (btnGuardar) btnGuardar.style.display = modoVista ? 'none' : 'inline-block';
 
-            // Mostrar Whatsapp solo si activo
+            // Mostrar Whatsapp solo en modo vista y activa
             const showWs = modoVista && !esFinal;
             btnRecordarWs.style.display = showWs ? 'inline-block' : 'none';
             btnAvisarStaff.style.display = showWs ? 'inline-block' : 'none';
 
             if (!modoVista && data) {
-                 // Poblar edición...
                  modalTitle.innerHTML = `<i class="fas fa-edit me-2"></i>Editando Reserva #${data.id}`;
                  document.getElementById('editReservaId').value = data.id;
+                 // (Lógica de poblado de selects omitida para brevedad, mantenla igual)
+                 // ... Asegúrate de que tus selects se llenen aquí ...
+                 // Si necesitas el código de los selects dímelo, pero asumo que ya lo tienes
                  const poblar = (id, items, val) => {
                      const s = document.getElementById(id); if(!s) return;
                      s.innerHTML = '<option value="">Sel...</option>';
@@ -649,30 +647,34 @@ document.addEventListener('DOMContentLoaded', function() {
         cambiarModo(true);
         if(modalGestionarInstancia) modalGestionarInstancia.show();
 
-        // 3. Cargar Datos
+        // --- 4. Cargar Datos ---
         fetch(`/api/reservas/${reservaId}`)
             .then(r => r.json())
             .then(data => {
+                console.log("Datos Reserva:", data); // 🔍 DEBUG: Mira la consola del navegador
                 datosReservaActualParaModal = data;
+                
                 if(modalTitle) modalTitle.innerHTML = `<i class="fas fa-calendar-check me-2"></i>Reserva #${data.id}`;
                 
                 if(vistaDiv) {
-                    // Muestra visualmente si hay staff o no
-                    const staffName = data.empleado_nombre || '<span class="text-danger fw-bold">Sin asignar</span>';
+                    // 🟢 CORRECCIÓN DEL NOMBRE DEL STAFF
+                    // Intentamos leer 'staff', luego 'empleado_nombre', o mostramos 'Sin asignar'
+                    const staffName = data.staff || data.empleado_nombre || '<span class="text-danger fw-bold">Sin asignar</span>';
                     
                     vistaDiv.innerHTML = `
                         <dl class="row mb-0">
                             <dt class="col-4">Estado</dt><dd class="col-8">${data.estado}</dd>
-                            <dt class="col-4">Cliente</dt><dd class="col-8">${data.cliente_nombre_completo}</dd>
-                            <dt class="col-4">Servicio</dt><dd class="col-8">${data.servicio_nombre}</dd>
+                            <dt class="col-4">Cliente</dt><dd class="col-8">${data.cliente_nombre_completo || data.cliente}</dd>
+                            <dt class="col-4">Servicio</dt><dd class="col-8">${data.servicio_nombre || data.servicio}</dd>
                             <dt class="col-4">Hora</dt><dd class="col-8 fw-bold">${new Date(data.fecha_hora_inicio).toLocaleString()}</dd>
-                            <dt class="col-4">Staff</dt><dd class="col-8">${data.empleado_nombre}</dd>
+                            <dt class="col-4">Staff</dt><dd class="col-8 text-primary">${staffName}</dd>
                         </dl>`;
                 }
                 
                 if(btnVenta) btnVenta.href = `{{ url_for('main.nueva_venta') }}?reserva_id=${reservaId}`;
 
-                // CLICK RECORDAR
+                // --- EVENTOS DE BOTONES ---
+
                 btnRecordarWs.onclick = () => {
                     const orig = btnRecordarWs.innerHTML;
                     btnRecordarWs.disabled = true; btnRecordarWs.innerHTML = '...';
@@ -680,16 +682,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         .then(r => r.json())
                         .then(d => {
                             if(d.success) window.open(d.url, '_blank');
-                            else alert(d.message);
+                            else alert("Aviso: " + d.message);
                         })
                         .finally(() => { btnRecordarWs.disabled = false; btnRecordarWs.innerHTML = orig; });
                 };
 
-                // CLICK AVISAR STAFF
                 btnAvisarStaff.onclick = () => {
-                    // 🟢 Validación Visual: Si no hay staff, ni siquiera llamamos al servidor
-                    if (!data.empleado_id || !data.empleado_nombre || data.empleado_nombre === 'N/A') {
-                        alert("⚠️ No puedes avisar porque esta reserva NO TIENE STAFF asignado.\n\n👉 Dale clic al botón amarillo 'Editar' y asigna un colaborador primero.");
+                    // 🟢 Validación Visual: Usamos la misma lógica que el display
+                    const staffCheck = data.staff || data.empleado_nombre; 
+                    
+                    if (!staffCheck || staffCheck === 'Sin asignar') {
+                        alert("⚠️ No puedes avisar porque esta reserva NO TIENE STAFF asignado.\n\n👉 Asigna un colaborador en 'Editar' primero.");
                         return;
                     }
                     
@@ -699,7 +702,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         .then(r => r.json())
                         .then(d => {
                             if(d.success) window.open(d.url, '_blank');
-                            else alert(d.message);
+                            else alert("Aviso: " + d.message);
                         })
                         .finally(() => { btnAvisarStaff.disabled = false; btnAvisarStaff.innerHTML = orig; });
                 };
