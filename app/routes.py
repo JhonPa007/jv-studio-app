@@ -2894,10 +2894,7 @@ def api_get_reserva_detalle(reserva_id):
             if reserva.get('fecha_actualizacion'):
                 reserva['fecha_actualizacion'] = reserva['fecha_actualizacion'].isoformat()
             
-            # 🟢 LIMPIEZA DE NULOS PARA EL FRONTEND
-            # Si es None, enviamos string vacío o null controlado
-            if not reserva['empleado_nombre']: 
-                reserva['empleado_nombre'] = 'Sin asignar'
+            
             
             return jsonify(reserva), 200
         else:
