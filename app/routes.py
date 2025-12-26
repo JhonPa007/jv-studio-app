@@ -10057,6 +10057,13 @@ def generar_link_reserva_existente(reserva_id):
             """, (reserva_id,))
             res = cursor.fetchone()
             
+            if not res: 
+                print("❌ [DEBUG] Reserva no encontrada en BD")
+                return jsonify({'success': False, 'message': 'Reserva no encontrada'}), 404
+
+            # 🔍 2. DATOS CRUDOS
+            print(f"   [DEBUG] Datos crudos BD: Staff={res.get('staff')}, TelStaff={res.get('tel_staff')}")
+            
             if not res: return jsonify({'success': False, 'message': 'Reserva no encontrada'}), 404
 
             # 2. 🟢 INICIALIZACIÓN OBLIGATORIA (Esto arregla el KeyError)
