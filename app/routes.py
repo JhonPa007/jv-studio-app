@@ -2832,11 +2832,18 @@ def api_marcar_reserva_completada(reserva_id):
 def api_get_reserva_detalle(reserva_id):
     """
     Devuelve los detalles de una reserva específica en formato JSON.
+    CORREGIDO: Incluye teléfonos y usa LEFT JOIN para staff 'Sin asignar'.
     """
     db_conn = get_db()
     cursor = None
     try:
         cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # 🟢 CAMBIOS IMPORTANTES EN EL SQL:
+        # 1. Usamos LEFT JOIN para clientes, empleados y servicios (para que no falle si falta alguno).
+        # 2. Agregamos c.telefono y e.telefono (CRUCIAL PARA WHATSAPP).
+        # 3. Agregamos alias 'empleado_nombre' y 'staff' para que el JS lo encuentre fácil.
+        
         sql = """
             SELECT 
                 r.id, 
@@ -2846,27 +2853,38 @@ def api_get_reserva_detalle(reserva_id):
                 r.notas_cliente,
                 r.notas_internas,
                 r.precio_cobrado,
+                r.fecha_creacion,
+                r.fecha_actualizacion,
+                
+                -- DATOS CLIENTE
                 r.cliente_id,
-                CONCAT(c.nombres, ' ', c.apellidos) AS cliente_nombre_completo,
+                c.razon_social_nombres AS cliente_nombre_completo, -- O c.nombres dependiendo de tu tabla
+                c.telefono AS tel_cliente,  -- <--- NECESARIO PARA EL BOTÓN RECORDAR
+                
+                -- DATOS EMPLEADO (STAFF)
                 r.empleado_id,
+                e.nombres AS empleado_nombre, -- <--- PARA QUE EL JS NO DE "UNDEFINED"
+                e.nombres AS staff,           -- <--- ALIAS EXTRA
                 CONCAT(e.nombres, ' ', e.apellidos) AS empleado_nombre_completo,
+                e.telefono AS tel_staff,      -- <--- NECESARIO PARA EL BOTÓN AVISAR STAFF
+                
+                -- DATOS SERVICIO
                 r.servicio_id,
                 s.nombre AS servicio_nombre,
                 s.duracion_minutos AS servicio_duracion_minutos,
-                s.precio AS servicio_precio_base,
-                r.fecha_creacion,
-                r.fecha_actualizacion
+                s.precio AS servicio_precio_base
+
             FROM reservas r
-            JOIN clientes c ON r.cliente_id = c.id
-            JOIN empleados e ON r.empleado_id = e.id
-            JOIN servicios s ON r.servicio_id = s.id
+            LEFT JOIN clientes c ON r.cliente_id = c.id
+            LEFT JOIN empleados e ON r.empleado_id = e.id
+            LEFT JOIN servicios s ON r.servicio_id = s.id
             WHERE r.id = %s
         """
         cursor.execute(sql, (reserva_id,))
         reserva = cursor.fetchone()
 
         if reserva:
-            # Convertir objetos datetime a strings ISO para JSON
+            # Manejo de Fechas
             if reserva.get('fecha_hora_inicio'):
                 reserva['fecha_hora_inicio'] = reserva['fecha_hora_inicio'].isoformat()
             if reserva.get('fecha_hora_fin'):
@@ -2875,13 +2893,19 @@ def api_get_reserva_detalle(reserva_id):
                 reserva['fecha_creacion'] = reserva['fecha_creacion'].isoformat()
             if reserva.get('fecha_actualizacion'):
                 reserva['fecha_actualizacion'] = reserva['fecha_actualizacion'].isoformat()
+            
+            # 🟢 LIMPIEZA DE NULOS PARA EL FRONTEND
+            # Si es None, enviamos string vacío o null controlado
+            if not reserva['empleado_nombre']: 
+                reserva['empleado_nombre'] = 'Sin asignar'
+            
             return jsonify(reserva), 200
         else:
             return jsonify({"error": "Reserva no encontrada"}), 404
 
     except Exception as err:
         current_app.logger.error(f"Error DB en api_get_reserva_detalle (Reserva ID: {reserva_id}): {err}")
-        return jsonify({"error": "Error interno del servidor al obtener detalles de la reserva.", "detalle": str(err)}), 500
+        return jsonify({"error": "Error interno", "detalle": str(err)}), 500
     finally:
         if cursor:
             cursor.close()
