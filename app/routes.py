@@ -10062,7 +10062,7 @@ def generar_link_reserva_existente(reserva_id):
                 return jsonify({'success': False, 'message': 'Reserva no encontrada'}), 404
 
             # 🔍 2. DATOS CRUDOS
-            print(f"   [DEBUG] Datos crudos BD: Staff={res.get('staff')}, TelStaff={res.get('tel_staff')}")
+            print(f"   [DEBUG] Datos crudos BD: Staff={res.get('staff')}, TelStaff={res.get('tel_staff')} \n")
             
             if not res: return jsonify({'success': False, 'message': 'Reserva no encontrada'}), 404
 
