@@ -2827,6 +2827,132 @@ def api_marcar_reserva_completada(reserva_id):
         if 'cursor_update' in locals() and cursor_update:
             cursor_update.close()
 
+# --- FUNCIONES AUXILIARES PARA MENSAJERÍA ---
+
+def generar_link_google_calendar(titulo, inicio_dt, fin_dt, detalles, ubicacion):
+    """
+    Genera un enlace para agregar evento a Google Calendar.
+    Formato: https://calendar.google.com/calendar/render?action=TEMPLATE&text=...
+    """
+    try:
+        base_url = "https://calendar.google.com/calendar/render?action=TEMPLATE"
+        # Google Calendar usa formato YYYYMMDDTHHMMSSZ (UTC) o local sin Z
+        # Usaremos local time string: YYYYMMDDTHHMMSS
+        fmt = "%Y%m%dT%H%M%S"
+        
+        # Asumiendo que inicio_dt y fin_dt ya son objetos datetime
+        fechas = f"{inicio_dt.strftime(fmt)}/{fin_dt.strftime(fmt)}"
+        
+        from urllib.parse import quote
+        
+        params = [
+            f"text={quote(titulo)}",
+            f"dates={fechas}",
+            f"details={quote(detalles)}",
+            f"location={quote(ubicacion)}",
+            "sf=true", # Source format
+            "output=xml"
+        ]
+        
+        return f"{base_url}&{'&'.join(params)}"
+    except Exception as e:
+        print(f"Error generando link calendar: {e}")
+        return ""
+
+@main_bp.route('/api/reservas/<int:reserva_id>/whatsapp-link')
+@login_required
+def api_generar_link_whatsapp_reserva(reserva_id):
+    """
+    Genera el enlace de WhatsApp dinámico para RECORDATORIO o AVISO STAFF.
+    Incluye integración con Google Calendar para el Staff.
+    """
+    tipo = request.args.get('tipo', 'recordatorio') # 'recordatorio' | 'aviso_staff'
+    db = get_db()
+    
+    try:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Obtener datos completos
+            sql = """
+                SELECT r.*, 
+                       c.razon_social_nombres as cliente_nombre, c.telefono as cliente_tel,
+                       e.nombres as staff_nombre, e.telefono as staff_tel,
+                       s.nombre as servicio_nombre, s.duracion_minutos
+                FROM reservas r
+                LEFT JOIN clientes c ON r.cliente_id = c.id
+                LEFT JOIN empleados e ON r.empleado_id = e.id
+                LEFT JOIN servicios s ON r.servicio_id = s.id
+                WHERE r.id = %s
+            """
+            cursor.execute(sql, (reserva_id,))
+            reserva = cursor.fetchone()
+            
+            if not reserva:
+                return jsonify({"success": False, "message": "Reserva no encontrada."})
+            
+            # 2. Generar Link
+            phone_target = ""
+            mensaje = ""
+            
+            # Objetos datetime
+            inicio = reserva['fecha_hora_inicio'] 
+            fin = reserva['fecha_hora_fin']
+            
+            # A. Lógica RECORDATORIO CLIENTE
+            if tipo == 'recordatorio':
+                phone_target = reserva['cliente_tel']
+                if not phone_target:
+                    return jsonify({"success": False, "message": "El cliente no tiene teléfono registrado."})
+                
+                # Plantilla
+                mensaje = (
+                    f"Hola {reserva['cliente_nombre']}! 👋\n"
+                    f"Te recordamos tu cita en *JV Studio*:\n\n"
+                    f"🗓️ Fecha: {inicio.strftime('%d/%m/%Y')}\n"
+                    f"⏰ Hora: {inicio.strftime('%I:%M %p')}\n"
+                    f"💇 Servicio: {reserva['servicio_nombre']}\n"
+                    f"📍 Staff: {reserva['staff_nombre'] or 'Por asignar'}\n\n"
+                    f"¡Nos vemos pronto!"
+                )
+
+            # B. Lógica AVISO STAFF (Con Google Calendar)
+            elif tipo == 'aviso_staff':
+                phone_target = reserva['staff_tel']
+                if not phone_target:
+                    return jsonify({"success": False, "message": "El colaborador no tiene teléfono registrado."})
+                
+                # Generar Link Calendar
+                gcal_link = generar_link_google_calendar(
+                    titulo=f"Cita: {reserva['cliente_nombre']} - {reserva['servicio_nombre']}",
+                    inicio_dt=inicio,
+                    fin_dt=fin,
+                    detalles=f"Cliente: {reserva['cliente_nombre']}\nServicio: {reserva['servicio_nombre']}\nNotas: {reserva['notas_cliente'] or ''}",
+                    ubicacion="JV Studio, Jr. Andahuaylas 216"
+                )
+                
+                mensaje = (
+                    f"🔔 *NUEVA ASIGNACION*\n"
+                    f"Has sido asignado a una cita:\n\n"
+                    f"👤 Cliente: {reserva['cliente_nombre']}\n"
+                    f"⏰ Hora: {inicio.strftime('%I:%M %p')}\n"
+                    f"✂️ Servicio: {reserva['servicio_nombre']}\n\n"
+                    f"📅 *Agregar a tu Calendario:* \n{gcal_link}" 
+                )
+            
+            # 3. Formatear Teléfono y URL
+            from urllib.parse import quote
+            
+            phone_clean = ''.join(filter(str.isdigit, str(phone_target)))
+            if len(phone_clean) == 9: phone_clean = '51' + phone_clean # Prefijo Perú
+            
+            url = f"https://wa.me/{phone_clean}?text={quote(mensaje)}"
+            
+            return jsonify({"success": True, "url": url})
+            
+    except Exception as e:
+        current_app.logger.error(f"Error generando whatsapp link: {e}")
+        return jsonify({"success": False, "message": str(e)})
+
+
 @main_bp.route('/api/reservas/<int:reserva_id>', methods=['GET'])
 @login_required
 def api_get_reserva_detalle(reserva_id):
@@ -2884,7 +3010,17 @@ def api_get_reserva_detalle(reserva_id):
         reserva = cursor.fetchone()
 
         if reserva:
-            # Manejo de Fechas
+            # 🟢 CORRECCIÓN ROBUSTA PARA STAFF 'SIN ASIGNAR'
+            # Si el ID existe pero el JOIN falló, o si el nombre es nulo
+            if reserva['empleado_id'] and not reserva['empleado_nombre']:
+                 # Intentamos buscarlo manualmente por si acaso (Integridad DB)
+                 cursor.execute("SELECT nombres FROM empleados WHERE id = %s", (reserva['empleado_id'],))
+                 emp_fallback = cursor.fetchone()
+                 if emp_fallback:
+                     reserva['empleado_nombre'] = emp_fallback['nombres']
+                     reserva['staff'] = emp_fallback['nombres']
+            
+            # Formatear Fechas para JSON
             if reserva.get('fecha_hora_inicio'):
                 reserva['fecha_hora_inicio'] = reserva['fecha_hora_inicio'].isoformat()
             if reserva.get('fecha_hora_fin'):
