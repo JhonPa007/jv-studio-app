@@ -722,7 +722,7 @@
                         const staffCheck = data.staff || data.empleado_nombre;
 
                         if (!staffCheck || staffCheck === 'Sin asignar') {
-                            alert("⚠️ No puedes avisar porque esta reserva NO TIENE STAFF asignado.\n\n👉 Asigna un colaborador en 'Editar' primero.");
+                            alert(`⚠️ No puedes avisar porque esta reserva NO TIENE STAFF asignado.\n\n👉 Asigna un colaborador en 'Editar' primero.\n\n[DEBUG]: ${data.debug_info || 'N/A'}`);
                             return;
                         }
 

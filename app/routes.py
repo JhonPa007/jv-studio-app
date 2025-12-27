@@ -2639,7 +2639,7 @@ def editar_reserva(reserva_id):
             cursor.execute(sql_update, val_update)
             db.commit()
 
-        return jsonify({"success": True, "message": "Reserva actualizada correctamente."})
+        return jsonify({"success": True, "message": f"Reserva actualizada. Staff ID guardado: {empleado_id}"})
 
     except Exception as e:
         get_db().rollback()
@@ -3031,6 +3031,9 @@ def api_get_reserva_detalle(reserva_id):
                 reserva['fecha_actualizacion'] = reserva['fecha_actualizacion'].isoformat()
             
             
+            
+            # 🟢 DEBUGGING: Agregar info cruda para el frontend
+            reserva['debug_info'] = f"EmpID: {reserva.get('empleado_id')} | Name: {reserva.get('empleado_nombre')} | Fallback: {reserva.get('staff')}"
             
             return jsonify(reserva), 200
         else:
