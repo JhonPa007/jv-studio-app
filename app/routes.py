@@ -2513,15 +2513,21 @@ def api_configuracion():
     POST: Guarda/Actualiza la configuración.
     """
     sucursal_id = session.get('sucursal_id')
+    current_app.logger.info(f"API Configuración solicitada. Sucursal: {sucursal_id}, Método: {request.method}")
+
     if not sucursal_id:
         return jsonify({"success": False, "message": "No hay sucursal seleccionada"}), 400
 
     db = get_db()
     if not db:
-        current_app.logger.error("Error: No database connection in api_configuracion")
+        current_app.logger.error("Error FATAL: No database connection in api_configuracion")
         return jsonify({"success": False, "message": "Error de conexión a Base de Datos"}), 500
 
-    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    except Exception as e:
+        current_app.logger.error(f"Error creando cursor: {e}")
+        return jsonify({"success": False, "message": "Error interno (Cursor)"}), 500
 
     if request.method == 'GET':
         try:
@@ -2529,7 +2535,6 @@ def api_configuracion():
             config = cursor.fetchone()
             
             if not config:
-                # Valores por defecto si no existe
                 config = {
                     "agenda_intervalo": "00:15:00",
                     "agenda_color_bloqueo": "#ffecec",
@@ -2539,58 +2544,64 @@ def api_configuracion():
                     "app_fuente": "Inter"
                 }
             
-            # Convert timedelta/time objects to string for JSON if needed? 
-            # RealDictCursor might return timedelta for interval.
+            # Asegurar string
             if 'agenda_intervalo' in config and config['agenda_intervalo']:
-                 # Simple trick: ensure it's string
                  config['agenda_intervalo'] = str(config['agenda_intervalo'])
 
             return jsonify({"success": True, "config": config})
         except Exception as e:
-            current_app.logger.error(f"Error GET config: {e}")
-            return jsonify({"success": False, "message": "Error al obtener configuración"}), 500
+            current_app.logger.error(f"Error GET config QUERY: {e}")
+            return jsonify({"success": False, "message": "Error al leer configuración"}), 500
 
     elif request.method == 'POST':
         try:
             data = request.json
+            current_app.logger.info(f"Datos recibidos para guardar: {data}")
             
-            # Upsert (Insert or Update)
-            sql = """
-                INSERT INTO configuracion_sucursal (
-                    sucursal_id, agenda_intervalo, agenda_color_bloqueo, 
-                    agenda_color_habilitado, agenda_color_reserva, 
-                    agenda_color_completado, app_fuente
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (sucursal_id) DO UPDATE SET
-                    agenda_intervalo = EXCLUDED.agenda_intervalo,
-                    agenda_color_bloqueo = EXCLUDED.agenda_color_bloqueo,
-                    agenda_color_habilitado = EXCLUDED.agenda_color_habilitado,
-                    agenda_color_reserva = EXCLUDED.agenda_color_reserva,
-                    agenda_color_completado = EXCLUDED.agenda_color_completado,
-                    app_fuente = EXCLUDED.app_fuente;
-            """
+            # Validar existencia previa
+            cursor.execute("SELECT id FROM configuracion_sucursal WHERE sucursal_id = %s", (sucursal_id,))
+            existe = cursor.fetchone()
             
-            # Map frontend duration names to time strings if necessary, 
-            # BUT frontend sends '00:15:00' or similar? 
-            # The Modal sends "00:15:00" as string value.
+            # Valores
+            val_intervalo = data.get('agenda_intervalo', '00:15:00')
+            val_bloqueo = data.get('agenda_color_bloqueo', '#ffecec')
+            val_habilitado = data.get('agenda_color_habilitado', '#ffffff')
+            val_reserva = data.get('agenda_color_reserva', '#6c63ff')
+            val_completado = data.get('agenda_color_completado', '#198754')
+            val_fuente = data.get('app_fuente', 'Inter')
+
+            if existe:
+                # UPDATE
+                sql_update = """
+                    UPDATE configuracion_sucursal SET
+                        agenda_intervalo = %s,
+                        agenda_color_bloqueo = %s,
+                        agenda_color_habilitado = %s,
+                        agenda_color_reserva = %s,
+                        agenda_color_completado = %s,
+                        app_fuente = %s
+                    WHERE sucursal_id = %s
+                """
+                cursor.execute(sql_update, (val_intervalo, val_bloqueo, val_habilitado, val_reserva, val_completado, val_fuente, sucursal_id))
+            else:
+                # INSERT
+                sql_insert = """
+                    INSERT INTO configuracion_sucursal (
+                        sucursal_id, agenda_intervalo, agenda_color_bloqueo, 
+                        agenda_color_habilitado, agenda_color_reserva, 
+                        agenda_color_completado, app_fuente
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """
+                cursor.execute(sql_insert, (sucursal_id, val_intervalo, val_bloqueo, val_habilitado, val_reserva, val_completado, val_fuente))
             
-            cursor.execute(sql, (
-                sucursal_id,
-                data.get('agenda_intervalo', '00:15:00'),
-                data.get('agenda_color_bloqueo', '#ffecec'),
-                data.get('agenda_color_habilitado', '#ffffff'),
-                data.get('agenda_color_reserva', '#6c63ff'),
-                data.get('agenda_color_completado', '#198754'),
-                data.get('app_fuente', 'Inter')
-            ))
             db.commit()
-            
+            current_app.logger.info("Configuración guardada exitosamente en DB.")
             return jsonify({"success": True, "message": "Configuración guardada correctamente."})
             
         except Exception as e:
             db.rollback()
-            current_app.logger.error(f"Error POST config: {e}")
-            return jsonify({"success": False, "message": str(e)}), 500
+            current_app.logger.error(f"Error POST config SAVE: {e}")
+            return jsonify({"success": False, "message": f"Error al guardar: {str(e)}"}), 500
 
 def timedelta_to_time_obj(obj):
     """
