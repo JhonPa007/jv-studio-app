@@ -2339,7 +2339,7 @@ def api_agenda_dia_data():
                         "start": f"{fecha_str}T{turno['hora_inicio']}", 
                         "end": f"{fecha_str}T{turno['hora_fin']}",
                         "display": "background", 
-                        "backgroundColor": "#ffffff",
+                        # "backgroundColor": "#ffffff", REMOVED
                         "classNames": ["turno-disponible"]
                     })
                 
@@ -2357,7 +2357,7 @@ def api_agenda_dia_data():
                         "start": f"{fecha_str}T{extra['hora_inicio']}", 
                         "end": f"{fecha_str}T{extra['hora_fin']}",
                         "display": "background", 
-                        "backgroundColor": "#ffffff", # Igual que turno normal
+                        # "backgroundColor": "#ffffff", REMOVED
                         "classNames": ["turno-disponible", "turno-extra"],
                         "title": f"Extra: {extra.get('motivo','')}"
                     })
@@ -2379,7 +2379,8 @@ def api_agenda_dia_data():
                         "start": ausencia['fecha_hora_inicio'].isoformat(),
                         "end": ausencia['fecha_hora_fin'].isoformat(),
                         "display": "background", 
-                        "backgroundColor": "rgba(220, 53, 69, 0.5)",
+                        # "backgroundColor": "rgba(220, 53, 69, 0.5)", REMOVED
+                        "classNames": ["bg-danger-subtle"], # To match CSS selector
                         "title": "Ausente"
                     })
                 
@@ -2402,14 +2403,7 @@ def api_agenda_dia_data():
                 cursor.execute(sql_reservas, (sucursal_id, fecha_str))
                 
                 for reserva in cursor.fetchall():
-                    color_fondo = '#D4AF37'
-                    border_color = '#b49b4c'
-                    
-                    if reserva['estado'] == 'Completada':
-                        color_fondo = '#198754'
-                        border_color = '#146c43'
-                    elif 'Cancelada' in reserva['estado']:
-                        color_fondo = '#dc3545' 
+                    # Colors handled by CSS now
                     
                     eventos.append({
                         "id": reserva['id'],
@@ -2417,9 +2411,10 @@ def api_agenda_dia_data():
                         "title": reserva['title'],
                         "start": reserva['start'].isoformat(),
                         "end": reserva['end'].isoformat(),
-                        "backgroundColor": color_fondo,
-                        "borderColor": border_color,
-                        "textColor": "#fff",
+                        # "backgroundColor": color_fondo, REMOVED
+                        # "borderColor": border_color, REMOVED
+                        # "textColor": "#fff", REMOVED
+                        "extendedProps": {"estado": reserva['estado']}, # IMPORTANT for JS class logic
                         "classNames": ["reserva-card"]
                     })
 
