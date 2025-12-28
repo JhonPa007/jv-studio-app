@@ -59,6 +59,11 @@ div {
     color: var(--color-accent) !important;
 }
 
+.text-muted {
+    color: var(--color-text-secondary) !important;
+    opacity: 0.8;
+}
+
 /* --- COMPONENTS --- */
 
 /* Glass Cards */
@@ -300,6 +305,13 @@ div {
 }
 
 /* STANDARD SELECT options (Browser dependent, but we try) */
+select,
+select.form-select {
+    background-color: var(--color-bg-card) !important;
+    color: var(--color-text-primary) !important;
+    border-color: var(--color-border);
+}
+
 select option {
     background-color: var(--color-bg-card);
     color: var(--color-text-primary);
