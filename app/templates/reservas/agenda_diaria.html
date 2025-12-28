@@ -380,6 +380,7 @@
 
     {% include 'reservas/_modal_nueva_reserva.html' %}
     {% include 'reservas/_modal_gestionar_reserva.html' %}
+    {% include 'reservas/_modal_bloqueo_agenda.html' %}
 </div>
 {% endblock content %}
 
@@ -414,6 +415,10 @@
 
         const modalGestionarElement = document.getElementById('modalGestionarReserva');
         const modalGestionarInstancia = modalGestionarElement ? new bootstrap.Modal(modalGestionarElement) : null;
+
+        const modalBloqueoElement = document.getElementById('modalBloqueoAgenda');
+        const modalBloqueoInstancia = modalBloqueoElement ? new bootstrap.Modal(modalBloqueoElement) : null;
+        const formBloqueo = document.getElementById('formBloqueoAgenda');
 
         // Datos Globales
         const todosLosClientes = JSON.parse('{{ clientes_todos | tojson | safe }}');
@@ -524,8 +529,8 @@
             editable: true,
             droppable: true,
             selectable: false, // Usamos dateClick customizado, no la selección nativa visual
-            slotLabelFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short', omitZeroMinute: false },
-            eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short' },
+            slotLabelFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short', omitZeroMinute: false, hour12: true },
+            eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short', hour12: true },
 
             // Fuentes de Datos
             resources: function (fetchInfo, successCallback, failureCallback) {
@@ -784,37 +789,109 @@
 
         // B. Lógica de Disponibilidad (Bloquear / Habilitar)
         window.bloquearHorarioColab = function (empleadoId, nombre) {
-            const fecha = document.getElementById('selectorFechaAgenda').value;
+            // 1. Resetear form
+            formBloqueo.reset();
 
-            // Prompt simple para MVP. Idealmente un Modal.
-            const motivo = prompt(`Bloquear horario para ${nombre} el ${fecha}.\n\nIngrese motivo (ej. Almuerzo, Permiso):`, "Permiso");
-            if (motivo === null) return;
+            // 2. Pre-llenar datos
+            document.getElementById('bloqueoEmpleadoId').value = empleadoId;
+            document.getElementById('bloqueoEmpleadoNombre').value = nombre;
+            document.getElementById('bloqueoFecha').value = selectorFecha.value;
 
-            const horaInicio = prompt("Hora Inicio (HH:MM):", "13:00");
-            if (!horaInicio) return;
-            const horaFin = prompt("Hora Fin (HH:MM):", "14:00");
-            if (!horaFin) return;
+            // Hora por defecto (hora actual redondeada o fija)
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = "00";
+            document.getElementById('bloqueoHoraInicio').value = `${h}:${m}`;
 
-            if (!confirm(`¿Confirmar BLOQUEO de ${horaInicio} a ${horaFin} para ${nombre}?`)) return;
+            // Trigger cambio tipo para resetear estados (Personalizado por defecto)
+            toggleTipoBloqueo('Personalizado');
+            // Esto también calculará la hora fin si llamamos a actualizar, 
+            // o podemos dejar vacío para que el usuario llene.
+            // Mejor: Setear 1 hora mas tarde.
+            const h2 = String((now.getHours() + 1) % 24).padStart(2, '0');
+            document.getElementById('bloqueoHoraFin').value = `${h2}:${m}`;
+            actualizarDuracionTexto();
+
+            // 3. Mostrar Modal
+            modalBloqueoInstancia.show();
+        };
+
+        // B.1 SUBMIT DEL MODAL BLOQUEO
+        formBloqueo?.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const btn = this.querySelector('button[type="submit"]');
+            const errDiv = document.getElementById('bloqueoError');
+
+            const formData = new FormData(this);
+            // El campo 'motivo' en el form se llama 'motivo' (ver input hidden o text), 
+            // pero mi backend espera 'descripcion' en el campo description?
+            // OJO: En mi fix anterior (Step 132), usé:
+            // Insert into ... (..., descripcion, ...) VALUES (..., motivo, ...)
+            // Pero en el request.form.get('motivo') lo usaba para el INSERT.
+            // 
+            // Revisemos routes.py api_agenda_bloquear:
+            // motivo = data.get('motivo', 'Bloqueo Manual')
+            // INSERT ... (..., descripcion, ...) VALUES (..., motivo, ...)
+            //
+            // Entonces el backend espera JSON { ... "motivo": "Algo" ... }
+            // Y lo guarda en la columna 'descripcion'.
+            //
+            // En mi HTML modal puse: name="motivo" para el título.
+            // Y name="descripcion" para el textarea.
+            //
+            // Si el backend solo usa 'motivo', ignorará 'descripcion' del textarea si no lo recojo.
+            //
+            // Vamos a ajustar el JS para combinar Título + Descripción si es necesario, 
+            // o mandar ambos si ajusto el backend. 
+            // Como NO quiero tocar backend otra vez si no es necesario,
+            // Mandaré en 'motivo' el string: "Título - Descripción" o solo Título.
+
+            const title = formData.get('motivo') || "";
+            const desc = formData.get('descripcion') || "";
+            const tipo = formData.get('tipo_bloqueo'); // Personalizado o Comida
+
+            let motivoFinal = title;
+            if (tipo === 'Comida' && !motivoFinal) motivoFinal = "Almuerzo/Comida";
+            if (desc) motivoFinal += ` (${desc})`;
+
+            const dataFinal = {
+                empleado_id: formData.get('empleado_id'),
+                fecha: formData.get('fecha'),
+                hora_inicio: formData.get('hora_inicio'),
+                hora_fin: formData.get('hora_fin'),
+                motivo: motivoFinal
+            };
+
+            btn.disabled = true;
+            btn.textContent = "Guardando...";
+            errDiv.style.display = 'none';
 
             fetch('/api/agenda/bloquear', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    empleado_id: empleadoId,
-                    fecha: fecha,
-                    hora_inicio: horaInicio,
-                    hora_fin: horaFin,
-                    motivo: motivo
-                })
+                body: JSON.stringify(dataFinal)
             })
-                .then(r => r.json())
-                .then(d => {
-                    if (d.success) { alert("Bloqueo registrado."); actualizarAgenda(); }
-                    else alert("Error: " + d.message);
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        modalBloqueoInstancia.hide();
+                        actualizarAgenda();
+                    } else {
+                        errDiv.innerText = data.message || "Error al bloquear.";
+                        errDiv.style.display = 'block';
+                    }
                 })
-                .catch(e => alert("Error de red: " + e));
-        };
+                .catch(err => {
+                    errDiv.innerText = "Error de red: " + err;
+                    errDiv.style.display = 'block';
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.textContent = "Guardar";
+                });
+        });
+
+        // 🟢 FIN NUEVAS FUNCIONES
 
         window.habilitarHorarioColab = function (empleadoId, nombre) {
             const fecha = document.getElementById('selectorFechaAgenda').value;

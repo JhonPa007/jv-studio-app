@@ -1,0 +1,180 @@
+<!-- Modal para Bloquear Horario / Agregar Ausencia -->
+<div class="modal fade" id="modalBloqueoAgenda" tabindex="-1" aria-labelledby="modalBloqueoAgendaLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="modalBloqueoAgendaLabel">Añadir horario no disponible</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formBloqueoAgenda">
+                    <input type="hidden" id="bloqueoEmpleadoId" name="empleado_id">
+
+                    <!-- 1. Tipo de Horario (Personalizado vs Comida) -->
+                    <label class="form-label fw-bold small text-secondary">Tipo de horario no disponible</label>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="card h-100 border-primary cursor-pointer selection-card p-2 text-center"
+                                id="cardTipoPersonalizado">
+                                <input type="radio" name="tipo_bloqueo" value="Personalizado" class="d-none" checked
+                                    onchange="toggleTipoBloqueo('Personalizado')">
+                                <div class="card-body p-1">
+                                    <i class="fas fa-pen fa-lg mb-2 text-primary"></i>
+                                    <h6 class="card-title text-dark small fw-bold mb-0">Personalizado</h6>
+                                    <small class="text-muted" style="font-size: 0.7rem;">Nuevo horario no
+                                        disponible</small>
+                                </div>
+                            </label>
+                        </div>
+                        <div class="col-6">
+                            <label class="card h-100 cursor-pointer selection-card p-2 text-center" id="cardTipoComida">
+                                <input type="radio" name="tipo_bloqueo" value="Comida" class="d-none"
+                                    onchange="toggleTipoBloqueo('Comida')">
+                                <div class="card-body p-1">
+                                    <i class="fas fa-hamburger fa-lg mb-2 text-warning"></i>
+                                    <h6 class="card-title text-dark small fw-bold mb-0">Comida</h6>
+                                    <small class="text-muted" style="font-size: 0.7rem;">60 min • No remunerado</small>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 2. Título (Solo para Personalizado) -->
+                    <div class="mb-3" id="divTituloBloqueo">
+                        <label for="bloqueoTitulo" class="form-label fw-bold small">Título (Opcional)</label>
+                        <input type="text" class="form-control" id="bloqueoTitulo" name="motivo"
+                            placeholder="por ejemplo, comida de negocios">
+                    </div>
+
+                    <!-- 3. Fecha -->
+                    <div class="mb-3">
+                        <label for="bloqueoFecha" class="form-label fw-bold small">Fecha</label>
+                        <input type="date" class="form-control" id="bloqueoFecha" name="fecha" required>
+                    </div>
+
+                    <!-- 4. Hora Inicio y Fin -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label for="bloqueoHoraInicio" class="form-label fw-bold small">Hora de inicio</label>
+                            <input type="time" class="form-control" id="bloqueoHoraInicio" name="hora_inicio" required>
+                        </div>
+                        <div class="col-6">
+                            <label for="bloqueoHoraFin" class="form-label fw-bold small">Hora de finalización</label>
+                            <input type="time" class="form-control" id="bloqueoHoraFin" name="hora_fin" required>
+                            <div class="form-text text-end" id="duracionBloqueoTxt" style="font-size: 0.75rem;">15 min
+                                de duración</div>
+                        </div>
+                    </div>
+
+                    <!-- 5. Miembros del equipo -->
+                    <div class="mb-3">
+                        <label for="bloqueoEmpleadoNombre" class="form-label fw-bold small">Miembros del equipo</label>
+                        <input type="text" class="form-control bg-light" id="bloqueoEmpleadoNombre" readonly>
+                    </div>
+
+                    <!-- 6. Descripción -->
+                    <div class="mb-3">
+                        <label for="bloqueoDescripcion" class="form-label fw-bold small">Descripción (Opcional)</label>
+                        <textarea class="form-control" id="bloqueoDescripcion" name="descripcion" rows="2"
+                            placeholder="Añadir descripción o comentario"></textarea>
+                    </div>
+
+                    <div id="bloqueoError" class="alert alert-danger p-2 small mb-3" style="display: none;"></div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-dark btn-lg">Guardar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .selection-card {
+        border: 1px solid #dee2e6;
+        transition: all 0.2s;
+    }
+
+    .selection-card:hover {
+        background-color: #f8f9fa;
+        border-color: #adb5bd;
+    }
+
+    /* Estilo "Activo" (simulado con JS o CSS :has si fuera moderno, pero usaremos clase active con JS) */
+    .selection-card.active-card {
+        border: 2px solid #6c63ff;
+        /* Color primario */
+        background-color: rgba(108, 99, 255, 0.05);
+    }
+</style>
+
+<script>
+    function toggleTipoBloqueo(tipo) {
+        // Actualizar UI de tarjetas
+        document.getElementById('cardTipoPersonalizado').classList.remove('active-card', 'border-primary');
+        document.getElementById('cardTipoComida').classList.remove('active-card', 'border-primary');
+
+        if (tipo === 'Personalizado') {
+            document.getElementById('cardTipoPersonalizado').classList.add('active-card');
+            document.getElementById('divTituloBloqueo').style.display = 'block';
+            document.getElementById('bloqueoTitulo').placeholder = "por ejemplo, Médico";
+        } else {
+            document.getElementById('cardTipoComida').classList.add('active-card');
+            // Ocultar título porque "Comida" es el título implícito? 
+            // O podemos dejarlo y pre-llenarlo. La imagen muestra campo Título visible en comida?
+            // En la imagen 3 (Comida) NO se ve el campo título, se ve "Comida" arriba seleccionado.
+            // Asumiremos que se oculta o se pre-llena.
+            document.getElementById('divTituloBloqueo').style.display = 'none';
+            document.getElementById('bloqueoTitulo').value = "Almuerzo/Comida";
+
+            // Ajustar duración por defecto a 60 min si es comida
+            ajustarHoraFinAutomatico(60);
+        }
+    }
+
+    function ajustarHoraFinAutomatico(minutos) {
+        const hInicio = document.getElementById('bloqueoHoraInicio').value;
+        if (!hInicio) return;
+
+        const [h, m] = hInicio.split(':').map(Number);
+        const date = new Date();
+        date.setHours(h, m);
+        date.setMinutes(date.getMinutes() + minutos);
+
+        const hF = String(date.getHours()).padStart(2, '0');
+        const mF = String(date.getMinutes()).padStart(2, '0');
+        document.getElementById('bloqueoHoraFin').value = `${hF}:${mF}`;
+        actualizarDuracionTexto();
+    }
+
+    // Calcular duración visual
+    function actualizarDuracionTexto() {
+        const ini = document.getElementById('bloqueoHoraInicio').value;
+        const fin = document.getElementById('bloqueoHoraFin').value;
+        if (!ini || !fin) return;
+
+        const [h1, m1] = ini.split(':').map(Number);
+        const [h2, m2] = fin.split(':').map(Number);
+
+        const d1 = new Date(); d1.setHours(h1, m1);
+        const d2 = new Date(); d2.setHours(h2, m2);
+
+        let diff = (d2 - d1) / 60000;
+        if (diff < 0) diff += 1440; // Día siguiente
+
+        let txt = "";
+        if (diff >= 60) {
+            const h = Math.floor(diff / 60);
+            const m = diff % 60;
+            txt = `${h} h ${m > 0 ? m + ' min' : ''}`;
+        } else {
+            txt = `${diff} min de duración`;
+        }
+        document.getElementById('duracionBloqueoTxt').innerText = txt;
+    }
+
+    document.getElementById('bloqueoHoraInicio').addEventListener('change', actualizarDuracionTexto);
+    document.getElementById('bloqueoHoraFin').addEventListener('change', actualizarDuracionTexto);
+</script>
