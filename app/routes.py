@@ -2170,7 +2170,6 @@ def render_agenda_diaria():
             cursor.execute("""
                 SELECT e.id, e.nombres, e.apellidos, e.nombre_display,
                        (SELECT COUNT(*) FROM reservas r 
-                       (SELECT COUNT(*) FROM reservas r 
                         WHERE r.empleado_id = e.id 
                           AND r.fecha_hora_inicio >= CURRENT_DATE 
                           AND r.fecha_hora_inicio < CURRENT_DATE + INTERVAL '1 day'
