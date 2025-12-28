@@ -21,6 +21,16 @@
     .select2-container--bootstrap-5 .select2-dropdown .select2-results__options .select2-results__option {
         color: #000;
         font-size: 0.9rem;
+        background-color: #ffffff;
+    }
+
+    .select2-container--bootstrap-5 .select2-selection {
+        background-color: #ffffff !important;
+        color: #000 !important;
+    }
+
+    .select2-container--bootstrap-5 .select2-selection__rendered {
+        color: #000 !important;
     }
 </style>
 
@@ -899,24 +909,71 @@
         // 🟢 FIN NUEVAS FUNCIONES
 
         window.habilitarHorarioColab = function (empleadoId, nombre) {
+            // 1. Resetear
+            formHabilitar.reset();
+            document.getElementById('habilitarError').style.display = 'none';
+
+            // 2. Pre-llenar
+            document.getElementById('habilitarEmpleadoId').value = empleadoId;
+            document.getElementById('habilitarNombreEmpleado').innerText = nombre;
+
+            const fechaVal = selectorFecha.value;
+            // Formato bonito de fecha para visualización
+            const d = new Date(fechaVal + 'T00:00:00');
+            const opciones = { weekday: 'short', day: 'numeric', month: 'short' };
+            if (document.getElementById('habilitarFechaTxt')) {
+                document.getElementById('habilitarFechaTxt').innerText = d.toLocaleDateString('es-ES', opciones);
+            }
+            document.getElementById('habilitarFecha').value = fechaVal;
+
+            // Horas default
+            document.getElementById('habilitarHoraInicio').value = "09:00";
+            document.getElementById('habilitarHoraFin').value = "13:00";
+
+            // Trigger cálculo inicial si la función externa existe
+            if (typeof actualizarDuracionExtra === 'function') actualizarDuracionExtra();
+
+            // 3. Mostrar
+            modalHabilitarInstancia.show();
+        };
+
+        // SUBMIT HABILITAR
+        formHabilitar?.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const btn = this.querySelector('button[type="submit"]');
+            const errDiv = document.getElementById('habilitarError');
+
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+
+            btn.disabled = true;
+            btn.textContent = "Guardando...";
+            errDiv.style.display = 'none';
+
             fetch('/api/agenda/habilitar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    empleado_id: empleadoId,
-                    fecha: fecha,
-                    hora_inicio: horaInicio,
-                    hora_fin: horaFin,
-                    motivo: motivo
-                })
+                body: JSON.stringify(data)
             })
-                .then(r => r.json())
-                .then(d => {
-                    if (d.success) { alert("Horario habilitado."); actualizarAgenda(); }
-                    else alert("Error: " + d.message);
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        modalHabilitarInstancia.hide();
+                        actualizarAgenda();
+                    } else {
+                        errDiv.innerText = data.message || "Error al habilitar.";
+                        errDiv.style.display = 'block';
+                    }
                 })
-                .catch(e => alert("Error de red: " + e));
-        };
+                .catch(err => {
+                    errDiv.innerText = "Error de red";
+                    errDiv.style.display = 'block';
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.textContent = "Guardar Turno";
+                });
+        });
 
         function abrirModalGestionarReserva(reservaId) {
             // --- 1. Selectores ---
