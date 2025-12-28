@@ -501,129 +501,131 @@
                 // Aseguramos position relative al container
                 container.style.position = 'relative';
 
-                // 2. Create Initials Only (or Image logic)
-                if (imagenUrl) {
+                // 2. Si no hay imagen, mostrar iniciales
+                if (!imagenUrl) {
+                    container.appendChild(crearIniciales(nombre));
+                }
 
-                    // 3. Agregar el Nombre (ESTO FALTABA)
-                    const nombreSpan = document.createElement('span');
-                    nombreSpan.className = 'staff-name';
-                    nombreSpan.innerText = nombre;
-                    container.appendChild(nombreSpan);
+                // 3. Agregar el Nombre (ESTO FALTABA)
+                const nombreSpan = document.createElement('span');
+                nombreSpan.className = 'staff-name';
+                nombreSpan.innerText = nombre;
+                container.appendChild(nombreSpan);
 
-                    // 4. Devolver el DOM al calendario (ESTO FALTABA)
-                    return { domNodes: [container] };
-                },
+                // 4. Devolver el DOM al calendario
+                return { domNodes: [container] };
+            },
 
-                slotDuration: '00:15:00',
-                    slotMinTime: '08:00:00',
-                        slotMaxTime: '22:00:00',
-                            slotLabelInterval: '01:00',
-                                stickyHeaderDates: true,
-                                    nowIndicator: true,
-                                        editable: true,
-                                            droppable: true,
-                                                selectable: false, // Usamos dateClick customizado, no la selección nativa visual
-                                                    slotLabelFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short', omitZeroMinute: false },
-                eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short' },
+            slotDuration: '00:15:00',
+            slotMinTime: '08:00:00',
+            slotMaxTime: '22:00:00',
+            slotLabelInterval: '01:00',
+            stickyHeaderDates: true,
+            nowIndicator: true,
+            editable: true,
+            droppable: true,
+            selectable: false, // Usamos dateClick customizado, no la selección nativa visual
+            slotLabelFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short', omitZeroMinute: false },
+            eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short' },
 
-                // Fuentes de Datos
-                resources: function (fetchInfo, successCallback, failureCallback) {
-                    const sucursalId = selectorSucursal.value;
-                    if (!sucursalId) { successCallback([]); return; }
+            // Fuentes de Datos
+            resources: function (fetchInfo, successCallback, failureCallback) {
+                const sucursalId = selectorSucursal.value;
+                if (!sucursalId) { successCallback([]); return; }
 
-                    // 🟢 LÓGICA DE FILTRADO LADO CLIENTE
-                    fetch(`/api/agenda_dia_data?fecha=${selectorFecha.value}&sucursal_id=${sucursalId}`)
-                        .then(res => res.json())
-                        .then(data => {
-                            let todosRecursos = data.recursos;
+                // 🟢 LÓGICA DE FILTRADO LADO CLIENTE
+                fetch(`/api/agenda_dia_data?fecha=${selectorFecha.value}&sucursal_id=${sucursalId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        let todosRecursos = data.recursos;
 
-                            // Obtenemos los IDs marcados en los checkboxes
-                            const checksMarcados = Array.from(document.querySelectorAll('.chk-colaborador:checked')).map(c => parseInt(c.value));
+                        // Obtenemos los IDs marcados en los checkboxes
+                        const checksMarcados = Array.from(document.querySelectorAll('.chk-colaborador:checked')).map(c => parseInt(c.value));
 
-                            // Filtramos: Solo devolvemos los recursos cuyo ID esté en los checks marcados
-                            // Si es la carga inicial y no hay checks (aunque el HTML server-side ya los pone), mostramos todo por seguridad o nada.
-                            // Como el HTML viene con checked, debería funcionar.
+                        // Filtramos: Solo devolvemos los recursos cuyo ID esté en los checks marcados
+                        // Si es la carga inicial y no hay checks (aunque el HTML server-side ya los pone), mostramos todo por seguridad o nada.
+                        // Como el HTML viene con checked, debería funcionar.
 
-                            const recursosFiltrados = todosRecursos.filter(r => checksMarcados.includes(r.id));
+                        const recursosFiltrados = todosRecursos.filter(r => checksMarcados.includes(r.id));
 
-                            successCallback(recursosFiltrados);
-                        })
-                        .catch(err => failureCallback(err));
-                },
-                events: function (fetchInfo, successCallback, failureCallback) {
-                    const sucursalId = selectorSucursal.value;
-                    if (!sucursalId) { successCallback([]); return; }
-                    fetch(`/api/agenda_dia_data?fecha=${selectorFecha.value}&sucursal_id=${sucursalId}`)
-                        .then(res => res.json()).then(data => {
-                            datosApiAgenda = data;
-                            successCallback(data.eventos);
-                        }).catch(err => failureCallback(err));
-                },
-
-                // A. Clic en espacio vacío
-                dateClick: function (info) {
-                    if (!datosApiAgenda || !datosApiAgenda.eventos) return;
-
-                    const slotDT = new Date(info.dateStr).getTime();
-                    const colaboradorId = info.resource.id;
-
-                    // Validar Horario Habil (Color blanco o clase turno-disponible)
-                    const esHorarioHabil = datosApiAgenda.eventos.some(evento =>
-                        evento.resourceId == colaboradorId &&
-                        evento.display === 'background' &&
-                        (evento.backgroundColor === '#ffffff' || (evento.classNames && evento.classNames.includes('turno-disponible'))) &&
-                        new Date(evento.start).getTime() <= slotDT &&
-                        new Date(evento.end).getTime() > slotDT
-                    );
-
-                    // Validar Ausencia (Rojo)
-                    const enAusencia = datosApiAgenda.eventos.some(evento =>
-                        evento.resourceId == colaboradorId &&
-                        evento.display === 'background' &&
-                        evento.backgroundColor.includes('220, 53, 69') &&
-                        new Date(evento.start).getTime() <= slotDT &&
-                        new Date(evento.end).getTime() > slotDT
-                    );
-
-                    if (esHorarioHabil && !enAusencia) {
-                        const hora = info.dateStr.slice(11, 16);
-                        abrirModalNuevaReserva(info.resource.id, info.resource.title, info.dateStr.slice(0, 10), hora);
-                    } else {
-                        console.log("Clic en zona no disponible");
-                    }
-                },
-
-                // B. Clic en Evento
-                eventClick: function (info) {
-                    if (info.event.id) abrirModalGestionarReserva(info.event.id);
-                },
-
-                // C. Arrastrar y Soltar
-                eventDrop: function (info) {
-                    const reservaId = info.event.id;
-                    const nuevoInicio = info.event.start;
-                    const nuevoColaboradorId = info.event.getResources()[0].id;
-
-                    if (nuevoInicio < new Date()) {
-                        alert("No se puede mover una reserva al pasado.");
-                        info.revert(); return;
-                    }
-                    if (!confirm("¿Seguro que deseas mover esta reserva?")) {
-                        info.revert(); return;
-                    }
-
-                    fetch('/reservas/reagendar', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ reserva_id: reservaId, nuevo_inicio: nuevoInicio.toISOString(), nuevo_colaborador_id: nuevoColaboradorId })
+                        successCallback(recursosFiltrados);
                     })
-                        .then(res => res.json().then(d => ({ ok: res.ok, data: d })))
-                        .then(result => {
-                            if (!result.ok) { alert(result.data.message); info.revert(); }
-                            else { actualizarAgenda(); }
-                        })
-                        .catch(err => { alert("Error de red."); info.revert(); });
-                },
-            });
+                    .catch(err => failureCallback(err));
+            },
+            events: function (fetchInfo, successCallback, failureCallback) {
+                const sucursalId = selectorSucursal.value;
+                if (!sucursalId) { successCallback([]); return; }
+                fetch(`/api/agenda_dia_data?fecha=${selectorFecha.value}&sucursal_id=${sucursalId}`)
+                    .then(res => res.json()).then(data => {
+                        datosApiAgenda = data;
+                        successCallback(data.eventos);
+                    }).catch(err => failureCallback(err));
+            },
+
+            // A. Clic en espacio vacío
+            dateClick: function (info) {
+                if (!datosApiAgenda || !datosApiAgenda.eventos) return;
+
+                const slotDT = new Date(info.dateStr).getTime();
+                const colaboradorId = info.resource.id;
+
+                // Validar Horario Habil (Color blanco o clase turno-disponible)
+                const esHorarioHabil = datosApiAgenda.eventos.some(evento =>
+                    evento.resourceId == colaboradorId &&
+                    evento.display === 'background' &&
+                    (evento.backgroundColor === '#ffffff' || (evento.classNames && evento.classNames.includes('turno-disponible'))) &&
+                    new Date(evento.start).getTime() <= slotDT &&
+                    new Date(evento.end).getTime() > slotDT
+                );
+
+                // Validar Ausencia (Rojo)
+                const enAusencia = datosApiAgenda.eventos.some(evento =>
+                    evento.resourceId == colaboradorId &&
+                    evento.display === 'background' &&
+                    evento.backgroundColor.includes('220, 53, 69') &&
+                    new Date(evento.start).getTime() <= slotDT &&
+                    new Date(evento.end).getTime() > slotDT
+                );
+
+                if (esHorarioHabil && !enAusencia) {
+                    const hora = info.dateStr.slice(11, 16);
+                    abrirModalNuevaReserva(info.resource.id, info.resource.title, info.dateStr.slice(0, 10), hora);
+                } else {
+                    console.log("Clic en zona no disponible");
+                }
+            },
+
+            // B. Clic en Evento
+            eventClick: function (info) {
+                if (info.event.id) abrirModalGestionarReserva(info.event.id);
+            },
+
+            // C. Arrastrar y Soltar
+            eventDrop: function (info) {
+                const reservaId = info.event.id;
+                const nuevoInicio = info.event.start;
+                const nuevoColaboradorId = info.event.getResources()[0].id;
+
+                if (nuevoInicio < new Date()) {
+                    alert("No se puede mover una reserva al pasado.");
+                    info.revert(); return;
+                }
+                if (!confirm("¿Seguro que deseas mover esta reserva?")) {
+                    info.revert(); return;
+                }
+
+                fetch('/reservas/reagendar', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reserva_id: reservaId, nuevo_inicio: nuevoInicio.toISOString(), nuevo_colaborador_id: nuevoColaboradorId })
+                })
+                    .then(res => res.json().then(d => ({ ok: res.ok, data: d })))
+                    .then(result => {
+                        if (!result.ok) { alert(result.data.message); info.revert(); }
+                        else { actualizarAgenda(); }
+                    })
+                    .catch(err => { alert("Error de red."); info.revert(); });
+            },
+        });
 
         calendar.render();
 
