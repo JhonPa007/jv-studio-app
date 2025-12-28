@@ -2170,11 +2170,28 @@ def render_agenda_diaria():
             cursor.execute("""
                 SELECT e.id, e.nombres, e.apellidos, e.nombre_display,
                        (SELECT COUNT(*) FROM reservas r 
+                       (SELECT COUNT(*) FROM reservas r 
                         WHERE r.empleado_id = e.id 
                           AND r.fecha_hora_inicio >= CURRENT_DATE 
                           AND r.fecha_hora_inicio < CURRENT_DATE + INTERVAL '1 day'
                           AND r.estado NOT IN ('Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio')
-                       ) as citas_hoy
+                       ) as citas_hoy,
+                       
+                       -- SUBQUERY PARA SABER SI TIENE TURNO HOY (Día de la semana) O EXTRA
+                       (
+                            EXISTS (
+                                SELECT 1 FROM horarios_empleado he 
+                                WHERE he.empleado_id = e.id 
+                                AND he.dia_semana = EXTRACT(ISODOW FROM CURRENT_DATE)
+                            )
+                            OR
+                            EXISTS (
+                                SELECT 1 FROM horarios_extra hx 
+                                WHERE hx.empleado_id = e.id 
+                                AND hx.fecha = CURRENT_DATE
+                            )
+                       ) as tiene_turno
+                       
                 FROM empleados e
                 WHERE e.activo = TRUE 
                   AND e.realiza_servicios = TRUE  
@@ -2187,7 +2204,6 @@ def render_agenda_diaria():
         flash(f"Error fatal al cargar datos maestros para la agenda: {err_load}", "danger")
     
     return render_template('reservas/agenda_diaria.html', 
-                           # Ya no enviamos sucursales_para_selector porque está fija
                            clientes_todos=clientes_todos,
                            servicios_todos_activos=servicios_todos_activos,
                            empleados_para_selector=empleados_para_selector)   
@@ -2254,25 +2270,48 @@ def api_agenda_dia_data():
             
             # --- 1. OBTENER RECURSOS (COLABORADORES) ---
             # 🟢 CORRECCIÓN: Quitamos reference a 'e.foto' porque no existe en la BD
+            # 1.A. Pre-calcular quienes tienen turno este día (Optimización: 1 sola query en lugar de N)
+            # Buscamos IDs que tengan horarios_empleado (día semana) O horarios_extra (fecha exacta)
+            dia_semana_num = fecha_obj.isoweekday()
+            
             cursor.execute("""
-                SELECT e.id, e.nombre_display as title
+                SELECT DISTINCT empleado_id 
+                FROM horarios_empleado 
+                WHERE dia_semana = %s
+                UNION
+                SELECT DISTINCT empleado_id 
+                FROM horarios_extra 
+                WHERE fecha = %s
+            """, (dia_semana_num, fecha_str))
+            
+            ids_con_turno = {row['empleado_id'] for row in cursor.fetchall()}
+
+            # --- 1.B. QUERY PRINCIPAL DE EMPLEADOS ---
+            # Necesitamos citas_hoy para el filtro "Con Citas" se actualice.
+            cursor.execute("""
+                SELECT e.id, e.nombre_display as title,
+                       (SELECT COUNT(*) FROM reservas r 
+                        WHERE r.empleado_id = e.id 
+                          AND DATE(r.fecha_hora_inicio) = %s
+                          AND r.estado NOT IN ('Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio')
+                       ) as citas_hoy_count
                 FROM empleados e
                 WHERE e.activo = TRUE 
                   AND e.realiza_servicios = TRUE  
                   AND e.id IN (SELECT empleado_id FROM empleado_sucursales WHERE sucursal_id = %s)
                 ORDER BY e.nombres
-            """, (sucursal_id,))
+            """, (fecha_str, sucursal_id))
             
             recursos_db = cursor.fetchall()
             
             recursos = []
             for r in recursos_db:
-                # 🟢 Como no hay columna foto, enviamos None.
-                # El Javascript detectará esto y mostrará el círculo con la INICIAL.
                 recursos.append({
                     "id": r['id'],
                     "title": r['title'],
-                    "imagen_url": None 
+                    "imagen_url": None,
+                    "tiene_turno": (r['id'] in ids_con_turno),
+                    "citas_hoy": r['citas_hoy_count']
                 })
             
             eventos = []

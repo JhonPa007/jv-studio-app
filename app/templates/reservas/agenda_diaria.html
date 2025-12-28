@@ -346,8 +346,9 @@
                         <div class="form-check p-1 ms-1">
                             <!-- data-citas-hoy será 1 o 0 (true/false) desde backend -->
                             <input class="form-check-input chk-colaborador" type="checkbox" value="{{ emp.id }}"
-                                id="chk_colab_{{ emp.id }}" data-citas-hoy="{{ emp.citas_hoy }}" checked>
-                            <!-- Por defecto checkeamos todo, JS ajustará segun el radio -->
+                                id="chk_colab_{{ emp.id }}" data-citas-hoy="{{ emp.citas_hoy }}" {% if emp.tiene_turno
+                                %}checked{% endif %}>
+                            <!-- Por defecto checkeamos si tiene turno -->
                             <label class="form-check-label d-flex align-items-center w-100"
                                 for="chk_colab_{{ emp.id }}">
                                 {% if emp.foto %}
@@ -372,11 +373,7 @@
             </div>
         </div>
 
-        <div class="ms-md-auto mt-2 mt-md-0">
-            <button id="btnActualizarAgenda" class="btn btn-primary btn-sm fw-bold shadow-sm">
-                <i class="fas fa-sync-alt me-1"></i>Actualizar
-            </button>
-        </div>
+
     </div>
 
     <div id='calendar' class="mt-4 shadow-lg"></div>
@@ -450,6 +447,8 @@
         if (!selectorFecha.value) setFechaLocal();
 
         // 3. Inicializar FullCalendar
+        let resetFilterOnNextLoad = false; // Bandera para saber si debemos resetear los checks al cambiar de fecha
+
         const calendar = new FullCalendar.Calendar(agendaContainer, {
             schedulerLicenseKey: 'GPL-My-Project-Is-Open-Source',
             initialView: 'resourceTimeGridDay',
@@ -538,6 +537,25 @@
                     .then(res => res.json())
                     .then(data => {
                         let todosRecursos = data.recursos;
+
+                        // 🟢 NUEVO: Si cambiamos de fecha, reseteamos los checks según "tiene_turno"
+                        if (resetFilterOnNextLoad) {
+                            document.querySelectorAll('.chk-colaborador').forEach(chk => {
+                                // Buscamos el recurso correspondiente en la data fresca
+                                const rec = todosRecursos.find(r => r.id == chk.value);
+                                if (rec) {
+                                    chk.checked = rec.tiene_turno;
+                                    // Actualizamos el dato de citas para el filtro "Con Citas"
+                                    chk.dataset.citasHoy = rec.citas_hoy;
+                                }
+                            });
+                            // Limpiamos la bandera
+                            resetFilterOnNextLoad = false;
+
+                            // Reset radios visuales
+                            if (document.getElementById('radioConCitas')) document.getElementById('radioConCitas').checked = false;
+                            if (document.getElementById('radioTodos')) document.getElementById('radioTodos').checked = false;
+                        }
 
                         // Obtenemos los IDs marcados en los checkboxes
                         const checksMarcados = Array.from(document.querySelectorAll('.chk-colaborador:checked')).map(c => parseInt(c.value));
@@ -633,23 +651,32 @@
         function actualizarAgenda() {
             calendar.refetchResources();
             calendar.refetchEvents();
-            calendar.gotoDate(selectorFecha.value);
+            if (selectorFecha.value) calendar.gotoDate(selectorFecha.value);
         }
 
         // --- 5. LISTENERS BOTONES DE FECHA ---
         document.getElementById('btnDiaAnterior').addEventListener('click', () => {
             const d = new Date(selectorFecha.value + 'T00:00:00'); d.setDate(d.getDate() - 1);
-            selectorFecha.value = d.toISOString().slice(0, 10); actualizarAgenda();
+            selectorFecha.value = d.toISOString().slice(0, 10);
+            resetFilterOnNextLoad = true; // 🟢 Resetear filtro
+            actualizarAgenda();
         });
         document.getElementById('btnDiaSiguiente').addEventListener('click', () => {
             const d = new Date(selectorFecha.value + 'T00:00:00'); d.setDate(d.getDate() + 1);
-            selectorFecha.value = d.toISOString().slice(0, 10); actualizarAgenda();
+            selectorFecha.value = d.toISOString().slice(0, 10);
+            resetFilterOnNextLoad = true; // 🟢 Resetear filtro
+            actualizarAgenda();
         });
         document.getElementById('btnHoy').addEventListener('click', () => {
-            setFechaLocal(); actualizarAgenda();
+            setFechaLocal();
+            resetFilterOnNextLoad = true; // 🟢 Resetear filtro
+            actualizarAgenda();
         });
-        selectorFecha.addEventListener('change', actualizarAgenda);
-        btnActualizar?.addEventListener('click', actualizarAgenda);
+        selectorFecha.addEventListener('change', () => {
+            resetFilterOnNextLoad = true; // 🟢 Resetear filtro
+            actualizarAgenda();
+        });
+        // btnActualizar REMOVED
 
         // --- 6. GESTIÓN DE MODALES (Nueva / Editar) ---
         // (Lógica idéntica a tu código original, resumida aquí para brevedad)
