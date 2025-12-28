@@ -800,20 +800,22 @@
                     const slotDT = new Date(info.dateStr).getTime();
                     const colaboradorId = info.resource.id;
 
-                    // Validar Horario Habil (Color blanco o clase turno-disponible)
+                    // 1. Validar Horario Habil
+                    // Ahora confiamos en la CLASE 'turno-disponible' que asigna el backend y CSS
                     const esHorarioHabil = datosApiAgenda.eventos.some(evento =>
                         evento.resourceId == colaboradorId &&
                         evento.display === 'background' &&
-                        (evento.backgroundColor === '#ffffff' || (evento.classNames && evento.classNames.includes('turno-disponible'))) &&
+                        evento.classNames && evento.classNames.includes('turno-disponible') &&
                         new Date(evento.start).getTime() <= slotDT &&
                         new Date(evento.end).getTime() > slotDT
                     );
 
-                    // Validar Ausencia (Rojo)
+                    // 2. Validar que NO sea Ausencia (Checked by NOT having turno-disponible usually, or explicit check)
+                    // Las ausencias tienen 'bg-danger-subtle'
                     const enAusencia = datosApiAgenda.eventos.some(evento =>
                         evento.resourceId == colaboradorId &&
                         evento.display === 'background' &&
-                        evento.backgroundColor.includes('220, 53, 69') &&
+                        evento.classNames && evento.classNames.includes('bg-danger-subtle') &&
                         new Date(evento.start).getTime() <= slotDT &&
                         new Date(evento.end).getTime() > slotDT
                     );
@@ -822,7 +824,7 @@
                         const hora = info.dateStr.slice(11, 16);
                         abrirModalNuevaReserva(info.resource.id, info.resource.title, info.dateStr.slice(0, 10), hora);
                     } else {
-                        console.log("Clic en zona no disponible");
+                        console.log("Clic en zona no disponible (Sin turno o Ausente)");
                     }
                 },
 
