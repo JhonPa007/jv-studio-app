@@ -138,10 +138,10 @@
     /* A. FONDO RAYADO BASE (Ahora usa la variable de Bloqueo) */
     .fc-timegrid-col {
         background-color: var(--agenda-bg-bloqueo) !important;
-        /* Patrón rayado neutro (blanco/negro suave) para que combine con cualquier color de fondo */
+        /* Patrón rayado OSCURO (Sombra suave) para que se vea sobre colores claros */
         background-image: repeating-linear-gradient(45deg,
-                rgba(255, 255, 255, 0.4),
-                rgba(255, 255, 255, 0.4) 2px,
+                rgba(0, 0, 0, 0.03),
+                rgba(0, 0, 0, 0.03) 2px,
                 transparent 2px,
                 transparent 10px) !important;
     }
@@ -174,8 +174,8 @@
     .fc-bg-event.bg-danger-subtle {
         background-color: var(--agenda-bg-bloqueo) !important;
         background-image: repeating-linear-gradient(45deg,
-                rgba(255, 255, 255, 0.4),
-                rgba(255, 255, 255, 0.4) 2px,
+                rgba(0, 0, 0, 0.03),
+                rgba(0, 0, 0, 0.03) 2px,
                 transparent 2px,
                 transparent 10px) !important;
         opacity: 1 !important;
