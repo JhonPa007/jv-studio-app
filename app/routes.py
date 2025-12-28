@@ -2829,7 +2829,7 @@ def api_marcar_reserva_completada(reserva_id):
 
 # --- FUNCIONES AUXILIARES PARA MENSAJERÍA ---
 
-def generar_link_google_calendar(titulo, inicio_dt, fin_dt, detalles, ubicacion):
+def _generar_link_gcal_interno(titulo, inicio_dt, fin_dt, detalles, ubicacion):
     """
     Genera un enlace para agregar evento a Google Calendar.
     Formato: https://calendar.google.com/calendar/render?action=TEMPLATE&text=...
@@ -2921,7 +2921,7 @@ def api_generar_link_whatsapp_reserva(reserva_id):
                     return jsonify({"success": False, "message": "El colaborador no tiene teléfono registrado."})
                 
                 # Generar Link Calendar
-                gcal_link = generar_link_google_calendar(
+                gcal_link = _generar_link_gcal_interno(
                     titulo=f"Cita: {reserva['cliente_nombre']} - {reserva['servicio_nombre']}",
                     inicio_dt=inicio,
                     fin_dt=fin,
