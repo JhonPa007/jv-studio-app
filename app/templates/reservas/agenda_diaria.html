@@ -381,6 +381,7 @@
     {% include 'reservas/_modal_nueva_reserva.html' %}
     {% include 'reservas/_modal_gestionar_reserva.html' %}
     {% include 'reservas/_modal_bloqueo_agenda.html' %}
+    {% include 'reservas/_modal_habilitar_extra.html' %}
 </div>
 {% endblock content %}
 
@@ -419,6 +420,10 @@
         const modalBloqueoElement = document.getElementById('modalBloqueoAgenda');
         const modalBloqueoInstancia = modalBloqueoElement ? new bootstrap.Modal(modalBloqueoElement) : null;
         const formBloqueo = document.getElementById('formBloqueoAgenda');
+
+        const modalHabilitarElement = document.getElementById('modalHabilitarExtra');
+        const modalHabilitarInstancia = modalHabilitarElement ? new bootstrap.Modal(modalHabilitarElement) : null;
+        const formHabilitar = document.getElementById('formHabilitarExtra');
 
         // Datos Globales
         const todosLosClientes = JSON.parse('{{ clientes_todos | tojson | safe }}');
@@ -894,18 +899,6 @@
         // 🟢 FIN NUEVAS FUNCIONES
 
         window.habilitarHorarioColab = function (empleadoId, nombre) {
-            const fecha = document.getElementById('selectorFechaAgenda').value;
-
-            const motivo = prompt(`Habilitar HORAS EXTRA para ${nombre} el ${fecha}.\n\nIngrese motivo (ej. Extra, Apoyo):`, "Turno Extra");
-            if (motivo === null) return;
-
-            const horaInicio = prompt("Hora Inicio (HH:MM):", "08:00");
-            if (!horaInicio) return;
-            const horaFin = prompt("Hora Fin (HH:MM):", "13:00");
-            if (!horaFin) return;
-
-            if (!confirm(`¿Confirmar HABILITACIÓN EXTRA de ${horaInicio} a ${horaFin} para ${nombre}?`)) return;
-
             fetch('/api/agenda/habilitar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
