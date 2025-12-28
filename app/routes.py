@@ -2605,8 +2605,18 @@ def nueva_reserva():
 
             # Validar Horarios
             dia_semana_reserva = fecha_hora_inicio.isoweekday()
+            
+            # 1. Turnos Recurrentes
             cursor.execute("SELECT hora_inicio, hora_fin FROM horarios_empleado WHERE empleado_id = %s AND dia_semana = %s", (empleado_id, dia_semana_reserva))
-            turnos_del_dia = cursor.fetchall()
+            turnos_recurrentes = cursor.fetchall()
+            
+            # 2. Turnos Extra (Específicos para la fecha)
+            fecha_solo_dia = fecha_hora_inicio.date()
+            cursor.execute("SELECT hora_inicio, hora_fin FROM horarios_extra WHERE empleado_id = %s AND fecha = %s", (empleado_id, fecha_solo_dia))
+            turnos_extra = cursor.fetchall()
+
+            # Combinar ambos
+            turnos_del_dia = turnos_recurrentes + turnos_extra
             
             if not turnos_del_dia:
                 return jsonify({"success": False, "message": f"El colaborador no trabaja el día seleccionado."}), 409
