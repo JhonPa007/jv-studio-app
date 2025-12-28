@@ -610,6 +610,9 @@
             const btnVenta = document.getElementById('btnModalRegistrarVenta');
             const btnCancelarEdicion = document.getElementById('btnModalCancelarEdicion');
             const btnGuardar = document.getElementById('btnModalGuardarCambios');
+            const btnDiagnostico = document.getElementById('btnModalDiagnostico'); // Nuevo Botón
+
+            // ... (limpieza de botones omitida) ...
 
             // --- 2. 🟢 LIMPIEZA TOTAL DE BOTONES WHATSAPP (Anti-Duplicados) ---
             // Buscamos cualquier botón que tenga nuestra clase especial y lo borramos
@@ -648,6 +651,7 @@
                 if (btnVenta) btnVenta.style.display = (data && data.estado === 'Completada') ? 'inline-block' : 'none';
                 if (btnCancelarEdicion) btnCancelarEdicion.style.display = modoVista ? 'none' : 'inline-block';
                 if (btnGuardar) btnGuardar.style.display = modoVista ? 'none' : 'inline-block';
+                if (btnDiagnostico) btnDiagnostico.style.display = modoVista ? 'inline-block' : 'none'; // Mostrar botón debug
 
                 // Mostrar Whatsapp solo en modo vista y activa
                 const showWs = modoVista && !esFinal;
@@ -717,8 +721,16 @@
                             .finally(() => { btnRecordarWs.disabled = false; btnRecordarWs.innerHTML = orig; });
                     };
 
+                    if (btnDiagnostico) {
+                        btnDiagnostico.onclick = () => {
+                            alert(JSON.stringify(data, null, 2));
+                        };
+                    }
+
                     btnAvisarStaff.onclick = () => {
                         // 🟢 Validación Visual: Usamos la misma lógica que el display
+                        const staffCheck = data.staff || data.empleado_nombre;
+
                         if (!staffCheck || staffCheck === 'Sin asignar') {
                             alert("⚠️ No puedes avisar porque esta reserva NO TIENE STAFF asignado.\n\n👉 Asigna un colaborador en 'Editar' primero.");
                             return;
