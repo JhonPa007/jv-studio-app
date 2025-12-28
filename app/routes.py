@@ -2200,6 +2200,8 @@ def render_agenda_diaria():
             empleados_para_selector = cursor.fetchall()
 
     except Exception as err_load:
+        if db_conn:
+            db_conn.rollback()
         flash(f"Error fatal al cargar datos maestros para la agenda: {err_load}", "danger")
     
     return render_template('reservas/agenda_diaria.html', 
