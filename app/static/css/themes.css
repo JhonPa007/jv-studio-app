@@ -1,0 +1,151 @@
+/* 
+   JV Studio - Theme Definitions 
+   Defines semantic variables for 10 distinct themes + Default override classes.
+*/
+
+:root {
+    /* DEFAULT THEME (Placeholder, will be overridden by classes) */
+    --color-bg-body: #212529;
+    --color-bg-sidebar: #000000;
+    --color-bg-navbar: #1a1a1a;
+    --color-bg-card: #2c3034;
+    --color-text-primary: #ffffff;
+    --color-text-secondary: #aaaaaa;
+    --color-accent: #ffc107;
+    --color-border: rgba(255, 255, 255, 0.1);
+    --glass-opacity: 0.7;
+    --shadow-intensity: 0.5;
+}
+
+/* ========================================================
+   BARBER THEMES (Dark, Masculine, Premium)
+   ======================================================== */
+
+/* 1. Barber Default (Gold & Dark) */
+.theme-barber-default {
+    --color-bg-body: #121212;
+    --color-bg-sidebar: #0a0a0a;
+    --color-bg-navbar: #161616;
+    --color-bg-card: #1e1e1e;
+    --color-text-primary: #e0e0e0;
+    --color-text-secondary: #a0a0a0;
+    --color-accent: #d4af37; /* Metallic Gold */
+    --color-border: rgba(212, 175, 55, 0.2);
+}
+
+/* 2. Barber Titanium (Silver & Cyan & Midnight Blue) */
+.theme-barber-titanium {
+    --color-bg-body: #0b1116; /* Deep Midnight Blue */
+    --color-bg-sidebar: #05080a;
+    --color-bg-navbar: #0f161b;
+    --color-bg-card: #151f26;
+    --color-text-primary: #ffffff;
+    --color-text-secondary: #8b9bb4;
+    --color-accent: #00bcd4; /* Cyan Neon */
+    --color-border: rgba(0, 188, 212, 0.2);
+}
+
+/* 3. Barber Leather (Brown, Classic, Vintage) */
+.theme-barber-leather {
+    --color-bg-body: #1a1512; /* Dark Espresso */
+    --color-bg-sidebar: #0f0b09;
+    --color-bg-navbar: #261e1b;
+    --color-bg-card: #2e2621;
+    --color-text-primary: #f0e6d2; /* Parchment */
+    --color-text-secondary: #a89f91;
+    --color-accent: #cd853f; /* Peru / Leather */
+    --color-border: rgba(205, 133, 63, 0.2);
+}
+
+/* 4. Barber Midnight (Total Black & Electric Blue) */
+.theme-barber-midnight {
+    --color-bg-body: #000000;
+    --color-bg-sidebar: #000000;
+    --color-bg-navbar: #0a0a0a;
+    --color-bg-card: #0f0f0f;
+    --color-text-primary: #e0e0e0;
+    --color-text-secondary: #555555;
+    --color-accent: #2962ff; /* Electric Blue */
+    --color-border: rgba(41, 98, 255, 0.3);
+}
+
+/* 5. Barber Forest (Dark Green & Gold) */
+.theme-barber-forest {
+    --color-bg-body: #0e1610; /* deeply dark green */
+    --color-bg-sidebar: #050a06;
+    --color-bg-navbar: #131f16;
+    --color-bg-card: #1a2b20;
+    --color-text-primary: #dce3dd;
+    --color-text-secondary: #8aa392;
+    --color-accent: #cca43b; /* Muted Gold */
+    --color-border: rgba(204, 164, 59, 0.2);
+}
+
+/* ========================================================
+   SALON THEMES (Light/Soft/Elegant or Chic Dark)
+   ======================================================== */
+
+/* 6. Salon Rose (Rose Gold, Pink, White) */
+.theme-salon-rose {
+    --color-bg-body: #fff0f5; /* Lavender Blush */
+    --color-bg-sidebar: #ffffff;
+    --color-bg-navbar: #ffffff;
+    --color-bg-card: #ffffff;
+    --color-text-primary: #4a4a4a;
+    --color-text-secondary: #888888;
+    --color-accent: #e08dac; /* Soft Rose */
+    --color-border: rgba(224, 141, 172, 0.2);
+    --shadow-intensity: 0.1; /* Softer shadows */
+}
+
+/* 7. Salon Lavender (Soft Purple & White) */
+.theme-salon-lavender {
+    --color-bg-body: #f3e5f5; /* Purple 50 */
+    --color-bg-sidebar: #ffffff;
+    --color-bg-navbar: #ffffff;
+    --color-bg-card: #ffffff;
+    --color-text-primary: #4a148c; /* Dark Purple Text */
+    --color-text-secondary: #7b1fa2;
+    --color-accent: #ab47bc; /* Purple 400 */
+    --color-border: rgba(171, 71, 188, 0.2);
+    --shadow-intensity: 0.1;
+}
+
+/* 8. Salon Chic (High Contrast Black/White/HotPink) */
+.theme-salon-chic {
+    --color-bg-body: #ffffff;
+    --color-bg-sidebar: #000000;
+    --color-bg-navbar: #000000;
+    --color-bg-card: #f8f9fa;
+    --color-text-primary: #000000;
+    --color-text-secondary: #555555;
+    --color-accent: #ff00ba; /* Hot Pink */
+    --color-border: rgba(0, 0, 0, 0.1);
+    --shadow-intensity: 0.15;
+}
+
+/* 9. Salon Nature (Sage Green & Earth tones) */
+.theme-salon-nature {
+    --color-bg-body: #f1f8e9; /* Light Green */
+    --color-bg-sidebar: #ffffff;
+    --color-bg-navbar: #ffffff;
+    --color-bg-card: #ffffff;
+    --color-text-primary: #33691e; /* Dark Green Text */
+    --color-text-secondary: #689f38;
+    --color-accent: #7cb342; /* Light Green Accent */
+    --color-border: rgba(124, 179, 66, 0.2);
+    --shadow-intensity: 0.1;
+}
+
+/* 10. Salon Ocean (Clean Blue & White) */
+.theme-salon-ocean {
+    --color-bg-body: #e3f2fd; /* Blue 50 */
+    --color-bg-sidebar: #ffffff;
+    --color-bg-navbar: #ffffff;
+    --color-bg-card: #ffffff;
+    --color-text-primary: #0d47a1; /* Dark Blue Text */
+    --color-text-secondary: #1976d2;
+    --color-accent: #00bcd4; /* Cyan */
+    --color-border: rgba(0, 188, 212, 0.2);
+    --shadow-intensity: 0.1;
+}
