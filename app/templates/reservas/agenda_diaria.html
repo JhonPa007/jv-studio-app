@@ -168,8 +168,9 @@
 
     /* APLICACIÓN DE VARIABLES A CLASES EXISTENTES */
 
-    /* BLOQUEOS: Usamos un patrón linear-gradient sobre el color de fondo variable 
-       para mantener las líneas diagonales ("hachure") pero cambiar el tono base */
+    /* APLICACIÓN DE VARIABLES A CLASES EXISTENTES */
+
+    /* 1. BLOQUEOS (Background Events) */
     .fc-bg-event.bg-danger-subtle {
         background-color: var(--agenda-bg-bloqueo) !important;
         background-image: repeating-linear-gradient(45deg,
@@ -178,17 +179,27 @@
                 rgba(255, 0, 0, 0.05) 10px,
                 rgba(255, 0, 0, 0.05) 20px) !important;
         opacity: 1 !important;
-        /* Forzamos opacidad para ver el color */
     }
 
-    /* CITAS (Eventos normales) */
-    .fc-event {
+    /* 2. TURNOS HABILITADOS (Background Events) - "Available" */
+    .fc-bg-event.turno-disponible {
+        background-color: var(--agenda-bg-habilitado) !important;
+        opacity: 1 !important;
+    }
+
+    /* 3. CITAS / RESERVAS (Foreground Events) */
+    /* Usamos selectores más específicos para NO afectar a los background events */
+    .fc-timegrid-event,
+    .fc-daygrid-event,
+    .fc-v-event {
         background-color: var(--agenda-bg-reserva) !important;
         border-color: var(--agenda-bg-reserva) !important;
         color: var(--agenda-txt-reserva) !important;
     }
 
-    .fc-event.reserva-completada {
+    /* 3.1 Citas Completadas */
+    .fc-timegrid-event.reserva-completada,
+    .fc-v-event.reserva-completada {
         background-color: var(--agenda-bg-completado) !important;
         border-color: var(--agenda-bg-completado) !important;
     }
