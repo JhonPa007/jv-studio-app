@@ -641,6 +641,10 @@
         });
 
         function initCalendar() {
+            // DEBUG: Ver qué valor está llegando realmente
+            console.log("Config actual:", currentConfig);
+            // alert("DEBUG: Intervalo cargado...");
+
             // Destruir si existe para recrear con nueva duración
             if (calendar) calendar.destroy();
 
@@ -652,8 +656,8 @@
                 height: 'calc(100vh - 190px)',
                 allDaySlot: false,
                 allDaySlot: false,
-                // Asegurar valor válido o fallback a 15m
-                slotDuration: currentConfig.agenda_intervalo ? currentConfig.agenda_intervalo : '00:15:00',
+                // PRUEBA DE FUEGO: FORZAR 5 MINUTOS
+                slotDuration: '00:05:00', // currentConfig.agenda_intervalo ? currentConfig.agenda_intervalo : '00:15:00',
 
                 // Forzar etiquetas de hora cada hora para limpieza visual si el slot es muy pequeño
                 slotLabelInterval: '01:00',
