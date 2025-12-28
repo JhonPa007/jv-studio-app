@@ -2525,6 +2525,8 @@ def api_configuracion():
 
     try:
         cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        # Evitar bloqueos indefinidos (5 segundos timeout)
+        cursor.execute("SET statement_timeout = 5000") 
     except Exception as e:
         current_app.logger.error(f"Error creando cursor: {e}")
         return jsonify({"success": False, "message": "Error interno (Cursor)"}), 500
