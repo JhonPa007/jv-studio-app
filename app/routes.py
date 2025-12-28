@@ -2455,11 +2455,11 @@ def api_agenda_bloquear():
         # Insertar en ausencias_empleado
         sql = """
             INSERT INTO ausencias_empleado 
-            (empleado_id, tipo_ausencia, fecha_hora_inicio, fecha_hora_fin, descripcion, aprobado, creado_por)
-            VALUES (%s, 'Bloqueo Agenda', %s, %s, %s, TRUE, %s) 
+            (empleado_id, tipo_ausencia, fecha_hora_inicio, fecha_hora_fin, descripcion, aprobado)
+            VALUES (%s, 'Bloqueo Agenda', %s, %s, %s, TRUE) 
             RETURNING id
         """ 
-        cursor.execute(sql, (empleado_id, dt_inicio, dt_fin, motivo, session.get('user_id')))
+        cursor.execute(sql, (empleado_id, dt_inicio, dt_fin, motivo))
         db.commit()
         
         return jsonify({"success": True, "message": "Horario bloqueado correctamente."})
