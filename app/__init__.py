@@ -89,10 +89,17 @@ def create_app():
 
                     # C. Cargar Datos de la Sucursal Actual (Para el Footer)
                     sucursal_id = session.get('sucursal_id')
+                    config_sucursal = None # Variable para config especifica de sucursal
+                    
                     if sucursal_id:
                         try:
                             cursor.execute("SELECT * FROM sucursales WHERE id = %s", (sucursal_id,))
                             sucursal_actual = cursor.fetchone()
+                            
+                            # Cargar Configuración de Sucursal (Agenda, Fuentes, etc.)
+                            cursor.execute("SELECT * FROM configuracion_sucursal WHERE sucursal_id = %s", (sucursal_id,))
+                            config_sucursal = cursor.fetchone()
+                            
                         except Exception:
                             pass
 
@@ -104,7 +111,8 @@ def create_app():
             tema_sistema=tema, 
             mis_sucursales=mis_sucursales, 
             sucursal_actual=sucursal_actual,
-            config_sistema=config_sistema
+            config_sistema=config_sistema,
+            config_sucursal=config_sucursal 
         )
     # ----------------------------------------------------------
 

@@ -2501,6 +2501,91 @@ def api_agenda_habilitar():
         return jsonify({"success": False, "message": str(e)}), 500
    
     
+    
+    
+@main_bp.route('/api/configuracion', methods=['GET', 'POST'])
+@login_required
+def api_configuracion():
+    """
+    GET: Devuelve la configuración de la sucursal actual (o valores por defecto).
+    POST: Guarda/Actualiza la configuración.
+    """
+    sucursal_id = session.get('sucursal_id')
+    if not sucursal_id:
+        return jsonify({"success": False, "message": "No hay sucursal seleccionada"}), 400
+
+    db = get_db()
+    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    if request.method == 'GET':
+        try:
+            cursor.execute("SELECT * FROM configuracion_sucursal WHERE sucursal_id = %s", (sucursal_id,))
+            config = cursor.fetchone()
+            
+            if not config:
+                # Valores por defecto si no existe
+                config = {
+                    "agenda_intervalo": "00:15:00",
+                    "agenda_color_bloqueo": "#ffecec",
+                    "agenda_color_habilitado": "#ffffff",
+                    "agenda_color_reserva": "#6c63ff",
+                    "agenda_color_completado": "#198754",
+                    "app_fuente": "Inter"
+                }
+            
+            # Convert timedelta/time objects to string for JSON if needed? 
+            # RealDictCursor might return timedelta for interval.
+            if 'agenda_intervalo' in config and config['agenda_intervalo']:
+                 # Simple trick: ensure it's string
+                 config['agenda_intervalo'] = str(config['agenda_intervalo'])
+
+            return jsonify({"success": True, "config": config})
+        except Exception as e:
+            current_app.logger.error(f"Error GET config: {e}")
+            return jsonify({"success": False, "message": "Error al obtener configuración"}), 500
+
+    elif request.method == 'POST':
+        try:
+            data = request.json
+            
+            # Upsert (Insert or Update)
+            sql = """
+                INSERT INTO configuracion_sucursal (
+                    sucursal_id, agenda_intervalo, agenda_color_bloqueo, 
+                    agenda_color_habilitado, agenda_color_reserva, 
+                    agenda_color_completado, app_fuente
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (sucursal_id) DO UPDATE SET
+                    agenda_intervalo = EXCLUDED.agenda_intervalo,
+                    agenda_color_bloqueo = EXCLUDED.agenda_color_bloqueo,
+                    agenda_color_habilitado = EXCLUDED.agenda_color_habilitado,
+                    agenda_color_reserva = EXCLUDED.agenda_color_reserva,
+                    agenda_color_completado = EXCLUDED.agenda_color_completado,
+                    app_fuente = EXCLUDED.app_fuente;
+            """
+            
+            # Map frontend duration names to time strings if necessary, 
+            # BUT frontend sends '00:15:00' or similar? 
+            # The Modal sends "00:15:00" as string value.
+            
+            cursor.execute(sql, (
+                sucursal_id,
+                data.get('agenda_intervalo', '00:15:00'),
+                data.get('agenda_color_bloqueo', '#ffecec'),
+                data.get('agenda_color_habilitado', '#ffffff'),
+                data.get('agenda_color_reserva', '#6c63ff'),
+                data.get('agenda_color_completado', '#198754'),
+                data.get('app_fuente', 'Inter')
+            ))
+            db.commit()
+            
+            return jsonify({"success": True, "message": "Configuración guardada correctamente."})
+            
+        except Exception as e:
+            db.rollback()
+            current_app.logger.error(f"Error POST config: {e}")
+            return jsonify({"success": False, "message": str(e)}), 500
+
 def timedelta_to_time_obj(obj):
     """
     Convierte inteligentemente el dato de horario a un objeto time.

@@ -528,33 +528,106 @@
         let resetFilterOnNextLoad = false; // Bandera para saber si debemos resetear los checks al cambiar de fecha
         let calendar = null; // Variable global para instancia
 
-        // 🟢 CONFIGURACIÓN & STORAGE
-        const defaultConfig = {
-            slotDuration: '00:15:00',
-            colors: {
-                bloqueo: '#ffecec',
-                habilitado: '#ffffff',
-                reserva: '#6c63ff',
-                completado: '#198754'
-            }
+        // 🟢 CONFIGURACIÓN & STORAGE (DB)
+        let currentConfig = {
+            agenda_intervalo: '00:15:00',
+            agenda_color_bloqueo: '#ffecec',
+            agenda_color_habilitado: '#ffffff',
+            agenda_color_reserva: '#6c63ff',
+            agenda_color_completado: '#198754',
+            app_fuente: 'Inter'
         };
-
-        function getSavedConfig() {
-            const saved = localStorage.getItem('agendaConfig');
-            return saved ? JSON.parse(saved) : defaultConfig;
-        }
 
         function applyStyles(config) {
             const root = document.documentElement;
-            root.style.setProperty('--agenda-bg-bloqueo', config.colors.bloqueo);
-            root.style.setProperty('--agenda-bg-reserva', config.colors.reserva);
-            root.style.setProperty('--agenda-bg-completado', config.colors.completado);
-            root.style.setProperty('--agenda-bg-habilitado', config.colors.habilitado);
+            if (config.agenda_color_bloqueo) root.style.setProperty('--agenda-bg-bloqueo', config.agenda_color_bloqueo);
+            if (config.agenda_color_reserva) root.style.setProperty('--agenda-bg-reserva', config.agenda_color_reserva);
+            if (config.agenda_color_completado) root.style.setProperty('--agenda-bg-completado', config.agenda_color_completado);
+            if (config.agenda_color_habilitado) root.style.setProperty('--agenda-bg-habilitado', config.agenda_color_habilitado);
+
+            // Fuente Global
+            if (config.app_fuente) {
+                // Actualizar variable CSS globalmente
+                root.style.setProperty('--font-primary', `'${config.app_fuente}', sans-serif`);
+            }
         }
 
-        // Cargar config inicial
-        let currentConfig = getSavedConfig();
-        applyStyles(currentConfig);
+        function populateModalConfig(config) {
+            if (document.getElementById('cfgIntervalo')) document.getElementById('cfgIntervalo').value = config.agenda_intervalo;
+            if (document.getElementById('cfgColorBloqueo')) document.getElementById('cfgColorBloqueo').value = config.agenda_color_bloqueo;
+            if (document.getElementById('cfgColorHabilitado')) document.getElementById('cfgColorHabilitado').value = config.agenda_color_habilitado;
+            if (document.getElementById('cfgColorReserva')) document.getElementById('cfgColorReserva').value = config.agenda_color_reserva;
+            if (document.getElementById('cfgColorCompletado')) document.getElementById('cfgColorCompletado').value = config.agenda_color_completado;
+            if (document.getElementById('configAppFuente')) document.getElementById('configAppFuente').value = config.app_fuente || 'Inter';
+        }
+
+        // Cargar config llamada API
+        function loadConfigAndInit() {
+            fetch('/api/configuracion')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        currentConfig = data.config;
+                        applyStyles(currentConfig);
+                        populateModalConfig(currentConfig);
+                    }
+                })
+                .catch(err => console.error("Error cargando config:", err))
+                .finally(() => {
+                    // Iniciar calendario siempre, use default si falla API
+                    initCalendar();
+                });
+        }
+
+        // Listener Formulario Configuración
+        document.getElementById('formConfigAgenda')?.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const btn = this.querySelector('button[type="submit"]');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+            const payload = {
+                agenda_intervalo: document.getElementById('cfgIntervalo').value,
+                agenda_color_bloqueo: document.getElementById('cfgColorBloqueo').value,
+                agenda_color_habilitado: document.getElementById('cfgColorHabilitado').value,
+                agenda_color_reserva: document.getElementById('cfgColorReserva').value,
+                agenda_color_completado: document.getElementById('cfgColorCompletado').value,
+                app_fuente: document.getElementById('configAppFuente').value
+            };
+
+            fetch('/api/configuracion', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Configuración guardada.');
+                        location.reload(); // Recargar para aplicar cambios profundos (FullCalendar slotDuration a veces requiere rebuild total)
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(err => alert('Error de red'))
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                });
+        });
+
+        // Restaurar Default
+        document.getElementById('btnResetConfig')?.addEventListener('click', function () {
+            if (confirm('¿Restaurar valores por defecto?')) {
+                document.getElementById('cfgIntervalo').value = '00:15:00';
+                document.getElementById('cfgColorBloqueo').value = '#ffecec';
+                document.getElementById('cfgColorHabilitado').value = '#ffffff';
+                document.getElementById('cfgColorReserva').value = '#6c63ff';
+                document.getElementById('cfgColorCompletado').value = '#198754';
+                document.getElementById('configAppFuente').value = 'Inter';
+            }
+        });
 
         function initCalendar() {
             // Destruir si existe para recrear con nueva duración
@@ -567,7 +640,7 @@
                 headerToolbar: false,
                 height: 'calc(100vh - 190px)',
                 allDaySlot: false,
-                slotDuration: currentConfig.slotDuration, // 🟢 USAR CONFIG DINÁMICA
+                slotDuration: currentConfig.agenda_intervalo, // 🟢 USAR CONFIG DINÁMICA
 
                 // 🟢 CONFIGURACIÓN DE IMÁGENES DE COLABORADORES
                 resourceLabelContent: function (arg) {
@@ -769,7 +842,8 @@
         } // Fin initCalendar
 
         // Iniciar calendario por primera vez
-        initCalendar();
+        // Iniciar calendario por primera vez (Ahora via API)
+        loadConfigAndInit();
 
         // --- 4. FUNCIONES AUXILIARES ---
         function actualizarAgenda() {

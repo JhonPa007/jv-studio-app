@@ -22,6 +22,33 @@
             }
 
             ;
+
+            /* Dynamic Font from Database */
+                {
+                % if config_sucursal and config_sucursal.app_fuente %
+            }
+
+            --font-primary: '{{ config_sucursal.app_fuente }}',
+            sans-serif !important;
+
+                {
+                % else %
+            }
+
+            --font-primary: 'Inter',
+            sans-serif;
+
+                {
+                % endif %
+            }
+        }
+
+        body {
+            font-family: var(--font-primary);
+        }
+
+        body {
+            font-family: var(--font-primary);
         }
     </style>
     {% block head_extra %}{% endblock %}
