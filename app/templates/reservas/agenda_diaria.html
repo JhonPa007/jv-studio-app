@@ -5,6 +5,25 @@
 {% block head_extra %}
 <script src='https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.10/index.global.min.js'></script>
 
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<style>
+    /* Corrección Select2 en Modales (z-index) */
+    .select2-container--open {
+        z-index: 9999999 !important;
+    }
+
+    .select2-container--bootstrap-5 .select2-dropdown .select2-results__options .select2-results__option {
+        color: #000;
+        font-size: 0.9rem;
+    }
+</style>
+
 <style>
     /* --- 1. Contenedor Principal --- */
     #calendar {
@@ -312,9 +331,22 @@
 
 {% block scripts %}
 {{ super() }}
-
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        // 🟢 INICIALIZAR SELECT2 PARA CLIENTES (Búsqueda Avanzada)
+        $('#modalClienteId').select2({
+            theme: 'bootstrap-5',
+            dropdownParent: $('#modalNuevaReserva'),
+            placeholder: 'Buscar Cliente (Nombre, DNI, Tel)...',
+            width: '100%',
+            allowClear: true,
+            language: {
+                noResults: function () {
+                    return "No encontrado. <a href='/clientes/nuevo' target='_blank'>Crear Nuevo</a>";
+                }
+            },
+            escapeMarkup: function (markup) { return markup; }
+        });
         // 1. Selectores
         const selectorSucursal = document.getElementById('selectorSucursalAgenda');
         const selectorFecha = document.getElementById('selectorFechaAgenda');

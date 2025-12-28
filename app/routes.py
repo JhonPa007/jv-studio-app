@@ -2142,10 +2142,22 @@ def render_agenda_diaria():
             res_suc = cursor.fetchone()
             session['sucursal_nombre'] = res_suc['nombre'] if res_suc else 'Desconocida'
 
-        # 3. Cargar Clientes (Igual que antes)
+        # 3. Cargar Clientes (Mejorado para Búsqueda Avanzada)
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            cursor.execute("SELECT id, razon_social_nombres, apellidos FROM clientes WHERE tipo_documento != 'RUC' OR tipo_documento IS NULL ORDER BY razon_social_nombres, apellidos")
+            # Traemos TODOS (sin filtro de RUC) para que coincida con ventas y agenda
+            cursor.execute("""
+                SELECT id, razon_social_nombres, apellidos, telefono, numero_documento 
+                FROM clientes 
+                ORDER BY razon_social_nombres, apellidos
+            """)
             clientes_todos = cursor.fetchall()
+
+            # Formatear Texto de Búsqueda (Igual que en Nueva Venta)
+            for c in clientes_todos:
+                nombre_full = f"{c['razon_social_nombres']} {c['apellidos'] or ''}".strip()
+                doc = c['numero_documento'] or 'S/D'
+                tel = c['telefono'] or ''
+                c['texto_busqueda'] = f"{nombre_full} | Doc: {doc} | Tel: {tel}"
 
         # 4. Cargar Servicios (Igual que antes)
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
