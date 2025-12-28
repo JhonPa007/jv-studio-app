@@ -720,7 +720,7 @@
                     btnAvisarStaff.onclick = () => {
                         // 🟢 Validación Visual: Usamos la misma lógica que el display
                         if (!staffCheck || staffCheck === 'Sin asignar') {
-                            alert(`⚠️ No puedes avisar porque esta reserva NO TIENE STAFF asignado.\n\n👉 Asigna un colaborador en 'Editar' primero.\n\n[DIAGNÓSTICO CLIENTE]:\nID Staff en Reserva: ${data.empleado_id}\nNombre: ${data.empleado_nombre}\nDebug Backend: ${data.debug_info || 'NO ACTUALIZADO'}`);
+                            alert("⚠️ No puedes avisar porque esta reserva NO TIENE STAFF asignado.\n\n👉 Asigna un colaborador en 'Editar' primero.");
                             return;
                         }
 
