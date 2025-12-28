@@ -4,42 +4,94 @@
 
 {% block head_extra %}
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+<link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
 
 <style>
     /* --- ESTILOS GENERALES --- */
-    .venta-header { background-color: var(--color-secundario); padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-    .venta-section { background-color: #2c2c2c; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #444; }
-    .total-display { font-size: 2rem; font-weight: bold; color: var(--color-primario); text-align: right; }
-    .balance-display { font-size: 1.2rem; text-align: right; }
-    .table-items th { background-color: #444; color: #fff; }
-    .btn-add { height: 100%; }
+    .venta-header {
+        background-color: var(--color-secundario);
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+
+    .venta-section {
+        background-color: #2c2c2c;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border: 1px solid #444;
+    }
+
+    .total-display {
+        font-size: 2rem;
+        font-weight: bold;
+        color: var(--color-primario);
+        text-align: right;
+    }
+
+    .balance-display {
+        font-size: 1.2rem;
+        text-align: right;
+    }
+
+    .table-items th {
+        background-color: #444;
+        color: #fff;
+    }
+
+    .btn-add {
+        height: 100%;
+    }
 
     /* --- CORRECCIÓN CRÍTICA DE VISIBILIDAD (Colaboradores) --- */
-    select option { color: #000 !important; background-color: #fff !important; }
-    .form-select { color: #000 !important; }
+    select option {
+        color: #000 !important;
+        background-color: #fff !important;
+    }
+
+    .form-select {
+        color: #000 !important;
+    }
 
     /* --- CORRECCIÓN SELECT2 MODO OSCURO --- */
-    .select2-container--bootstrap-5 .select2-selection { background-color: #fff; color: #000; border: 1px solid #ced4da; }
-    .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered { color: #000 !important; }
-    .select2-results__option { color: #000 !important; }
-    
+    .select2-container--bootstrap-5 .select2-selection {
+        background-color: #fff;
+        color: #000;
+        border: 1px solid #ced4da;
+    }
+
+    .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+        color: #000 !important;
+    }
+
+    .select2-results__option {
+        color: #000 !important;
+    }
+
     /* Estilos Modals */
-    .modal-campana .modal-content { background-color: #2c2c2c; border: 1px solid var(--color-acento-dorado); color: #fff; }
-    .modal-campana .btn-close { filter: invert(1); }
+    .modal-campana .modal-content {
+        background-color: #2c2c2c;
+        border: 1px solid var(--color-acento-dorado);
+        color: #fff;
+    }
+
+    .modal-campana .btn-close {
+        filter: invert(1);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid mt-4">
-    
-    <div id="server-data" 
-         data-venta-guardada-id="{{ request.args.get('venta_guardada_id') or '' }}"
-         data-url-ticket="{{ url_for('main.ver_ticket', venta_id=0) }}">
+
+    <div id="server-data" data-venta-guardada-id="{{ request.args.get('venta_guardada_id') or '' }}"
+        data-url-ticket="{{ url_for('main.ver_ticket', venta_id=0) }}">
     </div>
 
     <form id="formVenta" method="POST" action="{{ url_for('main.nueva_venta') }}" onsubmit="return false;">
-        
+
         <div class="venta-header">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="mb-0 text-white"><i class="fas fa-cash-register me-2"></i>Nueva Venta</h2>
@@ -62,19 +114,20 @@
                 <div class="col-md-8 mb-3">
                     <label class="form-label text-warning">Cliente Atendido</label>
                     <div class="input-group">
-                        <select class="form-select form-select-lg select2-cliente" id="cliente_id" name="cliente_id" required>
+                        <select class="form-select form-select-lg select2-cliente" id="cliente_id" name="cliente_id"
+                            required>
                             <option value="">Buscar Cliente...</option>
                             {% for c in clientes %}
-                            <option value="{{ c.id }}" 
-                                    data-documento="{{ c.numero_documento }}"
-                                    data-fecha="{{ c.fecha_nac_str or '' }}"
-                                    data-validado="{{ 'true' if c.cumpleanos_validado else 'false' }}"
-                                    data-rechazo="{{ 'true' if c.rechazo_dato_cumpleanos else 'false' }}">
+                            <option value="{{ c.id }}" data-documento="{{ c.numero_documento }}"
+                                data-fecha="{{ c.fecha_nac_str or '' }}"
+                                data-validado="{{ 'true' if c.cumpleanos_validado else 'false' }}"
+                                data-rechazo="{{ 'true' if c.rechazo_dato_cumpleanos else 'false' }}">
                                 {{ c.texto_busqueda }}
                             </option>
                             {% endfor %}
                         </select>
-                        <a href="{{ url_for('main.nuevo_cliente') }}" class="btn btn-outline-secondary" title="Nuevo Cliente"><i class="fas fa-plus"></i></a>
+                        <a href="{{ url_for('main.nuevo_cliente') }}" class="btn btn-outline-secondary"
+                            title="Nuevo Cliente"><i class="fas fa-plus"></i></a>
                     </div>
                 </div>
             </div>
@@ -85,14 +138,14 @@
                     <select class="form-select form-select-lg" name="empleado_id" id="empleado_id" required>
                         <option value="">Seleccione...</option>
                         {% for e in empleados %}
-                        <option value="{{ e.id }}" {% if current_user.id == e.id %}selected{% endif %}>
+                        <option value="{{ e.id }}" {% if current_user.id==e.id %}selected{% endif %}>
                             {{ e.nombre_display }}
                         </option>
                         {% endfor %}
                     </select>
                 </div>
                 <div class="col-md-6 mb-3">
-                     <label class="form-label text-warning">Campaña / Promoción</label>
+                    <label class="form-label text-warning">Campaña / Promoción</label>
                     <select class="form-select form-select-lg" name="campana_id">
                         <option value="">-- Ninguna --</option>
                         {% for camp in campanas %}
@@ -107,7 +160,7 @@
             <div class="col-lg-8">
                 <div class="venta-section">
                     <h4 class="text-warning mb-3"><i class="fas fa-shopping-cart me-2"></i>Ítems</h4>
-                    
+
                     <div class="row mb-3 g-2">
                         <div class="col-md-10">
                             <select class="form-select" id="select_servicio">
@@ -119,25 +172,27 @@
                                 {% endfor %}
                             </select>
                         </div>
-                         <div class="col-md-2">
+                        <div class="col-md-2">
                             <button type="button" class="btn btn-primary w-100" onclick="agregarItem('servicio')">
                                 <i class="fas fa-plus"></i>
                             </button>
-                        </div>                        
+                        </div>
                     </div>
 
                     <div class="row mb-3 g-2">
                         <div class="col-md-10">
-                             <select class="form-select" id="select_producto">
+                            <select class="form-select" id="select_producto">
                                 <option value="">-- Agregar Producto --</option>
                                 {% for p in productos %}
-                                <option value="{{ p.id }}" data-precio="{{ p.precio_venta }}" data-nombre="{{ p.nombre }}" data-stock="{{ p.stock_actual }}">
-                                    {{ p.nombre }} (Stock: {{ p.stock_actual }}) - S/ {{ "%.2f"|format(p.precio_venta) }}
+                                <option value="{{ p.id }}" data-precio="{{ p.precio_venta }}"
+                                    data-nombre="{{ p.nombre }}" data-stock="{{ p.stock_actual }}">
+                                    {{ p.nombre }} (Stock: {{ p.stock_actual }}) - S/ {{ "%.2f"|format(p.precio_venta)
+                                    }}
                                 </option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-2">                                                    
+                        <div class="col-md-2">
                             <button type="button" class="btn btn-warning w-100" onclick="agregarItem('producto')">
                                 <i class="fas fa-box"></i>
                             </button>
@@ -164,45 +219,51 @@
             <div class="col-lg-4">
                 <div class="venta-section">
                     <h4 class="text-warning mb-3"><i class="fas fa-coins me-2"></i>Pago</h4>
-                    
+
                     <div class="d-flex justify-content-between mb-2 text-white">
                         <span>Subtotal:</span>
                         <span id="lbl_subtotal">S/ 0.00</span>
                     </div>
                     <div class="d-flex justify-content-between mb-2 align-items-center text-white">
                         <span>Descuento:</span>
-                        <input type="number" class="form-control form-control-sm w-50 text-end" id="descuento_global" value="0" min="0" step="0.10" oninput="calcularTotales()">
+                        <input type="number" class="form-control form-control-sm w-50 text-end" id="descuento_global"
+                            value="0" min="0" step="0.10" oninput="calcularTotales()">
                     </div>
                     <hr class="text-white">
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span class="h4 text-white">TOTAL:</span>
                         <span class="total-display" id="lbl_total_pagar">S/ 0.00</span>
                     </div>
-                    
+
                     <div class="d-flex justify-content-between align-items-center mt-3">
                         <span class="text-info">Pagado:</span>
                         <span class="text-info fw-bold" id="lbl_total_pagado">S/ 0.00</span>
                     </div>
-                     <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
                         <span class="text-white">Faltante:</span>
                         <span class="text-white fw-bold" id="lbl_faltante">S/ 0.00</span>
                     </div>
 
                     <div id="pagos_container"></div>
-                    
+
                     <button type="button" class="btn btn-outline-info btn-sm w-100 mt-2" onclick="agregarPago()">
                         <i class="fas fa-plus me-1"></i> Añadir Pago
                     </button>
-                    
+
                     <div class="card bg-warning bg-opacity-10 border-warning mt-4 mb-2">
                         <div class="card-body py-2 px-2">
-                            <h6 class="card-title text-warning mb-2 small fw-bold"><i class="fas fa-heart me-1"></i>Propina Voluntaria</h6>
+                            <h6 class="card-title text-warning mb-2 small fw-bold"><i
+                                    class="fas fa-heart me-1"></i>Propina Voluntaria</h6>
                             <div class="row g-1">
                                 <div class="col-4">
-                                    <input type="number" step="0.50" name="monto_propina" class="form-control form-control-sm bg-dark text-warning border-secondary fw-bold" placeholder="S/ 0.00">
+                                    <input type="number" step="0.50" name="monto_propina"
+                                        class="form-control form-control-sm bg-dark text-warning border-secondary fw-bold"
+                                        placeholder="S/ 0.00">
                                 </div>
                                 <div class="col-4">
-                                    <select name="empleado_propina_id" id="empleado_propina_id" class="form-select form-select-sm bg-dark text-white border-secondary" style="font-size: 0.8rem;">
+                                    <select name="empleado_propina_id" id="empleado_propina_id"
+                                        class="form-select form-select-sm bg-dark text-white border-secondary"
+                                        style="font-size: 0.8rem;">
                                         <option value="">¿A quién?</option>
                                         {% for e in empleados %}
                                         <option value="{{ e.id }}">{{ e.nombre_display }}</option>
@@ -210,7 +271,9 @@
                                     </select>
                                 </div>
                                 <div class="col-4">
-                                     <select name="metodo_propina" class="form-select form-select-sm bg-dark text-white border-secondary" style="font-size: 0.8rem;">
+                                    <select name="metodo_propina"
+                                        class="form-select form-select-sm bg-dark text-white border-secondary"
+                                        style="font-size: 0.8rem;">
                                         <option value="Efectivo">Efectivo</option>
                                         <option value="Yape">Yape</option>
                                         <option value="Plin">Plin</option>
@@ -244,8 +307,10 @@
             <option value="Tarjeta">Tarjeta</option>
             <option value="Transferencia">Transferencia</option>
         </select>
-        <input type="number" class="form-control form-control-sm monto-pago" placeholder="Monto" step="0.10" min="0" oninput="calcularTotales()">
-        <button type="button" class="btn btn-danger btn-sm" onclick="eliminarPago(this)"><i class="fas fa-trash"></i></button>
+        <input type="number" class="form-control form-control-sm monto-pago" placeholder="Monto" step="0.10" min="0"
+            oninput="calcularTotales()">
+        <button type="button" class="btn btn-danger btn-sm" onclick="eliminarPago(this)"><i
+                class="fas fa-trash"></i></button>
     </div>
 </template>
 
@@ -258,13 +323,15 @@
             </div>
             <div class="modal-body text-center p-4">
                 <h5 id="lblNombreClienteCampana" class="mb-3 text-info"></h5>
-                
+
                 <div id="bloqueConfirmar" style="display:none;">
                     <p>Tenemos registrado su cumpleaños:</p>
                     <h2 class="text-warning fw-bold mb-3" id="lblFechaActual"></h2>
                     <p>¿Es correcta?</p>
-                    <button class="btn btn-success me-2" onclick="responderCampana('confirmar')"><i class="fas fa-check"></i> Sí</button>
-                    <button class="btn btn-outline-light" onclick="mostrarInputFecha()"><i class="fas fa-edit"></i> No, corregir</button>
+                    <button class="btn btn-success me-2" onclick="responderCampana('confirmar')"><i
+                            class="fas fa-check"></i> Sí</button>
+                    <button class="btn btn-outline-light" onclick="mostrarInputFecha()"><i class="fas fa-edit"></i> No,
+                        corregir</button>
                 </div>
 
                 <div id="bloqueSolicitar" style="display:none;">
@@ -272,8 +339,10 @@
                     <p class="text-muted small">¿Nos podría brindar su fecha de cumpleaños?</p>
                     <input type="date" id="inputFechaCampana" class="form-control w-75 mx-auto mb-3">
                     <div class="d-grid gap-2">
-                        <button class="btn btn-info fw-bold" onclick="responderCampana('actualizar')">Guardar Fecha</button>
-                        <button class="btn btn-link text-muted" onclick="responderCampana('rechazar')">Prefiero no decirlo</button>
+                        <button class="btn btn-info fw-bold" onclick="responderCampana('actualizar')">Guardar
+                            Fecha</button>
+                        <button class="btn btn-link text-muted" onclick="responderCampana('rechazar')">Prefiero no
+                            decirlo</button>
                     </div>
                 </div>
             </div>
@@ -317,7 +386,7 @@
     const datosPreCargados = JSON.parse('{{ prefill_data | tojson | safe if prefill_data else "null" }}');
 
     // --- INICIALIZACIÓN ---
-    $(document).ready(function() {
+    $(document).ready(function () {
         // Select2 con tema Bootstrap 5
         $('.select2-cliente').select2({
             theme: 'bootstrap-5',
@@ -328,7 +397,7 @@
         // 🟢 AUTOMATIZACIÓN: Si hay datos pre-cargados (Desde Agenda)
         if (datosPreCargados) {
             console.log("Cargando datos de reserva:", datosPreCargados);
-            
+
             // 1. Seleccionar Cliente
             if (datosPreCargados.cliente_id) {
                 $('#cliente_id').val(datosPreCargados.cliente_id).trigger('change');
@@ -359,20 +428,20 @@
         }
 
         // DETECTOR DE CLIENTE (Campaña Cumpleaños)
-        $('.select2-cliente').on('select2:select', function(e) {
+        $('.select2-cliente').on('select2:select', function (e) {
             const el = e.params.data.element;
             if (!el) return;
 
             const dataset = el.dataset;
             clienteIdCampana = el.value;
-            const nombre = e.params.data.text.split('|')[0]; 
+            const nombre = e.params.data.text.split('|')[0];
 
             // Si ya validó o rechazó, no hacemos nada
             if (dataset.validado === 'true' || dataset.rechazo === 'true') return;
 
             // Preparar Modal
             document.getElementById('lblNombreClienteCampana').innerText = nombre;
-            
+
             if (dataset.fecha && dataset.fecha !== 'None' && dataset.fecha !== '') {
                 // Modo Confirmar
                 const [y, m, d] = dataset.fecha.split('-');
@@ -394,14 +463,14 @@
         // VERIFICAR SI VENIMOS DE UNA VENTA EXITOSA
         const serverData = document.getElementById('server-data');
         const ventaId = serverData.dataset.ventaGuardadaId;
-        
+
         if (ventaId) {
             const urlBase = serverData.dataset.urlTicket;
             document.getElementById('btnImprimirTicket').href = urlBase.replace('/0', '/' + ventaId);
             const modalExito = new bootstrap.Modal(document.getElementById('modalExitoVenta'));
             modalExito.show();
         }
-        
+
         // Agregar una línea de pago por defecto si la lista está vacía
         if (document.querySelectorAll('.pago-row').length === 0) {
             agregarPago();
@@ -420,46 +489,46 @@
 
         try {
             const res = await fetch('/api/clientes/actualizar-campana', {
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({cliente_id: clienteIdCampana, accion, fecha_nacimiento: fecha})
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cliente_id: clienteIdCampana, accion, fecha_nacimiento: fecha })
             });
             const data = await res.json();
-            
-            if(data.success) {
+
+            if (data.success) {
                 bootstrap.Modal.getInstance(document.getElementById('modalCampanaDatos')).hide();
                 // Actualizar DOM para no volver a preguntar
                 const opt = document.querySelector(`.select2-cliente option[value="${clienteIdCampana}"]`);
-                if(opt) {
+                if (opt) {
                     opt.dataset.validado = 'true';
-                    if(accion === 'rechazar') opt.dataset.rechazo = 'true';
+                    if (accion === 'rechazar') opt.dataset.rechazo = 'true';
                 }
                 alert(data.message);
             }
-        } catch(e) { console.error(e); alert('Error de conexión'); }
+        } catch (e) { console.error(e); alert('Error de conexión'); }
     }
 
     // --- LOGICA VENTA ---
     function agregarItem(tipo) {
         const sel = document.getElementById(tipo === 'servicio' ? 'select_servicio' : 'select_producto');
-        const id = sel.value; 
-        if(!id) return;
-        
+        const id = sel.value;
+        if (!id) return;
+
         const opt = sel.options[sel.selectedIndex];
         const item = {
-            id, tipo, 
-            descripcion: opt.dataset.nombre, 
+            id, tipo,
+            descripcion: opt.dataset.nombre,
             precio: parseFloat(opt.dataset.precio),
             stock: parseInt(opt.dataset.stock || 0),
             cantidad: 1
         };
 
         const existe = listaItems.find(i => i.id === id && i.tipo === tipo);
-        if(existe) {
-            if(tipo === 'producto' && existe.cantidad >= item.stock) { alert('Sin stock suficiente'); return; }
+        if (existe) {
+            if (tipo === 'producto' && existe.cantidad >= item.stock) { alert('Sin stock suficiente'); return; }
             existe.cantidad++;
         } else {
-            if(tipo === 'producto' && item.stock < 1) { alert('Producto agotado'); return; }
+            if (tipo === 'producto' && item.stock < 1) { alert('Producto agotado'); return; }
             listaItems.push(item);
         }
         renderTabla();
@@ -474,20 +543,31 @@
             tbody.innerHTML += `
                 <tr>
                     <td>${it.descripcion} <small class='text-muted'>${it.tipo}</small></td>
-                    <td><input type="number" class="form-control form-control-sm text-center" value="${it.cantidad}" min="1" onchange="updateCant(${i}, this.value)"></td>
-                    <td class="text-end">S/ ${it.precio.toFixed(2)}</td>
-                    <td class="text-end">S/ ${total.toFixed(2)}</td>
-                    <td><button class="btn btn-sm btn-danger" onclick="delItem(${i})">X</button></td>
-                </tr>
-            `;
+                <td><input type="number" class="form-control form-control-sm text-center" value="${it.cantidad}" min="1" onchange="updateCant(${i}, this.value)"></td>
+                <td>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">S/</span>
+                        <input type="number" class="form-control text-end" value="${it.precio.toFixed(2)}" step="0.50" min="0" onchange="updatePre(${i}, this.value)">
+                    </div>
+                </td>
+                <td class="text-end">S/ ${total.toFixed(2)}</td>
+                <td><button class="btn btn-sm btn-danger" onclick="delItem(${i})">X</button></td>
+            </tr>
+        `;
         });
         calcularTotales();
     }
 
+    function updatePre(i, val) {
+        let p = parseFloat(val);
+        if (isNaN(p) || p < 0) p = 0;
+        listaItems[i].precio = p;
+        renderTabla();
+    }
     function updateCant(i, val) {
         val = parseInt(val);
-        if(val < 1) val = 1;
-        if(listaItems[i].tipo === 'producto' && val > listaItems[i].stock) {
+        if (val < 1) val = 1;
+        if (listaItems[i].tipo === 'producto' && val > listaItems[i].stock) {
             alert('Stock máximo: ' + listaItems[i].stock);
             val = listaItems[i].stock;
         }
@@ -502,25 +582,25 @@
         document.getElementById('pagos_container').appendChild(tpl.content.cloneNode(true));
         calcularTotales();
     }
-    
+
     function eliminarPago(btn) { btn.closest('.pago-row').remove(); calcularTotales(); }
 
     function calcularTotales() {
         const sub = listaItems.reduce((acc, it) => acc + (it.cantidad * it.precio), 0);
         const desc = parseFloat(document.getElementById('descuento_global').value) || 0;
         const total = Math.max(0, sub - desc);
-        
+
         document.getElementById('lbl_subtotal').innerText = 'S/ ' + sub.toFixed(2);
         document.getElementById('lbl_total_pagar').innerText = 'S/ ' + total.toFixed(2);
-        
+
         let pagado = 0;
         document.querySelectorAll('.monto-pago').forEach(inp => pagado += parseFloat(inp.value) || 0);
         document.getElementById('lbl_total_pagado').innerText = 'S/ ' + pagado.toFixed(2);
-        
+
         const faltante = total - pagado;
         const lblFalt = document.getElementById('lbl_faltante');
-        
-        if(Math.abs(faltante) <= 0.01) { // Exacto
+
+        if (Math.abs(faltante) <= 0.01) { // Exacto
             lblFalt.className = 'text-white fw-bold';
             lblFalt.innerText = 'S/ 0.00';
         } else if (faltante < 0) { // Vuelto
@@ -530,10 +610,10 @@
             lblFalt.className = 'text-danger fw-bold';
             lblFalt.innerText = 'S/ ' + faltante.toFixed(2);
         }
-        
+
         // Autocompletar primer pago si está vacío y hay monto
         const primerPago = document.querySelector('.monto-pago');
-        if(primerPago && (!primerPago.value || parseFloat(primerPago.value) === 0) && total > 0 && document.querySelectorAll('.monto-pago').length === 1) {
+        if (primerPago && (!primerPago.value || parseFloat(primerPago.value) === 0) && total > 0 && document.querySelectorAll('.monto-pago').length === 1) {
             primerPago.value = total.toFixed(2);
             // Recalcular visualmente sin llamar recursivamente
             document.getElementById('lbl_total_pagado').innerText = 'S/ ' + total.toFixed(2);
@@ -543,22 +623,22 @@
     }
 
     function registrarVenta() {
-        if(listaItems.length === 0) { alert('Agregue ítems'); return; }
-        
+        if (listaItems.length === 0) { alert('Agregue ítems'); return; }
+
         // Validaciones RUC/DNI
         const tipo = document.getElementById('tipo_comprobante').value;
-        
+
         // Obtener data del cliente seleccionado en Select2
         const dataCliente = $('.select2-cliente').select2('data')[0];
         const elCliente = dataCliente ? dataCliente.element : null;
         const doc = elCliente ? elCliente.dataset.documento : '';
-        
+
         const total = parseFloat(document.getElementById('lbl_total_pagar').innerText.replace('S/ ', ''));
 
-        if(tipo === 'Factura Electrónica' && (!doc || doc.length !== 11)) {
+        if (tipo === 'Factura Electrónica' && (!doc || doc.length !== 11)) {
             alert('Para Factura se requiere cliente con RUC (11 dígitos).'); return;
         }
-        if(tipo === 'Boleta Electrónica' && total >= 700 && (!doc || doc.length !== 8)) {
+        if (tipo === 'Boleta Electrónica' && total >= 700 && (!doc || doc.length !== 8)) {
             alert('Para boletas >= S/ 700 se requiere DNI.'); return;
         }
 
@@ -566,13 +646,13 @@
         const pagos = [];
         document.querySelectorAll('.pago-row').forEach(row => {
             const m = parseFloat(row.querySelector('.monto-pago').value) || 0;
-            if(m > 0) pagos.push({
+            if (m > 0) pagos.push({
                 metodo: row.querySelector('.metodo-pago').value,
                 monto: m
             });
         });
-        
-        if(pagos.length === 0 && total > 0) { alert('Ingrese el pago'); return; }
+
+        if (pagos.length === 0 && total > 0) { alert('Ingrese el pago'); return; }
 
         document.getElementById('items_lista_json').value = JSON.stringify(listaItems);
         document.getElementById('pagos_lista_json').value = JSON.stringify(pagos);
