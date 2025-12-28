@@ -2455,8 +2455,8 @@ def api_agenda_bloquear():
         # Insertar en ausencias_empleado
         sql = """
             INSERT INTO ausencias_empleado 
-            (empleado_id, tipo_ausencia_id, fecha_hora_inicio, fecha_hora_fin, motivo, aprobado, creado_por)
-            VALUES (%s, 1, %s, %s, %s, TRUE, %s) 
+            (empleado_id, tipo_ausencia, fecha_hora_inicio, fecha_hora_fin, motivo, aprobado, creado_por)
+            VALUES (%s, 'Bloqueo Agenda', %s, %s, %s, TRUE, %s) 
             RETURNING id
         """ 
         cursor.execute(sql, (empleado_id, dt_inicio, dt_fin, motivo, session.get('user_id')))
