@@ -692,8 +692,8 @@
 
                     if (vistaDiv) {
                         // 🟢 CORRECCIÓN DEL NOMBRE DEL STAFF
-                        // Intentamos leer 'staff', luego 'empleado_nombre', o mostramos 'Sin asignar'
-                        const staffName = data.staff || data.empleado_nombre || '<span class="text-danger fw-bold">Sin asignar</span>';
+                        // Intentamos leer 'staff', 'empleado_nombre' o 'empleado_nombre_completo' (para compatibilidad)
+                        const staffName = data.staff || data.empleado_nombre || data.empleado_nombre_completo || '<span class="text-danger fw-bold">Sin asignar</span>';
 
                         vistaDiv.innerHTML = `
                         <dl class="row mb-0">
@@ -728,8 +728,8 @@
                     }
 
                     btnAvisarStaff.onclick = () => {
-                        // 🟢 Validación Visual: Usamos la misma lógica que el display
-                        const staffCheck = data.staff || data.empleado_nombre;
+                        // 🟢 Validación Visual: Compatibilidad con versiones anteriores del backend
+                        const staffCheck = data.staff || data.empleado_nombre || data.empleado_nombre_completo;
 
                         if (!staffCheck || staffCheck === 'Sin asignar') {
                             alert("⚠️ No puedes avisar porque esta reserva NO TIENE STAFF asignado.\n\n👉 Asigna un colaborador en 'Editar' primero.");
