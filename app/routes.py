@@ -2503,6 +2503,8 @@ def api_agenda_habilitar():
     
     
     
+import psycopg2.extras
+
 @main_bp.route('/api/configuracion', methods=['GET', 'POST'])
 @login_required
 def api_configuracion():
@@ -2515,6 +2517,10 @@ def api_configuracion():
         return jsonify({"success": False, "message": "No hay sucursal seleccionada"}), 400
 
     db = get_db()
+    if not db:
+        current_app.logger.error("Error: No database connection in api_configuracion")
+        return jsonify({"success": False, "message": "Error de conexión a Base de Datos"}), 500
+
     cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     if request.method == 'GET':
