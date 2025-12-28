@@ -739,21 +739,6 @@ def pagar_propina_a_barbero():
             
             caja_id = sesion['id']
 
-            # 🟢 3. BUSCAR UNA CATEGORÍA DE GASTO (Para cumplir con la BD)
-            # Intentamos buscar una que diga "Propinas" o "Personal", sino usamos la primera que exista.
-            cursor.execute("SELECT id FROM categorias_gastos WHERE nombre ILIKE '%Propina%' OR nombre ILIKE '%Personal%' LIMIT 1")
-            cat_match = cursor.fetchone()
-            
-            if cat_match:
-                categoria_id = cat_match['id']
-            else:
-                # Si no hay específica, agarramos CUALQUIERA para que no falle
-                cursor.execute("SELECT id FROM categorias_gastos LIMIT 1")
-                cat_any = cursor.fetchone()
-                if not cat_any:
-                    return jsonify({'error': 'Error: Debes crear al menos una "Categoría de Gastos" en el sistema antes de hacer esto.'}), 400
-                categoria_id = cat_any['id']
-
             # 4. Marcar propina como ENTREGADA
             cursor.execute("""
                 UPDATE propinas 
@@ -761,33 +746,14 @@ def pagar_propina_a_barbero():
                 WHERE id = %s
             """, (propina_id,))
             
-            # 5. Registrar SALIDA DE DINERO (Gasto)
-            cursor.execute("""
-                INSERT INTO gastos (
-                    descripcion, 
-                    monto, 
-                    fecha_registro, 
-                    metodo_pago, 
-                    caja_sesion_id, 
-                    usuario_id, 
-                    empleado_beneficiario_id,
-                    tipo,
-                    sucursal_id,
-                    categoria_gasto_id  -- <--- CAMPO OBLIGATORIO AGREGADO
-                )
-                VALUES (%s, %s, CURRENT_TIMESTAMP, 'Efectivo', %s, %s, %s, 'Salida de Propina', %s, %s)
-            """, (
-                f"Entrega de Propina - {nombre_barbero}", 
-                monto, 
-                caja_id, 
-                current_user.id, 
-                data['empleado_id'],
-                sucursal_id,
-                categoria_id  # <--- VALOR AGREGADO
-            ))
+            # --- NOTA: YA NO REGISTRAMOS GASTO ---
+            # El dashboard calcula "Ingresos Efectivo" sumando ventas + propinas NO entregadas.
+            # Al marcarla como entregada, automáticamente "desaparece" del Ingreso Calculado y del Total en Caja.
+            # Si registráramos un Gasto, se descontaría DOBLE (una vez por salir del Ingreso, otra por el Gasto).
+            # Por solicitud del usuario: "No sumarse a los egresos".
             
             db.commit()
-            return jsonify({'mensaje': 'Propina entregada y descontada de caja correctamente.'})
+            return jsonify({'mensaje': 'Propina entregada correctamente.'})
 
     except Exception as e:
         db.rollback()

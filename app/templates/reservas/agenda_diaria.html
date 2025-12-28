@@ -699,10 +699,15 @@
                     const poblar = (id, items, val) => {
                         const s = document.getElementById(id); if (!s) return;
                         s.innerHTML = '<option value="">Sel...</option>';
-                        items.forEach(i => s.add(new Option(i.nombres || i.nombre || i.razon_social_nombres, i.id)));
+                        items.forEach(i => s.add(new Option(i.texto_busqueda || i.nombres || i.nombre || i.razon_social_nombres, i.id)));
                         s.value = val;
                     };
                     poblar('editClienteId', todosLosClientes, data.cliente_id);
+
+                    // 🟢 INIT SELECT2 EDITAR
+                    if ($('#editClienteId').data('select2')) $('#editClienteId').select2('destroy');
+                    $('#editClienteId').select2({ theme: 'bootstrap-5', dropdownParent: $('#modalGestionarReserva'), width: '100%', placeholder: 'Buscar Cliente...' });
+
                     poblar('editEmpleadoId', todosLosEmpleadosParaSelector, data.empleado_id);
                     poblar('editServicioId', todosLosServiciosActivos, data.servicio_id);
                     if (document.getElementById('editFechaHoraInicio')) document.getElementById('editFechaHoraInicio').value = data.fecha_hora_inicio.slice(0, 16);
