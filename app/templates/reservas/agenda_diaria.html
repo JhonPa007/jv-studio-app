@@ -357,15 +357,7 @@
             </div>
         </div>
 
-        <!-- Botón Configuración (A la derecha) -->
-        <div class="ms-auto">
-            <button class="btn btn-dark border border-secondary" type="button" data-bs-toggle="modal"
-                data-bs-target="#modalConfiguracionAgenda" title="Configuración de Vista">
-                <i class="fas fa-cog"></i>
-            </button>
-        </div>
-
-        <div class="ms-md-3 mt-2 mt-md-0 position-relative">
+        <div class="ms-md-3 mt-2 mt-md-0 position-relative ms-auto">
             <label class="form-label text-light small fw-bold mb-1">Filtrar Colaboradores:</label>
             <div class="dropdown">
                 <button
@@ -436,6 +428,15 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Botón Configuración (A la derecha) -->
+        <div>
+            <label class="form-label text-light small fw-bold mb-1" style="visibility: hidden;">Conf</label>
+            <button class="btn btn-dark border border-secondary" type="button" data-bs-toggle="modal"
+                data-bs-target="#modalConfiguracionAgenda" title="Configuración de Vista">
+                <i class="fas fa-cog"></i>
+            </button>
         </div>
 
 
@@ -764,426 +765,425 @@
                 },
             });
 
-        });
-    calendar.render();
+            calendar.render();
         } // Fin initCalendar
 
-    // Iniciar calendario por primera vez
-    initCalendar();
+        // Iniciar calendario por primera vez
+        initCalendar();
 
-    // --- 4. FUNCIONES AUXILIARES ---
-    function actualizarAgenda() {
-        calendar.refetchResources();
-        calendar.refetchEvents();
-        if (selectorFecha.value) calendar.gotoDate(selectorFecha.value);
-    }
+        // --- 4. FUNCIONES AUXILIARES ---
+        function actualizarAgenda() {
+            calendar.refetchResources();
+            calendar.refetchEvents();
+            if (selectorFecha.value) calendar.gotoDate(selectorFecha.value);
+        }
 
-    // --- 5. LISTENERS BOTONES DE FECHA ---
-    document.getElementById('btnDiaAnterior').addEventListener('click', () => {
-        const d = new Date(selectorFecha.value + 'T00:00:00'); d.setDate(d.getDate() - 1);
-        selectorFecha.value = d.toISOString().slice(0, 10);
-        resetFilterOnNextLoad = true; // 🟢 Resetear filtro
-        actualizarAgenda();
-    });
-    document.getElementById('btnDiaSiguiente').addEventListener('click', () => {
-        const d = new Date(selectorFecha.value + 'T00:00:00'); d.setDate(d.getDate() + 1);
-        selectorFecha.value = d.toISOString().slice(0, 10);
-        resetFilterOnNextLoad = true; // 🟢 Resetear filtro
-        actualizarAgenda();
-    });
-    document.getElementById('btnHoy').addEventListener('click', () => {
-        setFechaLocal();
-        resetFilterOnNextLoad = true; // 🟢 Resetear filtro
-        actualizarAgenda();
-    });
-    selectorFecha.addEventListener('change', () => {
-        resetFilterOnNextLoad = true; // 🟢 Resetear filtro
-        actualizarAgenda();
-    });
-    // btnActualizar REMOVED
-
-    // --- 6. GESTIÓN DE MODALES (Nueva / Editar) ---
-    // (Lógica idéntica a tu código original, resumida aquí para brevedad)
-    window.abrirModalNuevaReserva = function (empleadoId, empleadoNombre, fecha, hora) {
-        formModalNuevaReserva.reset();
-        document.getElementById('modalSucursalId').value = selectorSucursal.value;
-        document.getElementById('modalEmpleadoNombre').textContent = empleadoNombre;
-        const fechaObj = new Date(fecha + 'T00:00:00');
-        document.getElementById('modalFecha').textContent = fechaObj.toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        document.getElementById('modalHoraInicio').textContent = hora;
-        document.getElementById('modalEmpleadoId').value = empleadoId;
-        document.getElementById('modalFechaHoraInicioFull').value = `${fecha}T${hora}`;
-        document.getElementById('modalErrores').style.display = 'none';
-        if (modalNuevaReservaInstancia) modalNuevaReservaInstancia.show();
-    };
-
-    formModalNuevaReserva?.addEventListener('submit', function (e) {
-        e.preventDefault();
-        const btn = this.querySelector('button[type="submit"]');
-        const errDiv = document.getElementById('modalErrores');
-
-        // 1. Recopilar datos básicos del formulario
-        const formData = new FormData(this);
-        const data = Object.fromEntries(formData);
-
-        // 2. 🟢 AGREGAR VALOR DEL CHECKBOX (True/False)
-        const chk = document.getElementById('chkEnviarWhatsApp');
-        data.enviar_whatsapp = chk ? chk.checked : false;
-
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
-        errDiv.style.display = 'none';
-
-        // 3. Enviar al Backend
-        fetch("{{ url_for('main.nueva_reserva') }}", {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        })
-            .then(res => res.json().then(d => ({ ok: res.ok, data: d })))
-            .then(res => {
-                if (res.ok && res.data.success) {
-                    // A. Cerrar modal y refrescar calendario
-                    modalNuevaReservaInstancia.hide();
-                    actualizarAgenda();
-
-                    // B. 🟢 LÓGICA DE WHATSAPP CLICK-TO-CHAT
-                    if (res.data.whatsapp_url) {
-                        // Si el backend devolvió una URL, la abrimos en nueva pestaña
-                        window.open(res.data.whatsapp_url, '_blank');
-                    } else if (data.enviar_whatsapp) {
-                        // Si el usuario marcó el check pero no hubo URL (ej: cliente sin teléfono)
-                        alert("Reserva guardada correctamente, pero no se pudo generar el enlace de WhatsApp (verifique que el cliente tenga teléfono registrado).");
-                    }
-                }
-                else {
-                    // C. Mostrar errores del servidor
-                    errDiv.innerHTML = (res.data.errors || [res.data.message]).join('<br>');
-                    errDiv.style.display = 'block';
-                }
-            })
-            .catch(err => {
-                errDiv.innerHTML = `Error de conexión: ${err.message}`;
-                errDiv.style.display = 'block';
-            })
-            .finally(() => {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-save me-1"></i>Guardar Reserva';
-            });
-    });
-
-    // 🟢 NUEVAS FUNCIONES PARA FILTRO Y DISPONIBILIDAD
-
-    // A. Lógica de Filtro Avanzado
-    window.toggleGrupo = function (grupo) {
-        const checks = document.querySelectorAll('.chk-colaborador');
-        checks.forEach(chk => {
-            if (grupo === 'todos') {
-                chk.checked = true;
-            } else if (grupo === 'citas') {
-                // Usamos el atributo data-citas-hoy que inyectamos desde jinja
-                chk.checked = (chk.dataset.citasHoy == "1" || chk.dataset.citasHoy == "true" || parseInt(chk.dataset.citasHoy) > 0);
-            }
+        // --- 5. LISTENERS BOTONES DE FECHA ---
+        document.getElementById('btnDiaAnterior').addEventListener('click', () => {
+            const d = new Date(selectorFecha.value + 'T00:00:00'); d.setDate(d.getDate() - 1);
+            selectorFecha.value = d.toISOString().slice(0, 10);
+            resetFilterOnNextLoad = true; // 🟢 Resetear filtro
+            actualizarAgenda();
         });
-        actualizarAgenda(); // Refresca FullCalendar
-    };
+        document.getElementById('btnDiaSiguiente').addEventListener('click', () => {
+            const d = new Date(selectorFecha.value + 'T00:00:00'); d.setDate(d.getDate() + 1);
+            selectorFecha.value = d.toISOString().slice(0, 10);
+            resetFilterOnNextLoad = true; // 🟢 Resetear filtro
+            actualizarAgenda();
+        });
+        document.getElementById('btnHoy').addEventListener('click', () => {
+            setFechaLocal();
+            resetFilterOnNextLoad = true; // 🟢 Resetear filtro
+            actualizarAgenda();
+        });
+        selectorFecha.addEventListener('change', () => {
+            resetFilterOnNextLoad = true; // 🟢 Resetear filtro
+            actualizarAgenda();
+        });
+        // btnActualizar REMOVED
 
-    window.limpiarSeleccion = function () {
-        document.querySelectorAll('.chk-colaborador').forEach(c => c.checked = false);
-        // Deseleccionar radios visualmente para evitar confusión
-        document.getElementById('radioConCitas').checked = false;
-        document.getElementById('radioTodos').checked = false;
-        actualizarAgenda();
-    };
+        // --- 6. GESTIÓN DE MODALES (Nueva / Editar) ---
+        // (Lógica idéntica a tu código original, resumida aquí para brevedad)
+        window.abrirModalNuevaReserva = function (empleadoId, empleadoNombre, fecha, hora) {
+            formModalNuevaReserva.reset();
+            document.getElementById('modalSucursalId').value = selectorSucursal.value;
+            document.getElementById('modalEmpleadoNombre').textContent = empleadoNombre;
+            const fechaObj = new Date(fecha + 'T00:00:00');
+            document.getElementById('modalFecha').textContent = fechaObj.toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            document.getElementById('modalHoraInicio').textContent = hora;
+            document.getElementById('modalEmpleadoId').value = empleadoId;
+            document.getElementById('modalFechaHoraInicioFull').value = `${fecha}T${hora}`;
+            document.getElementById('modalErrores').style.display = 'none';
+            if (modalNuevaReservaInstancia) modalNuevaReservaInstancia.show();
+        };
 
-    // Evento cambio individual
-    document.addEventListener('change', function (e) {
-        if (e.target.classList.contains('chk-colaborador')) {
-            // Si alguien toca un check manual, desmarcamos los radios de grupo para indicar "Personalizado"
+        formModalNuevaReserva?.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const btn = this.querySelector('button[type="submit"]');
+            const errDiv = document.getElementById('modalErrores');
+
+            // 1. Recopilar datos básicos del formulario
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData);
+
+            // 2. 🟢 AGREGAR VALOR DEL CHECKBOX (True/False)
+            const chk = document.getElementById('chkEnviarWhatsApp');
+            data.enviar_whatsapp = chk ? chk.checked : false;
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+            errDiv.style.display = 'none';
+
+            // 3. Enviar al Backend
+            fetch("{{ url_for('main.nueva_reserva') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+                .then(res => res.json().then(d => ({ ok: res.ok, data: d })))
+                .then(res => {
+                    if (res.ok && res.data.success) {
+                        // A. Cerrar modal y refrescar calendario
+                        modalNuevaReservaInstancia.hide();
+                        actualizarAgenda();
+
+                        // B. 🟢 LÓGICA DE WHATSAPP CLICK-TO-CHAT
+                        if (res.data.whatsapp_url) {
+                            // Si el backend devolvió una URL, la abrimos en nueva pestaña
+                            window.open(res.data.whatsapp_url, '_blank');
+                        } else if (data.enviar_whatsapp) {
+                            // Si el usuario marcó el check pero no hubo URL (ej: cliente sin teléfono)
+                            alert("Reserva guardada correctamente, pero no se pudo generar el enlace de WhatsApp (verifique que el cliente tenga teléfono registrado).");
+                        }
+                    }
+                    else {
+                        // C. Mostrar errores del servidor
+                        errDiv.innerHTML = (res.data.errors || [res.data.message]).join('<br>');
+                        errDiv.style.display = 'block';
+                    }
+                })
+                .catch(err => {
+                    errDiv.innerHTML = `Error de conexión: ${err.message}`;
+                    errDiv.style.display = 'block';
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-save me-1"></i>Guardar Reserva';
+                });
+        });
+
+        // 🟢 NUEVAS FUNCIONES PARA FILTRO Y DISPONIBILIDAD
+
+        // A. Lógica de Filtro Avanzado
+        window.toggleGrupo = function (grupo) {
+            const checks = document.querySelectorAll('.chk-colaborador');
+            checks.forEach(chk => {
+                if (grupo === 'todos') {
+                    chk.checked = true;
+                } else if (grupo === 'citas') {
+                    // Usamos el atributo data-citas-hoy que inyectamos desde jinja
+                    chk.checked = (chk.dataset.citasHoy == "1" || chk.dataset.citasHoy == "true" || parseInt(chk.dataset.citasHoy) > 0);
+                }
+            });
+            actualizarAgenda(); // Refresca FullCalendar
+        };
+
+        window.limpiarSeleccion = function () {
+            document.querySelectorAll('.chk-colaborador').forEach(c => c.checked = false);
+            // Deseleccionar radios visualmente para evitar confusión
             document.getElementById('radioConCitas').checked = false;
             document.getElementById('radioTodos').checked = false;
             actualizarAgenda();
-        }
-    });
-
-    // B. Lógica de Disponibilidad (Bloquear / Habilitar)
-    window.bloquearHorarioColab = function (empleadoId, nombre) {
-        // 1. Resetear form
-        formBloqueo.reset();
-
-        // 2. Pre-llenar datos
-        document.getElementById('bloqueoEmpleadoId').value = empleadoId;
-        document.getElementById('bloqueoEmpleadoNombre').value = nombre;
-        document.getElementById('bloqueoFecha').value = selectorFecha.value;
-
-        // Hora por defecto (hora actual redondeada o fija)
-        const now = new Date();
-        const h = String(now.getHours()).padStart(2, '0');
-        const m = "00";
-        document.getElementById('bloqueoHoraInicio').value = `${h}:${m}`;
-
-        // Trigger cambio tipo para resetear estados (Personalizado por defecto)
-        toggleTipoBloqueo('Personalizado');
-        // Esto también calculará la hora fin si llamamos a actualizar, 
-        // o podemos dejar vacío para que el usuario llene.
-        // Mejor: Setear 1 hora mas tarde.
-        const h2 = String((now.getHours() + 1) % 24).padStart(2, '0');
-        document.getElementById('bloqueoHoraFin').value = `${h2}:${m}`;
-        actualizarDuracionTexto();
-
-        // 3. Mostrar Modal
-        modalBloqueoInstancia.show();
-    };
-
-    // B.1 SUBMIT DEL MODAL BLOQUEO
-    formBloqueo?.addEventListener('submit', function (e) {
-        e.preventDefault();
-        const btn = this.querySelector('button[type="submit"]');
-        const errDiv = document.getElementById('bloqueoError');
-
-        const formData = new FormData(this);
-        // El campo 'motivo' en el form se llama 'motivo' (ver input hidden o text), 
-        // pero mi backend espera 'descripcion' en el campo description?
-        // OJO: En mi fix anterior (Step 132), usé:
-        // Insert into ... (..., descripcion, ...) VALUES (..., motivo, ...)
-        // Pero en el request.form.get('motivo') lo usaba para el INSERT.
-        // 
-        // Revisemos routes.py api_agenda_bloquear:
-        // motivo = data.get('motivo', 'Bloqueo Manual')
-        // INSERT ... (..., descripcion, ...) VALUES (..., motivo, ...)
-        //
-        // Entonces el backend espera JSON { ... "motivo": "Algo" ... }
-        // Y lo guarda en la columna 'descripcion'.
-        //
-        // En mi HTML modal puse: name="motivo" para el título.
-        // Y name="descripcion" para el textarea.
-        //
-        // Si el backend solo usa 'motivo', ignorará 'descripcion' del textarea si no lo recojo.
-        //
-        // Vamos a ajustar el JS para combinar Título + Descripción si es necesario, 
-        // o mandar ambos si ajusto el backend. 
-        // Como NO quiero tocar backend otra vez si no es necesario,
-        // Mandaré en 'motivo' el string: "Título - Descripción" o solo Título.
-
-        const title = formData.get('motivo') || "";
-        const desc = formData.get('descripcion') || "";
-        const tipo = formData.get('tipo_bloqueo'); // Personalizado o Comida
-
-        let motivoFinal = title;
-        if (tipo === 'Comida' && !motivoFinal) motivoFinal = "Almuerzo/Comida";
-        if (desc) motivoFinal += ` (${desc})`;
-
-        const dataFinal = {
-            empleado_id: formData.get('empleado_id'),
-            fecha: formData.get('fecha'),
-            hora_inicio: formData.get('hora_inicio'),
-            hora_fin: formData.get('hora_fin'),
-            motivo: motivoFinal
         };
 
-        btn.disabled = true;
-        btn.textContent = "Guardando...";
-        errDiv.style.display = 'none';
-
-        fetch('/api/agenda/bloquear', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(dataFinal)
-        })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    modalBloqueoInstancia.hide();
-                    actualizarAgenda();
-                } else {
-                    errDiv.innerText = data.message || "Error al bloquear.";
-                    errDiv.style.display = 'block';
-                }
-            })
-            .catch(err => {
-                errDiv.innerText = "Error de red: " + err;
-                errDiv.style.display = 'block';
-            })
-            .finally(() => {
-                btn.disabled = false;
-                btn.textContent = "Guardar";
-            });
-    });
-
-    // 🟢 FIN NUEVAS FUNCIONES
-
-    window.habilitarHorarioColab = function (empleadoId, nombre) {
-        // 1. Resetear
-        formHabilitar.reset();
-        document.getElementById('habilitarError').style.display = 'none';
-
-        // 2. Pre-llenar
-        document.getElementById('habilitarEmpleadoId').value = empleadoId;
-        document.getElementById('habilitarNombreEmpleado').innerText = nombre;
-
-        const fechaVal = selectorFecha.value;
-        // Formato bonito de fecha para visualización
-        const d = new Date(fechaVal + 'T00:00:00');
-        const opciones = { weekday: 'short', day: 'numeric', month: 'short' };
-        if (document.getElementById('habilitarFechaTxt')) {
-            document.getElementById('habilitarFechaTxt').innerText = d.toLocaleDateString('es-ES', opciones);
-        }
-        document.getElementById('habilitarFecha').value = fechaVal;
-
-        // Horas default
-        document.getElementById('habilitarHoraInicio').value = "09:00";
-        document.getElementById('habilitarHoraFin').value = "13:00";
-
-        // Trigger cálculo inicial si la función externa existe
-        if (typeof actualizarDuracionExtra === 'function') actualizarDuracionExtra();
-
-        // 3. Mostrar
-        modalHabilitarInstancia.show();
-    };
-
-    // SUBMIT HABILITAR
-    formHabilitar?.addEventListener('submit', function (e) {
-        e.preventDefault();
-        const btn = this.querySelector('button[type="submit"]');
-        const errDiv = document.getElementById('habilitarError');
-
-        const formData = new FormData(this);
-        const data = Object.fromEntries(formData.entries());
-
-        btn.disabled = true;
-        btn.textContent = "Guardando...";
-        errDiv.style.display = 'none';
-
-        fetch('/api/agenda/habilitar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    modalHabilitarInstancia.hide();
-                    actualizarAgenda();
-                } else {
-                    errDiv.innerText = data.message || "Error al habilitar.";
-                    errDiv.style.display = 'block';
-                }
-            })
-            .catch(err => {
-                errDiv.innerText = "Error de red";
-                errDiv.style.display = 'block';
-            })
-            .finally(() => {
-                btn.disabled = false;
-                btn.textContent = "Guardar Turno";
-            });
-    });
-
-    function abrirModalGestionarReserva(reservaId) {
-        // --- 1. Selectores ---
-        const modalTitle = document.getElementById('modalGestionarReservaLabel');
-        const vistaDiv = document.getElementById('detalleReservaVista');
-        const formEditar = document.getElementById('formEditarReservaModal');
-        const modalFooter = document.querySelector('#modalGestionarReserva .modal-footer');
-
-        // Botones Nativos
-        const btnEditar = document.getElementById('btnModalEditarReserva');
-        const btnCancelar = document.getElementById('btnModalCancelarReserva');
-        const btnCompletar = document.getElementById('btnModalCompletarReserva');
-        const btnVenta = document.getElementById('btnModalRegistrarVenta');
-        const btnCancelarEdicion = document.getElementById('btnModalCancelarEdicion');
-        const btnGuardar = document.getElementById('btnModalGuardarCambios');
-        const btnDiagnostico = document.getElementById('btnModalDiagnostico'); // Nuevo Botón
-
-        // ... (limpieza de botones omitida) ...
-
-        // --- 2. 🟢 LIMPIEZA TOTAL DE BOTONES WHATSAPP (Anti-Duplicados) ---
-        // Buscamos cualquier botón que tenga nuestra clase especial y lo borramos
-        const botonesViejos = modalFooter.querySelectorAll('.btn-whatsapp-dynamic');
-        botonesViejos.forEach(btn => btn.remove());
-
-        // --- 3. 🟢 CREACIÓN DE NUEVOS BOTONES ---
-
-        // A. Botón Recordar (Cliente)
-        const btnRecordarWs = document.createElement('button');
-        btnRecordarWs.className = 'btn btn-success btn-sm shadow-sm me-1 btn-whatsapp-dynamic'; // Agregamos clase identificadora
-        btnRecordarWs.innerHTML = '<i class="fab fa-whatsapp me-1"></i> Recordar';
-        modalFooter.insertBefore(btnRecordarWs, modalFooter.firstChild);
-
-        // B. Botón Avisar Staff
-        const btnAvisarStaff = document.createElement('button');
-        btnAvisarStaff.className = 'btn btn-info btn-sm shadow-sm me-auto text-white btn-whatsapp-dynamic'; // Agregamos clase identificadora
-        btnAvisarStaff.innerHTML = '<i class="fas fa-user-clock me-1"></i> Avisar Staff';
-        btnRecordarWs.after(btnAvisarStaff);
-
-        function cambiarModo(modoVista, data = null) {
-            if (vistaDiv) vistaDiv.style.display = modoVista ? 'block' : 'none';
-            if (formEditar) formEditar.style.display = modoVista ? 'none' : 'block';
-
-            let esFinal = false;
-            if (data) {
-                const est = data.estado || '';
-                esFinal = ['Completada', 'Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio'].some(s => est.includes(s));
-            } else { esFinal = true; }
-
-            const mostrarAcciones = modoVista && !esFinal;
-
-            if (btnEditar) btnEditar.style.display = mostrarAcciones ? 'inline-block' : 'none';
-            if (btnCancelar) btnCancelar.style.display = mostrarAcciones ? 'inline-block' : 'none';
-            if (btnCompletar) btnCompletar.style.display = mostrarAcciones ? 'inline-block' : 'none';
-            if (btnVenta) btnVenta.style.display = (data && data.estado === 'Completada') ? 'inline-block' : 'none';
-            if (btnCancelarEdicion) btnCancelarEdicion.style.display = modoVista ? 'none' : 'inline-block';
-            if (btnGuardar) btnGuardar.style.display = modoVista ? 'none' : 'inline-block';
-            if (btnDiagnostico) btnDiagnostico.style.display = modoVista ? 'inline-block' : 'none'; // Mostrar botón debug
-
-            // Mostrar Whatsapp solo en modo vista y activa
-            const showWs = modoVista && !esFinal;
-            btnRecordarWs.style.display = showWs ? 'inline-block' : 'none';
-            btnAvisarStaff.style.display = showWs ? 'inline-block' : 'none';
-
-            if (!modoVista && data) {
-                modalTitle.innerHTML = `<i class="fas fa-edit me-2"></i>Editando Reserva #${data.id}`;
-                document.getElementById('editReservaId').value = data.id;
-                // (Lógica de poblado de selects omitida para brevedad, mantenla igual)
-                // ... Asegúrate de que tus selects se llenen aquí ...
-                // Si necesitas el código de los selects dímelo, pero asumo que ya lo tienes
-                const poblar = (id, items, val) => {
-                    const s = document.getElementById(id); if (!s) return;
-                    s.innerHTML = '<option value="">Sel...</option>';
-                    items.forEach(i => s.add(new Option(i.texto_busqueda || i.nombres || i.nombre || i.razon_social_nombres, i.id)));
-                    s.value = val;
-                };
-                poblar('editClienteId', todosLosClientes, data.cliente_id);
-
-                // 🟢 INIT SELECT2 EDITAR
-                if ($('#editClienteId').data('select2')) $('#editClienteId').select2('destroy');
-                $('#editClienteId').select2({ theme: 'bootstrap-5', dropdownParent: $('#modalGestionarReserva'), width: '100%', placeholder: 'Buscar Cliente...' });
-
-                poblar('editEmpleadoId', todosLosEmpleadosParaSelector, data.empleado_id);
-                poblar('editServicioId', todosLosServiciosActivos, data.servicio_id);
-                if (document.getElementById('editFechaHoraInicio')) document.getElementById('editFechaHoraInicio').value = data.fecha_hora_inicio.slice(0, 16);
-                if (document.getElementById('editPrecioCobrado')) document.getElementById('editPrecioCobrado').value = data.precio_cobrado;
+        // Evento cambio individual
+        document.addEventListener('change', function (e) {
+            if (e.target.classList.contains('chk-colaborador')) {
+                // Si alguien toca un check manual, desmarcamos los radios de grupo para indicar "Personalizado"
+                document.getElementById('radioConCitas').checked = false;
+                document.getElementById('radioTodos').checked = false;
+                actualizarAgenda();
             }
-        }
+        });
 
-        cambiarModo(true);
-        if (modalGestionarInstancia) modalGestionarInstancia.show();
+        // B. Lógica de Disponibilidad (Bloquear / Habilitar)
+        window.bloquearHorarioColab = function (empleadoId, nombre) {
+            // 1. Resetear form
+            formBloqueo.reset();
 
-        // --- 4. Cargar Datos ---
-        fetch(`/api/reservas/${reservaId}`)
-            .then(r => r.json())
-            .then(data => {
-                console.log("Datos Reserva:", data); // 🔍 DEBUG: Mira la consola del navegador
-                datosReservaActualParaModal = data;
+            // 2. Pre-llenar datos
+            document.getElementById('bloqueoEmpleadoId').value = empleadoId;
+            document.getElementById('bloqueoEmpleadoNombre').value = nombre;
+            document.getElementById('bloqueoFecha').value = selectorFecha.value;
 
-                if (modalTitle) modalTitle.innerHTML = `<i class="fas fa-calendar-check me-2"></i>Reserva #${data.id}`;
+            // Hora por defecto (hora actual redondeada o fija)
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = "00";
+            document.getElementById('bloqueoHoraInicio').value = `${h}:${m}`;
 
-                if (vistaDiv) {
-                    // 🟢 CORRECCIÓN DEL NOMBRE DEL STAFF
-                    // Intentamos leer 'staff', 'empleado_nombre' o 'empleado_nombre_completo' (para compatibilidad)
-                    const staffName = data.staff || data.empleado_nombre || data.empleado_nombre_completo || '<span class="text-danger fw-bold">Sin asignar</span>';
+            // Trigger cambio tipo para resetear estados (Personalizado por defecto)
+            toggleTipoBloqueo('Personalizado');
+            // Esto también calculará la hora fin si llamamos a actualizar, 
+            // o podemos dejar vacío para que el usuario llene.
+            // Mejor: Setear 1 hora mas tarde.
+            const h2 = String((now.getHours() + 1) % 24).padStart(2, '0');
+            document.getElementById('bloqueoHoraFin').value = `${h2}:${m}`;
+            actualizarDuracionTexto();
 
-                    vistaDiv.innerHTML = `
+            // 3. Mostrar Modal
+            modalBloqueoInstancia.show();
+        };
+
+        // B.1 SUBMIT DEL MODAL BLOQUEO
+        formBloqueo?.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const btn = this.querySelector('button[type="submit"]');
+            const errDiv = document.getElementById('bloqueoError');
+
+            const formData = new FormData(this);
+            // El campo 'motivo' en el form se llama 'motivo' (ver input hidden o text), 
+            // pero mi backend espera 'descripcion' en el campo description?
+            // OJO: En mi fix anterior (Step 132), usé:
+            // Insert into ... (..., descripcion, ...) VALUES (..., motivo, ...)
+            // Pero en el request.form.get('motivo') lo usaba para el INSERT.
+            // 
+            // Revisemos routes.py api_agenda_bloquear:
+            // motivo = data.get('motivo', 'Bloqueo Manual')
+            // INSERT ... (..., descripcion, ...) VALUES (..., motivo, ...)
+            //
+            // Entonces el backend espera JSON { ... "motivo": "Algo" ... }
+            // Y lo guarda en la columna 'descripcion'.
+            //
+            // En mi HTML modal puse: name="motivo" para el título.
+            // Y name="descripcion" para el textarea.
+            //
+            // Si el backend solo usa 'motivo', ignorará 'descripcion' del textarea si no lo recojo.
+            //
+            // Vamos a ajustar el JS para combinar Título + Descripción si es necesario, 
+            // o mandar ambos si ajusto el backend. 
+            // Como NO quiero tocar backend otra vez si no es necesario,
+            // Mandaré en 'motivo' el string: "Título - Descripción" o solo Título.
+
+            const title = formData.get('motivo') || "";
+            const desc = formData.get('descripcion') || "";
+            const tipo = formData.get('tipo_bloqueo'); // Personalizado o Comida
+
+            let motivoFinal = title;
+            if (tipo === 'Comida' && !motivoFinal) motivoFinal = "Almuerzo/Comida";
+            if (desc) motivoFinal += ` (${desc})`;
+
+            const dataFinal = {
+                empleado_id: formData.get('empleado_id'),
+                fecha: formData.get('fecha'),
+                hora_inicio: formData.get('hora_inicio'),
+                hora_fin: formData.get('hora_fin'),
+                motivo: motivoFinal
+            };
+
+            btn.disabled = true;
+            btn.textContent = "Guardando...";
+            errDiv.style.display = 'none';
+
+            fetch('/api/agenda/bloquear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dataFinal)
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        modalBloqueoInstancia.hide();
+                        actualizarAgenda();
+                    } else {
+                        errDiv.innerText = data.message || "Error al bloquear.";
+                        errDiv.style.display = 'block';
+                    }
+                })
+                .catch(err => {
+                    errDiv.innerText = "Error de red: " + err;
+                    errDiv.style.display = 'block';
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.textContent = "Guardar";
+                });
+        });
+
+        // 🟢 FIN NUEVAS FUNCIONES
+
+        window.habilitarHorarioColab = function (empleadoId, nombre) {
+            // 1. Resetear
+            formHabilitar.reset();
+            document.getElementById('habilitarError').style.display = 'none';
+
+            // 2. Pre-llenar
+            document.getElementById('habilitarEmpleadoId').value = empleadoId;
+            document.getElementById('habilitarNombreEmpleado').innerText = nombre;
+
+            const fechaVal = selectorFecha.value;
+            // Formato bonito de fecha para visualización
+            const d = new Date(fechaVal + 'T00:00:00');
+            const opciones = { weekday: 'short', day: 'numeric', month: 'short' };
+            if (document.getElementById('habilitarFechaTxt')) {
+                document.getElementById('habilitarFechaTxt').innerText = d.toLocaleDateString('es-ES', opciones);
+            }
+            document.getElementById('habilitarFecha').value = fechaVal;
+
+            // Horas default
+            document.getElementById('habilitarHoraInicio').value = "09:00";
+            document.getElementById('habilitarHoraFin').value = "13:00";
+
+            // Trigger cálculo inicial si la función externa existe
+            if (typeof actualizarDuracionExtra === 'function') actualizarDuracionExtra();
+
+            // 3. Mostrar
+            modalHabilitarInstancia.show();
+        };
+
+        // SUBMIT HABILITAR
+        formHabilitar?.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const btn = this.querySelector('button[type="submit"]');
+            const errDiv = document.getElementById('habilitarError');
+
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+
+            btn.disabled = true;
+            btn.textContent = "Guardando...";
+            errDiv.style.display = 'none';
+
+            fetch('/api/agenda/habilitar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        modalHabilitarInstancia.hide();
+                        actualizarAgenda();
+                    } else {
+                        errDiv.innerText = data.message || "Error al habilitar.";
+                        errDiv.style.display = 'block';
+                    }
+                })
+                .catch(err => {
+                    errDiv.innerText = "Error de red";
+                    errDiv.style.display = 'block';
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.textContent = "Guardar Turno";
+                });
+        });
+
+        function abrirModalGestionarReserva(reservaId) {
+            // --- 1. Selectores ---
+            const modalTitle = document.getElementById('modalGestionarReservaLabel');
+            const vistaDiv = document.getElementById('detalleReservaVista');
+            const formEditar = document.getElementById('formEditarReservaModal');
+            const modalFooter = document.querySelector('#modalGestionarReserva .modal-footer');
+
+            // Botones Nativos
+            const btnEditar = document.getElementById('btnModalEditarReserva');
+            const btnCancelar = document.getElementById('btnModalCancelarReserva');
+            const btnCompletar = document.getElementById('btnModalCompletarReserva');
+            const btnVenta = document.getElementById('btnModalRegistrarVenta');
+            const btnCancelarEdicion = document.getElementById('btnModalCancelarEdicion');
+            const btnGuardar = document.getElementById('btnModalGuardarCambios');
+            const btnDiagnostico = document.getElementById('btnModalDiagnostico'); // Nuevo Botón
+
+            // ... (limpieza de botones omitida) ...
+
+            // --- 2. 🟢 LIMPIEZA TOTAL DE BOTONES WHATSAPP (Anti-Duplicados) ---
+            // Buscamos cualquier botón que tenga nuestra clase especial y lo borramos
+            const botonesViejos = modalFooter.querySelectorAll('.btn-whatsapp-dynamic');
+            botonesViejos.forEach(btn => btn.remove());
+
+            // --- 3. 🟢 CREACIÓN DE NUEVOS BOTONES ---
+
+            // A. Botón Recordar (Cliente)
+            const btnRecordarWs = document.createElement('button');
+            btnRecordarWs.className = 'btn btn-success btn-sm shadow-sm me-1 btn-whatsapp-dynamic'; // Agregamos clase identificadora
+            btnRecordarWs.innerHTML = '<i class="fab fa-whatsapp me-1"></i> Recordar';
+            modalFooter.insertBefore(btnRecordarWs, modalFooter.firstChild);
+
+            // B. Botón Avisar Staff
+            const btnAvisarStaff = document.createElement('button');
+            btnAvisarStaff.className = 'btn btn-info btn-sm shadow-sm me-auto text-white btn-whatsapp-dynamic'; // Agregamos clase identificadora
+            btnAvisarStaff.innerHTML = '<i class="fas fa-user-clock me-1"></i> Avisar Staff';
+            btnRecordarWs.after(btnAvisarStaff);
+
+            function cambiarModo(modoVista, data = null) {
+                if (vistaDiv) vistaDiv.style.display = modoVista ? 'block' : 'none';
+                if (formEditar) formEditar.style.display = modoVista ? 'none' : 'block';
+
+                let esFinal = false;
+                if (data) {
+                    const est = data.estado || '';
+                    esFinal = ['Completada', 'Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio'].some(s => est.includes(s));
+                } else { esFinal = true; }
+
+                const mostrarAcciones = modoVista && !esFinal;
+
+                if (btnEditar) btnEditar.style.display = mostrarAcciones ? 'inline-block' : 'none';
+                if (btnCancelar) btnCancelar.style.display = mostrarAcciones ? 'inline-block' : 'none';
+                if (btnCompletar) btnCompletar.style.display = mostrarAcciones ? 'inline-block' : 'none';
+                if (btnVenta) btnVenta.style.display = (data && data.estado === 'Completada') ? 'inline-block' : 'none';
+                if (btnCancelarEdicion) btnCancelarEdicion.style.display = modoVista ? 'none' : 'inline-block';
+                if (btnGuardar) btnGuardar.style.display = modoVista ? 'none' : 'inline-block';
+                if (btnDiagnostico) btnDiagnostico.style.display = modoVista ? 'inline-block' : 'none'; // Mostrar botón debug
+
+                // Mostrar Whatsapp solo en modo vista y activa
+                const showWs = modoVista && !esFinal;
+                btnRecordarWs.style.display = showWs ? 'inline-block' : 'none';
+                btnAvisarStaff.style.display = showWs ? 'inline-block' : 'none';
+
+                if (!modoVista && data) {
+                    modalTitle.innerHTML = `<i class="fas fa-edit me-2"></i>Editando Reserva #${data.id}`;
+                    document.getElementById('editReservaId').value = data.id;
+                    // (Lógica de poblado de selects omitida para brevedad, mantenla igual)
+                    // ... Asegúrate de que tus selects se llenen aquí ...
+                    // Si necesitas el código de los selects dímelo, pero asumo que ya lo tienes
+                    const poblar = (id, items, val) => {
+                        const s = document.getElementById(id); if (!s) return;
+                        s.innerHTML = '<option value="">Sel...</option>';
+                        items.forEach(i => s.add(new Option(i.texto_busqueda || i.nombres || i.nombre || i.razon_social_nombres, i.id)));
+                        s.value = val;
+                    };
+                    poblar('editClienteId', todosLosClientes, data.cliente_id);
+
+                    // 🟢 INIT SELECT2 EDITAR
+                    if ($('#editClienteId').data('select2')) $('#editClienteId').select2('destroy');
+                    $('#editClienteId').select2({ theme: 'bootstrap-5', dropdownParent: $('#modalGestionarReserva'), width: '100%', placeholder: 'Buscar Cliente...' });
+
+                    poblar('editEmpleadoId', todosLosEmpleadosParaSelector, data.empleado_id);
+                    poblar('editServicioId', todosLosServiciosActivos, data.servicio_id);
+                    if (document.getElementById('editFechaHoraInicio')) document.getElementById('editFechaHoraInicio').value = data.fecha_hora_inicio.slice(0, 16);
+                    if (document.getElementById('editPrecioCobrado')) document.getElementById('editPrecioCobrado').value = data.precio_cobrado;
+                }
+            }
+
+            cambiarModo(true);
+            if (modalGestionarInstancia) modalGestionarInstancia.show();
+
+            // --- 4. Cargar Datos ---
+            fetch(`/api/reservas/${reservaId}`)
+                .then(r => r.json())
+                .then(data => {
+                    console.log("Datos Reserva:", data); // 🔍 DEBUG: Mira la consola del navegador
+                    datosReservaActualParaModal = data;
+
+                    if (modalTitle) modalTitle.innerHTML = `<i class="fas fa-calendar-check me-2"></i>Reserva #${data.id}`;
+
+                    if (vistaDiv) {
+                        // 🟢 CORRECCIÓN DEL NOMBRE DEL STAFF
+                        // Intentamos leer 'staff', 'empleado_nombre' o 'empleado_nombre_completo' (para compatibilidad)
+                        const staffName = data.staff || data.empleado_nombre || data.empleado_nombre_completo || '<span class="text-danger fw-bold">Sin asignar</span>';
+
+                        vistaDiv.innerHTML = `
                         <dl class="row mb-0">
                             <dt class="col-4">Estado</dt><dd class="col-8">${data.estado}</dd>
                             <dt class="col-4">Cliente</dt><dd class="col-8">${data.cliente_nombre_completo || data.cliente}</dd>
@@ -1191,155 +1191,155 @@
                             <dt class="col-4">Hora</dt><dd class="col-8 fw-bold">${new Date(data.fecha_hora_inicio).toLocaleString()}</dd>
                             <dt class="col-4">Staff</dt><dd class="col-8 text-primary">${staffName}</dd>
                         </dl>`;
-                }
-
-                if (btnVenta) btnVenta.href = `{{ url_for('main.nueva_venta') }}?reserva_id=${reservaId}`;
-
-                // --- EVENTOS DE BOTONES ---
-
-                btnRecordarWs.onclick = () => {
-                    const orig = btnRecordarWs.innerHTML;
-                    btnRecordarWs.disabled = true; btnRecordarWs.innerHTML = '...';
-                    fetch(`/api/reservas/${reservaId}/whatsapp-link?tipo=recordatorio`)
-                        .then(r => r.json())
-                        .then(d => {
-                            if (d.success) window.open(d.url, '_blank');
-                            else alert("Aviso: " + d.message);
-                        })
-                        .finally(() => { btnRecordarWs.disabled = false; btnRecordarWs.innerHTML = orig; });
-                };
-
-                if (btnDiagnostico) {
-                    btnDiagnostico.onclick = () => {
-                        alert(JSON.stringify(data, null, 2));
-                    };
-                }
-
-                btnAvisarStaff.onclick = () => {
-                    // 🟢 Validación Visual: Compatibilidad con versiones anteriores del backend
-                    const staffCheck = data.staff || data.empleado_nombre || data.empleado_nombre_completo;
-
-                    if (!staffCheck || staffCheck === 'Sin asignar') {
-                        alert("⚠️ No puedes avisar porque esta reserva NO TIENE STAFF asignado.\n\n👉 Asigna un colaborador en 'Editar' primero.");
-                        return;
                     }
 
-                    const orig = btnAvisarStaff.innerHTML;
-                    btnAvisarStaff.disabled = true; btnAvisarStaff.innerHTML = '...';
-                    fetch(`/api/reservas/${reservaId}/whatsapp-link?tipo=aviso_staff`)
-                        .then(r => r.json())
-                        .then(d => {
-                            if (d.success) window.open(d.url, '_blank');
-                            else alert("Aviso: " + d.message);
-                        })
-                        .finally(() => { btnAvisarStaff.disabled = false; btnAvisarStaff.innerHTML = orig; });
-                };
+                    if (btnVenta) btnVenta.href = `{{ url_for('main.nueva_venta') }}?reserva_id=${reservaId}`;
 
-                cambiarModo(true, data);
-            });
+                    // --- EVENTOS DE BOTONES ---
 
-        // Listeners básicos
-        if (btnEditar) btnEditar.onclick = () => cambiarModo(false, datosReservaActualParaModal);
-        if (btnCancelarEdicion) btnCancelarEdicion.onclick = () => cambiarModo(true, datosReservaActualParaModal);
-        if (btnCancelar) btnCancelar.onclick = () => {
-            if (confirm('¿Cancelar?')) fetch(`/reservas/cancelar/${reservaId}`, { method: 'POST' }).then(() => { modalGestionarInstancia.hide(); actualizarAgenda(); });
-        };
-        if (btnCompletar) btnCompletar.onclick = () => {
-            if (confirm('¿Completar?')) fetch(`/api/reservas/${reservaId}/completar`, { method: 'POST' }).then(() => { modalGestionarInstancia.hide(); actualizarAgenda(); });
-        };
-    }
+                    btnRecordarWs.onclick = () => {
+                        const orig = btnRecordarWs.innerHTML;
+                        btnRecordarWs.disabled = true; btnRecordarWs.innerHTML = '...';
+                        fetch(`/api/reservas/${reservaId}/whatsapp-link?tipo=recordatorio`)
+                            .then(r => r.json())
+                            .then(d => {
+                                if (d.success) window.open(d.url, '_blank');
+                                else alert("Aviso: " + d.message);
+                            })
+                            .finally(() => { btnRecordarWs.disabled = false; btnRecordarWs.innerHTML = orig; });
+                    };
 
-    document.getElementById('formEditarReservaModal')?.addEventListener('submit', function (e) {
-        e.preventDefault();
-        fetch(`/reservas/editar/${datosReservaActualParaModal.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(new FormData(this))) })
-            .then(res => res.json()).then(d => { if (d.success) { modalGestionarInstancia.hide(); actualizarAgenda(); } else { alert(d.message); } });
-    });
+                    if (btnDiagnostico) {
+                        btnDiagnostico.onclick = () => {
+                            alert(JSON.stringify(data, null, 2));
+                        };
+                    }
 
-    // =========================================================
-    // 🟢 MAGIA: EFECTO HOVER (CÁLCULO MATEMÁTICO DE HORA)
-    // =========================================================
+                    btnAvisarStaff.onclick = () => {
+                        // 🟢 Validación Visual: Compatibilidad con versiones anteriores del backend
+                        const staffCheck = data.staff || data.empleado_nombre || data.empleado_nombre_completo;
 
-    const indicadorDiv = document.createElement('div');
-    indicadorDiv.id = 'indicadorHoraHover';
+                        if (!staffCheck || staffCheck === 'Sin asignar') {
+                            alert("⚠️ No puedes avisar porque esta reserva NO TIENE STAFF asignado.\n\n👉 Asigna un colaborador en 'Editar' primero.");
+                            return;
+                        }
 
-    // Configuración de tu agenda (DEBE COINCIDIR con tu calendar options)
-    const HORA_INICIO = 8; // 08:00 AM
-    const MINUTOS_SLOT = 15; // 15 minutos
+                        const orig = btnAvisarStaff.innerHTML;
+                        btnAvisarStaff.disabled = true; btnAvisarStaff.innerHTML = '...';
+                        fetch(`/api/reservas/${reservaId}/whatsapp-link?tipo=aviso_staff`)
+                            .then(r => r.json())
+                            .then(d => {
+                                if (d.success) window.open(d.url, '_blank');
+                                else alert("Aviso: " + d.message);
+                            })
+                            .finally(() => { btnAvisarStaff.disabled = false; btnAvisarStaff.innerHTML = orig; });
+                    };
 
-    agendaContainer.addEventListener('mousemove', function (e) {
-        // 1. Detectar Columna
-        const target = document.elementFromPoint(e.clientX, e.clientY);
-        if (!target) return;
-        const col = target.closest('.fc-timegrid-col');
+                    cambiarModo(true, data);
+                });
 
-        // Si no estamos en columna o estamos en cabecera, adiós
-        if (!col || target.closest('.fc-col-header')) {
-            indicadorDiv.style.display = 'none';
-            return;
+            // Listeners básicos
+            if (btnEditar) btnEditar.onclick = () => cambiarModo(false, datosReservaActualParaModal);
+            if (btnCancelarEdicion) btnCancelarEdicion.onclick = () => cambiarModo(true, datosReservaActualParaModal);
+            if (btnCancelar) btnCancelar.onclick = () => {
+                if (confirm('¿Cancelar?')) fetch(`/reservas/cancelar/${reservaId}`, { method: 'POST' }).then(() => { modalGestionarInstancia.hide(); actualizarAgenda(); });
+            };
+            if (btnCompletar) btnCompletar.onclick = () => {
+                if (confirm('¿Completar?')) fetch(`/api/reservas/${reservaId}/completar`, { method: 'POST' }).then(() => { modalGestionarInstancia.hide(); actualizarAgenda(); });
+            };
         }
 
-        // 2. Detectar Altura de Slot (Referencia)
-        const primerSlot = document.querySelector('.fc-timegrid-slot');
-        const slotHeight = primerSlot ? primerSlot.offsetHeight : 22;
-
-        // 3. Cálculos de Posición
-        const rectCol = col.getBoundingClientRect();
-        const relativeY = e.clientY - rectCol.top;
-
-        // "Imantar" al slot más cercano
-        // Math.floor(relativeY / slotHeight) nos da el índice del slot (0, 1, 2...)
-        const slotIndex = Math.floor(relativeY / slotHeight);
-        const snappedY = slotIndex * slotHeight;
-
-        // 4. Mover la Barra
-        if (indicadorDiv.parentElement !== col) {
-            col.appendChild(indicadorDiv);
-            indicadorDiv.style.display = 'flex';
-            indicadorDiv.style.height = `${slotHeight}px`;
-            indicadorDiv.style.width = '100%';
-        }
-        indicadorDiv.style.top = `${snappedY}px`;
-
-        // 5. CALCULAR LA HORA MATEMÁTICAMENTE (Infalible)
-        // Total minutos desde el inicio (8:00) = index * 15
-        const minutosDesdeInicio = slotIndex * MINUTOS_SLOT;
-
-        const fechaBase = new Date();
-        fechaBase.setHours(HORA_INICIO, 0, 0, 0); // 08:00:00
-        fechaBase.setMinutes(fechaBase.getMinutes() + minutosDesdeInicio);
-
-        // Formatear: 10:15 a. m.
-        const horaStr = fechaBase.toLocaleTimeString('es-PE', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
+        document.getElementById('formEditarReservaModal')?.addEventListener('submit', function (e) {
+            e.preventDefault();
+            fetch(`/reservas/editar/${datosReservaActualParaModal.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(new FormData(this))) })
+                .then(res => res.json()).then(d => { if (d.success) { modalGestionarInstancia.hide(); actualizarAgenda(); } else { alert(d.message); } });
         });
 
-        indicadorDiv.innerHTML = `<i class="fas fa-clock me-1" style="font-size: 0.7rem; margin-top: 3px;"></i> ${horaStr}`;
-    });
+        // =========================================================
+        // 🟢 MAGIA: EFECTO HOVER (CÁLCULO MATEMÁTICO DE HORA)
+        // =========================================================
 
-    agendaContainer.addEventListener('mouseleave', function () {
-        indicadorDiv.style.display = 'none';
-    });
-    // Función para crear el círculo con iniciales
-    function crearIniciales(nombre) {
-        const div = document.createElement('div');
-        div.style.width = '50px';
-        div.style.height = '50px';
-        div.style.borderRadius = '50%';
-        div.style.backgroundColor = '#6c63ff'; // Tu color morado
-        div.style.color = '#ffffff';
-        div.style.display = 'flex';
-        div.style.alignItems = 'center';
-        div.style.justifyContent = 'center';
-        div.style.fontWeight = 'bold';
-        div.style.fontSize = '1.2rem';
-        div.style.border = '2px solid #fff';
-        div.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
-        div.style.marginBottom = '5px';
-        div.innerText = nombre ? nombre.charAt(0).toUpperCase() : '?';
-        return div;
-    }
+        const indicadorDiv = document.createElement('div');
+        indicadorDiv.id = 'indicadorHoraHover';
+
+        // Configuración de tu agenda (DEBE COINCIDIR con tu calendar options)
+        const HORA_INICIO = 8; // 08:00 AM
+        const MINUTOS_SLOT = 15; // 15 minutos
+
+        agendaContainer.addEventListener('mousemove', function (e) {
+            // 1. Detectar Columna
+            const target = document.elementFromPoint(e.clientX, e.clientY);
+            if (!target) return;
+            const col = target.closest('.fc-timegrid-col');
+
+            // Si no estamos en columna o estamos en cabecera, adiós
+            if (!col || target.closest('.fc-col-header')) {
+                indicadorDiv.style.display = 'none';
+                return;
+            }
+
+            // 2. Detectar Altura de Slot (Referencia)
+            const primerSlot = document.querySelector('.fc-timegrid-slot');
+            const slotHeight = primerSlot ? primerSlot.offsetHeight : 22;
+
+            // 3. Cálculos de Posición
+            const rectCol = col.getBoundingClientRect();
+            const relativeY = e.clientY - rectCol.top;
+
+            // "Imantar" al slot más cercano
+            // Math.floor(relativeY / slotHeight) nos da el índice del slot (0, 1, 2...)
+            const slotIndex = Math.floor(relativeY / slotHeight);
+            const snappedY = slotIndex * slotHeight;
+
+            // 4. Mover la Barra
+            if (indicadorDiv.parentElement !== col) {
+                col.appendChild(indicadorDiv);
+                indicadorDiv.style.display = 'flex';
+                indicadorDiv.style.height = `${slotHeight}px`;
+                indicadorDiv.style.width = '100%';
+            }
+            indicadorDiv.style.top = `${snappedY}px`;
+
+            // 5. CALCULAR LA HORA MATEMÁTICAMENTE (Infalible)
+            // Total minutos desde el inicio (8:00) = index * 15
+            const minutosDesdeInicio = slotIndex * MINUTOS_SLOT;
+
+            const fechaBase = new Date();
+            fechaBase.setHours(HORA_INICIO, 0, 0, 0); // 08:00:00
+            fechaBase.setMinutes(fechaBase.getMinutes() + minutosDesdeInicio);
+
+            // Formatear: 10:15 a. m.
+            const horaStr = fechaBase.toLocaleTimeString('es-PE', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+
+            indicadorDiv.innerHTML = `<i class="fas fa-clock me-1" style="font-size: 0.7rem; margin-top: 3px;"></i> ${horaStr}`;
+        });
+
+        agendaContainer.addEventListener('mouseleave', function () {
+            indicadorDiv.style.display = 'none';
+        });
+        // Función para crear el círculo con iniciales
+        function crearIniciales(nombre) {
+            const div = document.createElement('div');
+            div.style.width = '50px';
+            div.style.height = '50px';
+            div.style.borderRadius = '50%';
+            div.style.backgroundColor = '#6c63ff'; // Tu color morado
+            div.style.color = '#ffffff';
+            div.style.display = 'flex';
+            div.style.alignItems = 'center';
+            div.style.justifyContent = 'center';
+            div.style.fontWeight = 'bold';
+            div.style.fontSize = '1.2rem';
+            div.style.border = '2px solid #fff';
+            div.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+            div.style.marginBottom = '5px';
+            div.innerText = nombre ? nombre.charAt(0).toUpperCase() : '?';
+            return div;
+        }
     });
 </script>
 
