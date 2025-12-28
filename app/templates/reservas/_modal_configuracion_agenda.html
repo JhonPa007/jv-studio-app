@@ -11,7 +11,29 @@
             <div class="modal-body">
                 <form id="formConfigAgenda">
 
-                    <!-- 1. Intervalo de Tiempo -->
+                    <!-- 1. Configuración General de la Aplicación -->
+                    <h6 class="border-bottom pb-2 mb-3 text-secondary"><i class="fas fa-desktop me-2"></i>Apariencia
+                        General</h6>
+
+                    <div class="mb-4">
+                        <label for="configAppFuente" class="form-label fw-bold small text-muted">Tipo de Letra
+                            (Fuente)</label>
+                        <select class="form-select form-select-sm" id="configAppFuente">
+                            <option value="Inter">Inter (Moderna, Default)</option>
+                            <option value="Arial">Arial (Clásica)</option>
+                            <option value="Roboto">Roboto (Google)</option>
+                            <option value="'Courier New'">Courier New (Monospaced)</option>
+                            <option value="'Times New Roman'">Times New Roman (Serif)</option>
+                            <option value="Verdana">Verdana</option>
+                        </select>
+                        <small class="text-xs text-muted">Aplica a toda la plataforma.</small>
+                    </div>
+
+                    <!-- 2. Configuración de Agenda -->
+                    <h6 class="border-bottom pb-2 mb-3 text-secondary"><i class="fas fa-calendar-alt me-2"></i>Agenda
+                    </h6>
+
+                    <!-- Intervalo de Tiempo -->
                     <div class="mb-4">
                         <label class="form-label fw-bold small text-uppercase text-muted">Intervalo de Tiempo
                             (Filas)</label>
