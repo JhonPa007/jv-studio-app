@@ -1,0 +1,90 @@
+<!-- Modal Configuración Agenda -->
+<div class="modal fade" id="modalConfiguracionAgenda" tabindex="-1" aria-labelledby="modalConfigLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="modalConfigLabel"><i class="fas fa-cog me-2"></i>Configuración de
+                    Vista</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formConfigAgenda">
+
+                    <!-- 1. Intervalo de Tiempo -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold small text-uppercase text-muted">Intervalo de Tiempo
+                            (Filas)</label>
+                        <select class="form-select form-select-lg" id="cfgIntervalo">
+                            <option value="00:05:00">5 minutos</option>
+                            <option value="00:10:00">10 minutos</option>
+                            <option value="00:15:00">15 minutos (Default)</option>
+                            <option value="00:20:00">20 minutos</option>
+                            <option value="00:30:00">30 minutos</option>
+                        </select>
+                        <div class="form-text">Define la altura de cada bloque en el calendario.</div>
+                    </div>
+
+                    <hr>
+
+                    <!-- 2. Colores -->
+                    <label class="form-label fw-bold small text-uppercase text-muted mb-3">Personalizar Colores</label>
+
+                    <div class="row g-3 align-items-center mb-2">
+                        <div class="col-8">
+                            <span class="fw-bold text-dark">Bloqueado / No Disponible</span>
+                            <div class="small text-muted">Color de fondo para ausencias</div>
+                        </div>
+                        <div class="col-4 text-end">
+                            <input type="color" class="form-control form-control-color w-100" id="cfgColorBloqueo"
+                                value="#ffecec" title="Elegir color">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 align-items-center mb-2">
+                        <div class="col-8">
+                            <span class="fw-bold text-dark">Habilitado / Turno Extra</span>
+                            <div class="small text-muted">Fondo para turnos disponibles</div>
+                        </div>
+                        <div class="col-4 text-end">
+                            <input type="color" class="form-control form-control-color w-100" id="cfgColorHabilitado"
+                                value="#ffffff" title="Elegir color">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 align-items-center mb-2">
+                        <div class="col-8">
+                            <span class="fw-bold text-dark">Reservado</span>
+                            <div class="small text-muted">Citas programadas</div>
+                        </div>
+                        <div class="col-4 text-end">
+                            <input type="color" class="form-control form-control-color w-100" id="cfgColorReserva"
+                                value="#6c63ff" title="Elegir color">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 align-items-center mb-2">
+                        <div class="col-8">
+                            <span class="fw-bold text-dark">Completado</span>
+                            <div class="small text-muted">Citas ya atendidas</div>
+                        </div>
+                        <div class="col-4 text-end">
+                            <input type="color" class="form-control form-control-color w-100" id="cfgColorCompletado"
+                                value="#198754" title="Elegir color">
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-flex justify-content-between">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetConfig">
+                            <i class="fas fa-undo me-1"></i> Restaurar Default
+                        </button>
+                        <button type="submit" class="btn btn-primary px-4">
+                            <i class="fas fa-save me-1"></i> Aplicar Cambios
+                        </button>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
