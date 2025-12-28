@@ -2168,7 +2168,13 @@ def render_agenda_diaria():
         # Solo traemos empleados activos que pertenezcan a ESTA sucursal
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("""
-                SELECT e.id, e.nombres, e.apellidos, e.nombre_display 
+                SELECT e.id, e.nombres, e.apellidos, e.nombre_display,
+                       (SELECT COUNT(*) FROM reservas r 
+                        WHERE r.empleado_id = e.id 
+                          AND r.fecha_hora_inicio >= CURRENT_DATE 
+                          AND r.fecha_hora_inicio < CURRENT_DATE + INTERVAL '1 day'
+                          AND r.estado NOT IN ('Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio')
+                       ) as citas_hoy
                 FROM empleados e
                 WHERE e.activo = TRUE 
                   AND e.realiza_servicios = TRUE  
@@ -2297,6 +2303,25 @@ def api_agenda_dia_data():
                         "classNames": ["turno-disponible"]
                     })
                 
+                # --- 2.1 HORARIOS EXTRA (Turnos Adicionales) ---
+                sql_extras = f"""
+                    SELECT empleado_id, hora_inicio, hora_fin, motivo
+                    FROM horarios_extra
+                    WHERE empleado_id IN ({placeholders}) AND fecha = %s
+                """
+                cursor.execute(sql_extras, params_base + [fecha_str])
+                
+                for extra in cursor.fetchall():
+                     eventos.append({
+                        "resourceId": extra['empleado_id'],
+                        "start": f"{fecha_str}T{extra['hora_inicio']}", 
+                        "end": f"{fecha_str}T{extra['hora_fin']}",
+                        "display": "background", 
+                        "backgroundColor": "#ffffff", # Igual que turno normal
+                        "classNames": ["turno-disponible", "turno-extra"],
+                        "title": f"Extra: {extra.get('motivo','')}"
+                    })
+                
                 # --- 3. AUSENCIAS (FONDO ROJO) ---
                 sql_ausencias = f"""
                     SELECT empleado_id, fecha_hora_inicio, fecha_hora_fin 
@@ -2363,6 +2388,82 @@ def api_agenda_dia_data():
         return jsonify({"error": "Error interno del servidor."}), 500
 
     return jsonify({"recursos": recursos, "eventos": eventos})
+
+@main_bp.route('/api/agenda/bloquear', methods=['POST'])
+@login_required
+def api_agenda_bloquear():
+    """
+    Crea una ausencia (bloqueo) de horas para un empleado.
+    """
+    try:
+        data = request.json
+        empleado_id = data.get('empleado_id')
+        fecha = data.get('fecha')
+        hora_inicio = data.get('hora_inicio')
+        hora_fin = data.get('hora_fin')
+        motivo = data.get('motivo', 'Bloqueo Manual')
+        
+        if not all([empleado_id, fecha, hora_inicio, hora_fin]):
+            return jsonify({"success": False, "message": "Faltan datos obligatorios."}), 400
+
+        dt_inicio = f"{fecha} {hora_inicio}:00"
+        dt_fin = f"{fecha} {hora_fin}:00"
+
+        db = get_db()
+        cursor = db.cursor()
+        
+        # Insertar en ausencias_empleado
+        sql = """
+            INSERT INTO ausencias_empleado 
+            (empleado_id, tipo_ausencia_id, fecha_hora_inicio, fecha_hora_fin, motivo, aprobado, creado_por)
+            VALUES (%s, 1, %s, %s, %s, TRUE, %s) 
+            RETURNING id
+        """ 
+        cursor.execute(sql, (empleado_id, dt_inicio, dt_fin, motivo, session.get('user_id')))
+        db.commit()
+        
+        return jsonify({"success": True, "message": "Horario bloqueado correctamente."})
+        
+    except Exception as e:
+        if 'db' in locals(): db.rollback()
+        current_app.logger.error(f"Error en api_agenda_bloquear: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@main_bp.route('/api/agenda/habilitar', methods=['POST'])
+@login_required
+def api_agenda_habilitar():
+    """
+    Crea un turno extra (horario habilitado) para un empleado.
+    """
+    try:
+        data = request.json
+        empleado_id = data.get('empleado_id')
+        fecha = data.get('fecha')
+        hora_inicio = data.get('hora_inicio')
+        hora_fin = data.get('hora_fin')
+        motivo = data.get('motivo', 'Habilitación Manual')
+        sucursal_id = session.get('sucursal_id')
+        
+        if not all([empleado_id, fecha, hora_inicio, hora_fin]):
+            return jsonify({"success": False, "message": "Faltan datos obligatorios."}), 400
+
+        db = get_db()
+        cursor = db.cursor()
+        
+        sql = """
+            INSERT INTO horarios_extra 
+            (empleado_id, sucursal_id, fecha, hora_inicio, hora_fin, motivo)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(sql, (empleado_id, sucursal_id, fecha, hora_inicio, hora_fin, motivo))
+        db.commit()
+        
+        return jsonify({"success": True, "message": "Horario habilitado correctamente."})
+
+    except Exception as e:
+        if 'db' in locals(): db.rollback()
+        current_app.logger.error(f"Error en api_agenda_habilitar: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
    
     
 def timedelta_to_time_obj(obj):
