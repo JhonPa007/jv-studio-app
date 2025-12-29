@@ -1444,9 +1444,10 @@
             if (indicadorDiv.parentElement !== col) {
                 // Limpiar anterior si existe en otra columna (aunque el CSS lo oculta, mejor moverlo)
                 col.appendChild(indicadorDiv);
-                indicadorDiv.style.display = 'flex';
                 indicadorDiv.style.width = '100%';
             }
+            // CRÍTICO: Asegurar siempre display flex (corrige bug de re-entrada tras mouseleave)
+            indicadorDiv.style.display = 'flex';
 
             // Forzar altura siempre por si el zoom cambió
             indicadorDiv.style.height = `${slotHeight}px`;
