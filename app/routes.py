@@ -2781,12 +2781,22 @@ def nueva_reserva():
                         plantilla_limpia = plantilla_raw.replace('%0A', '\n').replace('\\n', '\n')
                         
                         # Formatear mensaje reemplazando variables
-                        mensaje_final = plantilla_limpia.format(
+                        mensaje_base = plantilla_limpia.format(
                             cliente=c_data['razon_social_nombres'],
                             fecha=fecha_hora_inicio.strftime('%d/%m/%Y'),
                             hora=fecha_hora_inicio.strftime('%I:%M %p'),
                             servicio=nombre_servicio_str,
                             staff=e_data['nombres']
+                        )
+                        
+                        # Agregar Footer con Redes
+                        mensaje_final = (
+                            f"{mensaje_base}\n\n"
+                            f"Síguenos en nuestras redes:\n"
+                            f"👍 Facebook: https://www.facebook.com/BarberiaAbancay\n"
+                            f"🎵 TikTok: https://www.tiktok.com/@jvbarberia\n"
+                            f"📸 Instagram: https://www.instagram.com/jvstudio_formen/\n"
+                            f"📞 WhatsApp: 965 432 443"
                         )
                         
                         # Preparar teléfono (Asegurar prefijo 51 Perú)

@@ -29,7 +29,12 @@ def enviar_alerta_reserva(cliente_tel, staff_tel, datos_cita):
             f"⏰ Hora: {datos_cita['hora']}\n"
             f"💇 Servicio: {datos_cita['servicio']}\n"
             f"📍 Especialista: {datos_cita['staff']}\n\n"
-            f"¡Te esperamos!"
+            f"¡Te esperamos!\n\n"
+            f"Síguenos en nuestras redes:\n"
+            f"👍 Facebook: https://www.facebook.com/BarberiaAbancay\n"
+            f"🎵 TikTok: https://www.tiktok.com/@jvbarberia\n"
+            f"📸 Instagram: https://www.instagram.com/jvstudio_formen/\n"
+            f"📞 WhatsApp: 965 432 443"
         )
         # Ejecutar en hilo paralelo (Fire & Forget)
         threading.Thread(target=_enviar_mensaje_async, args=(cliente_tel, msg_cliente)).start()
