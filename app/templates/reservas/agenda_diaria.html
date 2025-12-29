@@ -1358,45 +1358,55 @@
         indicadorDiv.id = 'indicadorHoraHover';
 
         // Configuración de tu agenda (DEBE COINCIDIR con tu calendar options)
-        const HORA_INICIO = 8; // 08:00 AM
-        const MINUTOS_SLOT = 15; // 15 minutos
+        // 🟢 INTERACCIÓN VISUAL (HOVER)
+        // Calculamos los minutos dinámicamente según la configuración
+        const timeParts = ((currentConfig && currentConfig.agenda_intervalo) || '00:15:00').split(':');
+        const MINUTOS_SLOT = (parseInt(timeParts[0]) * 60) + parseInt(timeParts[1]);
+        const HORA_INICIO = 8; // Asegúrate de que esto coincida con slotMinTime (8:00 AM)
 
         agendaContainer.addEventListener('mousemove', function (e) {
-            // 1. Detectar Columna
-            const target = document.elementFromPoint(e.clientX, e.clientY);
-            if (!target) return;
-            const col = target.closest('.fc-timegrid-col');
+            // 1. Validar target
+            // Buscamos el slot o la columna base
+            const slot = e.target.closest('.fc-timegrid-slot');
+            const col = e.target.closest('.fc-timegrid-col');
 
-            // Si no estamos en columna o estamos en cabecera, adiós
-            if (!col || target.closest('.fc-col-header')) {
+            if (!col) {
                 indicadorDiv.style.display = 'none';
                 return;
             }
 
-            // 2. Detectar Altura de Slot (Referencia)
-            const primerSlot = document.querySelector('.fc-timegrid-slot');
-            const slotHeight = primerSlot ? primerSlot.offsetHeight : 22;
+            // 2. Obtener altura del slot (dinámico, FullCalendar lo calcula)
+            // Necesitamos un slot de referencia. Si no hay slot bajo el mouse (ej. evento encima), buscamos uno en la columna
+            let referenceSlot = slot || col.querySelector('.fc-timegrid-slot');
+
+            if (!referenceSlot) return;
+
+            // Altura real renderizada
+            const slotHeight = referenceSlot.getBoundingClientRect().height;
+            if (slotHeight < 5) return; // Evitar divisiones por cero o valores absurdos
 
             // 3. Cálculos de Posición
             const rectCol = col.getBoundingClientRect();
             const relativeY = e.clientY - rectCol.top;
 
             // "Imantar" al slot más cercano
-            // Math.floor(relativeY / slotHeight) nos da el índice del slot (0, 1, 2...)
             const slotIndex = Math.floor(relativeY / slotHeight);
             const snappedY = slotIndex * slotHeight;
 
             // 4. Mover la Barra
+            // Evitamos parpadeo: solo append si cambió de columna
             if (indicadorDiv.parentElement !== col) {
+                // Limpiar anterior si existe en otra columna (aunque el CSS lo oculta, mejor moverlo)
                 col.appendChild(indicadorDiv);
                 indicadorDiv.style.display = 'flex';
-                indicadorDiv.style.height = `${slotHeight}px`;
                 indicadorDiv.style.width = '100%';
             }
+
+            // Forzar altura siempre por si el zoom cambió
+            indicadorDiv.style.height = `${slotHeight}px`;
             indicadorDiv.style.top = `${snappedY}px`;
 
             // 5. CALCULAR LA HORA MATEMÁTICAMENTE (Infalible)
-            // Total minutos desde el inicio (8:00) = index * 15
             const minutosDesdeInicio = slotIndex * MINUTOS_SLOT;
 
             const fechaBase = new Date();
