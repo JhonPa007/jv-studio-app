@@ -41,6 +41,7 @@ class User(UserMixin):
                     self._permisos = set()
                     
         return self._permisos
+        
 
     def can(self, permiso):
         return 'acceso_total' in self.permisos or permiso in self.permisos
