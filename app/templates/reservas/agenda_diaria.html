@@ -1391,20 +1391,18 @@
 
         const indicadorDiv = document.createElement('div');
         indicadorDiv.id = 'indicadorHoraHover';
-
-
-        // DEBUG VISUAL (Solo para desarrollo/diagnóstico)
-        const debugDiv = document.createElement('div');
-        debugDiv.style.position = 'fixed';
-        debugDiv.style.bottom = '10px';
-        debugDiv.style.right = '10px';
-        debugDiv.style.background = 'rgba(0,0,0,0.8)';
-        debugDiv.style.color = 'lime';
-        debugDiv.style.padding = '5px 10px';
-        debugDiv.style.fontSize = '12px';
-        debugDiv.style.zIndex = '99999';
-        debugDiv.innerHTML = `Config Intervalo: ${currentConfig.agenda_intervalo} <br> Minutos: ${((parseInt(currentConfig.agenda_intervalo.split(':')[0]) * 60) + parseInt(currentConfig.agenda_intervalo.split(':')[1]))}`;
-        document.body.appendChild(debugDiv);
+        indicadorDiv.style.position = 'absolute';
+        indicadorDiv.style.left = '0';
+        indicadorDiv.style.pointerEvents = 'none'; // CRITICO: Permite hacer clic "a través" de la barra
+        indicadorDiv.style.zIndex = '5'; // Encima de celdas, debajo de eventos (eventos suelen ser z=6 o más)
+        indicadorDiv.style.borderTop = '2px dashed var(--agenda-bg-reserva, #6c63ff)';
+        indicadorDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+        indicadorDiv.style.display = 'none'; // Oculto x default
+        indicadorDiv.style.alignItems = 'center'; // Centrar vertical
+        indicadorDiv.style.paddingLeft = '5px';
+        indicadorDiv.style.fontSize = '0.85rem';
+        indicadorDiv.style.fontWeight = 'bold';
+        indicadorDiv.style.color = 'var(--agenda-bg-reserva, #6c63ff)';
 
         const HORA_INICIO = 8; // Asegúrate de que esto coincida con slotMinTime (8:00 AM)
 
