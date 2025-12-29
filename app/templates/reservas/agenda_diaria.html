@@ -1137,10 +1137,12 @@
         };
 
         // SUBMIT HABILITAR
+        // SUBMIT HABILITAR
         formHabilitar?.addEventListener('submit', function (e) {
             e.preventDefault();
             const btn = this.querySelector('button[type="submit"]');
             const errDiv = document.getElementById('habilitarError');
+            // ... (resto del código submit) ...
 
             const formData = new FormData(this);
             const data = Object.fromEntries(formData.entries());
@@ -1173,6 +1175,39 @@
                     btn.textContent = "Guardar Turno";
                 });
         });
+
+        // 🟢 FUNCIÓN RESTAURADA: Abrir Modal Nueva Reserva
+        function abrirModalNuevaReserva(recursoId, recursoNombre, fecha, hora) {
+            // 1. Llenar campos ocultos
+            if (document.getElementById('nuevaReservaEmpleadoId')) document.getElementById('nuevaReservaEmpleadoId').value = recursoId;
+            if (document.getElementById('nuevaReservaFecha')) document.getElementById('nuevaReservaFecha').value = fecha;
+            if (document.getElementById('nuevaReservaHora')) document.getElementById('nuevaReservaHora').value = hora;
+
+            // 2. Título visual
+            const modalTitle = document.getElementById('modalNuevaReservaLabel');
+            if (modalTitle) {
+                // Formato bonito de fecha
+                let fechaBonita = fecha;
+                try {
+                    fechaBonita = new Date(fecha + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+                } catch (e) { }
+
+                modalTitle.innerHTML = `<i class="fas fa-plus-circle me-2"></i>Nueva Reserva - <b>${recursoNombre}</b> <br><small class="text-muted" style="font-size:0.9rem">${fechaBonita} - ${hora}</small>`;
+            }
+
+            // 3. Resetear formulario
+            const form = document.getElementById('formNuevaReserva');
+            if (form) form.reset();
+
+            // 4. Resetear Select2 si existen
+            if ($('#nuevaReservaClienteId').length) $('#nuevaReservaClienteId').val('').trigger('change');
+            if ($('#nuevaReservaServicioId').length) $('#nuevaReservaServicioId').val('').trigger('change');
+
+            // 5. Establecer fecha/hora visible si existe campo (opcional, depende de tu modal)
+
+            // 6. Mostrar Modal
+            if (modalNuevaInstancia) modalNuevaInstancia.show();
+        }
 
         function abrirModalGestionarReserva(reservaId) {
             // --- 1. Selectores ---
