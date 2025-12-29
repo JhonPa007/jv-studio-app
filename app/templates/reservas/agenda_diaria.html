@@ -1392,14 +1392,33 @@
         const indicadorDiv = document.createElement('div');
         indicadorDiv.id = 'indicadorHoraHover';
 
-        // Configuración de tu agenda (DEBE COINCIDIR con tu calendar options)
-        // 🟢 INTERACCIÓN VISUAL (HOVER)
-        // Calculamos los minutos dinámicamente según la configuración
-        const timeParts = ((currentConfig && currentConfig.agenda_intervalo) || '00:15:00').split(':');
-        const MINUTOS_SLOT = (parseInt(timeParts[0]) * 60) + parseInt(timeParts[1]);
+        // =========================================================
+        // 🟢 MAGIA: EFECTO HOVER (CÁLCULO MATEMÁTICO DE HORA)
+        // =========================================================
+
+        const indicadorDiv = document.createElement('div');
+        indicadorDiv.id = 'indicadorHoraHover';
+
+        // DEBUG VISUAL (Solo para desarrollo/diagnóstico)
+        const debugDiv = document.createElement('div');
+        debugDiv.style.position = 'fixed';
+        debugDiv.style.bottom = '10px';
+        debugDiv.style.right = '10px';
+        debugDiv.style.background = 'rgba(0,0,0,0.8)';
+        debugDiv.style.color = 'lime';
+        debugDiv.style.padding = '5px 10px';
+        debugDiv.style.fontSize = '12px';
+        debugDiv.style.zIndex = '99999';
+        debugDiv.innerHTML = `Config Intervalo: ${currentConfig.agenda_intervalo} <br> Minutos: ${((parseInt(currentConfig.agenda_intervalo.split(':')[0]) * 60) + parseInt(currentConfig.agenda_intervalo.split(':')[1]))}`;
+        document.body.appendChild(debugDiv);
+
         const HORA_INICIO = 8; // Asegúrate de que esto coincida con slotMinTime (8:00 AM)
 
         agendaContainer.addEventListener('mousemove', function (e) {
+            // Recalcular minutos dinámicamente SIEMPRE (por si cambia config en runtime aunque no debería)
+            const parts = (currentConfig.agenda_intervalo || '00:15:00').split(':');
+            const minutos_slot_dynamic = (parseInt(parts[0]) * 60) + parseInt(parts[1]);
+
             // 1. Validar target
             // Buscamos el slot o la columna base
             const slot = e.target.closest('.fc-timegrid-slot');
@@ -1442,7 +1461,7 @@
             indicadorDiv.style.top = `${snappedY}px`;
 
             // 5. CALCULAR LA HORA MATEMÁTICAMENTE (Infalible)
-            const minutosDesdeInicio = slotIndex * MINUTOS_SLOT;
+            const minutosDesdeInicio = slotIndex * minutos_slot_dynamic;
 
             const fechaBase = new Date();
             fechaBase.setHours(HORA_INICIO, 0, 0, 0); // 08:00:00
