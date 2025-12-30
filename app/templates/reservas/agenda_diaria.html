@@ -577,6 +577,8 @@
             if (document.getElementById('cfgColorReserva')) document.getElementById('cfgColorReserva').value = config.agenda_color_reserva;
             if (document.getElementById('cfgColorCompletado')) document.getElementById('cfgColorCompletado').value = config.agenda_color_completado;
             if (document.getElementById('configAppFuente')) document.getElementById('configAppFuente').value = config.app_fuente || 'Inter';
+            if (document.getElementById('cfgHoraInicio')) document.getElementById('cfgHoraInicio').value = config.agenda_hora_inicio || '08:00';
+            if (document.getElementById('cfgHoraFin')) document.getElementById('cfgHoraFin').value = config.agenda_hora_fin || '22:00';
         }
 
         // Inicializar modal con datos actuales
@@ -603,7 +605,9 @@
                 agenda_color_habilitado: document.getElementById('cfgColorHabilitado').value,
                 agenda_color_reserva: document.getElementById('cfgColorReserva').value,
                 agenda_color_completado: document.getElementById('cfgColorCompletado').value,
-                app_fuente: document.getElementById('configAppFuente').value
+                app_fuente: document.getElementById('configAppFuente').value,
+                agenda_hora_inicio: document.getElementById('cfgHoraInicio').value,
+                agenda_hora_fin: document.getElementById('cfgHoraFin').value
             };
 
             fetch('/api/configuracion', {
@@ -726,10 +730,23 @@
                     return { domNodes: [container] };
                 },
 
+                // Lógica Dinámica para Etiquetas de Hora (Axis)
                 slotDuration: currentConfig.agenda_intervalo ? currentConfig.agenda_intervalo : '00:15:00',
-                slotMinTime: '08:00:00',
-                slotMaxTime: '22:00:00',
-                slotLabelInterval: '01:00',
+                slotMinTime: currentConfig.agenda_hora_inicio ? currentConfig.agenda_hora_inicio : '08:00:00',
+                slotMaxTime: currentConfig.agenda_hora_fin ? currentConfig.agenda_hora_fin : '22:00:00',
+
+                // CÁLCULO INTELIGENTE DE ETIQUETAS (AXIS)
+                slotLabelInterval: (function () {
+                    const intervalo = currentConfig.agenda_intervalo || '00:15:00';
+                    // Parsear minutos
+                    const parts = intervalo.split(':');
+                    const minutos = (parseInt(parts[0]) * 60) + parseInt(parts[1]);
+
+                    if (minutos <= 5) return '00:15:00'; // 5 min -> Etiquetas cada 15
+                    if (minutos <= 10) return '00:30:00'; // 10 min -> Etiquetas cada 30
+                    return '01:00:00'; // 15, 20, 30+ -> Etiquetas cada 1 Hora
+                })(),
+
                 stickyHeaderDates: true,
                 nowIndicator: true,
                 editable: true,
@@ -1401,20 +1418,21 @@
         indicadorDiv.style.position = 'absolute';
         indicadorDiv.style.left = '0';
         indicadorDiv.style.pointerEvents = 'none';
-        indicadorDiv.style.zIndex = '5';
+        indicadorDiv.style.zIndex = '9999';
         // ESTILO TIPO SCREENSHOT
-        indicadorDiv.style.backgroundColor = '#e0e7ff'; // Fondo azulito/lila suave
-        indicadorDiv.style.color = '#4338ca'; // Texto oscuro
+        indicadorDiv.style.backgroundColor = '#e0e7ff';
+        indicadorDiv.style.color = '#4338ca';
         indicadorDiv.style.padding = '2px 8px';
         indicadorDiv.style.borderRadius = '4px';
-        indicadorDiv.style.fontSize = '0.8rem';
-        indicadorDiv.style.fontWeight = '600';
+        indicadorDiv.style.fontSize = '0.85rem';
+        indicadorDiv.style.fontWeight = '700';
         indicadorDiv.style.display = 'none';
         indicadorDiv.style.alignItems = 'center';
-        indicadorDiv.style.height = 'auto'; // Ajuste automático
-        indicadorDiv.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+        indicadorDiv.style.height = 'auto';
+        indicadorDiv.style.boxShadow = '0 4px 6px rgba(0,0,0,0.15)';
+        indicadorDiv.style.transform = 'translateY(-50%)'; // Centrado vertical exacto
 
-        const HORA_INICIO = 8;
+        // const HORA_INICIO = 8; // YA NO SE USA AQUÍ, LO CALCULAMOS DINÁMICAMENTE ABAJO
 
         agendaContainer.addEventListener('mousemove', function (e) {
             // Recalcular minutos dinámicamente SIEMPRE (por si cambia config en runtime)
@@ -1473,7 +1491,11 @@
             const minutosDesdeInicio = slotIndex * minutos_slot_dynamic;
 
             const fechaBase = new Date();
-            fechaBase.setHours(HORA_INICIO, 0, 0, 0); // 08:00:00
+            // Usar la hora de inicio real configurada
+            const horaInicioReal = currentConfig.agenda_hora_inicio ? parseInt(currentConfig.agenda_hora_inicio.split(':')[0]) : 8;
+            const minInicioReal = currentConfig.agenda_hora_inicio ? parseInt(currentConfig.agenda_hora_inicio.split(':')[1]) : 0;
+
+            fechaBase.setHours(horaInicioReal, minInicioReal, 0, 0);
             fechaBase.setMinutes(fechaBase.getMinutes() + minutosDesdeInicio);
 
             // Formatear: 10:15 a. m.

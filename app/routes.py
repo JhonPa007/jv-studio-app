@@ -2597,16 +2597,18 @@ def api_configuracion():
                 }
             
             # Asegurar string con formato HH:MM:SS (2 dígitos para hora)
-            if 'agenda_intervalo' in config and config['agenda_intervalo']:
-                 val = config['agenda_intervalo']
-                 if isinstance(val, timedelta):
-                     total_seconds = int(val.total_seconds())
-                     hours = total_seconds // 3600
-                     minutes = (total_seconds % 3600) // 60
-                     seconds = total_seconds % 60
-                     config['agenda_intervalo'] = f"{hours:02}:{minutes:02}:{seconds:02}"
-                 else:
-                     config['agenda_intervalo'] = str(val)
+            for field in ['agenda_intervalo', 'agenda_hora_inicio', 'agenda_hora_fin']:
+                if field in config and config[field]:
+                     val = config[field]
+                     if isinstance(val, timedelta):
+                         total_seconds = int(val.total_seconds())
+                         hours = total_seconds // 3600
+                         minutes = (total_seconds % 3600) // 60
+                         seconds = total_seconds % 60
+                         config[field] = f"{hours:02}:{minutes:02}:{seconds:02}"
+                     else:
+                         # Si ya es string, asegurarse formato HH:MM
+                         config[field] = str(val)
 
             return jsonify({"success": True, "config": config})
         except Exception as e:
@@ -2629,6 +2631,8 @@ def api_configuracion():
             val_reserva = data.get('agenda_color_reserva', '#6c63ff')
             val_completado = data.get('agenda_color_completado', '#198754')
             val_fuente = data.get('app_fuente', 'Inter')
+            val_inicio = data.get('agenda_hora_inicio', '08:00')
+            val_fin = data.get('agenda_hora_fin', '22:00')
 
             if existe:
                 # UPDATE
@@ -2639,15 +2643,22 @@ def api_configuracion():
                         agenda_color_habilitado = %s,
                         agenda_color_reserva = %s,
                         agenda_color_completado = %s,
-                        app_fuente = %s
+                        app_fuente = %s,
+                        agenda_hora_inicio = %s,
+                        agenda_hora_fin = %s
                     WHERE sucursal_id = %s
                 """
-                cursor.execute(sql_update, (val_intervalo, val_bloqueo, val_habilitado, val_reserva, val_completado, val_fuente, sucursal_id))
+                cursor.execute(sql_update, (val_intervalo, val_bloqueo, val_habilitado, val_reserva, val_completado, val_fuente, val_inicio, val_fin, sucursal_id))
             else:
                 # INSERT
                 sql_insert = """
                     INSERT INTO configuracion_sucursal (
                         sucursal_id, agenda_intervalo, agenda_color_bloqueo, 
+                        agenda_color_habilitado, agenda_color_reserva, agenda_color_completado, app_fuente,
+                        agenda_hora_inicio, agenda_hora_fin
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                cursor.execute(sql_insert, (sucursal_id, val_intervalo, val_bloqueo, val_habilitado, val_reserva, val_completado, val_fuente, val_inicio, val_fin))
                         agenda_color_habilitado, agenda_color_reserva, 
                         agenda_color_completado, app_fuente
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s)
