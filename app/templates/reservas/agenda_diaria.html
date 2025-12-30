@@ -655,9 +655,8 @@
                 height: 'calc(100vh - 190px)',
                 allDaySlot: false,
                 allDaySlot: false,
-                // PRUEBA DE FUEGO: FORZAR 5 MINUTOS
-                slotDuration: '00:05:00', // currentConfig.agenda_intervalo ? currentConfig.agenda_intervalo : '00:15:00',
-                slotLabelInterval: '00:30', // Etiquetas cada 30 min para no saturar
+                slotDuration: currentConfig.agenda_intervalo ? currentConfig.agenda_intervalo : '00:15:00',
+                slotLabelInterval: '00:30',
 
                 // 🟢 INTERACCIÓN HOVER (MOSTRAR HORA)
                 eventMouseEnter: function (info) {
@@ -727,7 +726,7 @@
                     return { domNodes: [container] };
                 },
 
-                slotDuration: '00:05:00',
+                slotDuration: currentConfig.agenda_intervalo ? currentConfig.agenda_intervalo : '00:15:00',
                 slotMinTime: '08:00:00',
                 slotMaxTime: '22:00:00',
                 slotLabelInterval: '01:00',
@@ -1418,8 +1417,14 @@
         const HORA_INICIO = 8;
 
         agendaContainer.addEventListener('mousemove', function (e) {
-            // FORZAR 5 MINUTOS (Ya que lo forzamos en el calendario)
-            const minutos_slot_dynamic = 5;
+            // Recalcular minutos dinámicamente SIEMPRE (por si cambia config en runtime)
+            let minutos_slot_dynamic = 15; // Default
+            if (currentConfig.agenda_intervalo) {
+                const parts = currentConfig.agenda_intervalo.split(':');
+                if (parts.length >= 2) {
+                    minutos_slot_dynamic = (parseInt(parts[0]) * 60) + parseInt(parts[1]);
+                }
+            }
 
 
             // 1. Validar target
