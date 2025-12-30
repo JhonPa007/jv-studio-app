@@ -2659,11 +2659,7 @@ def api_configuracion():
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 cursor.execute(sql_insert, (sucursal_id, val_intervalo, val_bloqueo, val_habilitado, val_reserva, val_completado, val_fuente, val_inicio, val_fin))
-                        agenda_color_habilitado, agenda_color_reserva, 
-                        agenda_color_completado, app_fuente
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """
-                cursor.execute(sql_insert, (sucursal_id, val_intervalo, val_bloqueo, val_habilitado, val_reserva, val_completado, val_fuente))
+
             
             db.commit()
             current_app.logger.info("Configuración guardada exitosamente en DB.")
