@@ -142,7 +142,7 @@
                     <h4 class="text-warning mb-3"><i class="fas fa-shopping-cart me-2"></i>Ítems</h4>
 
                     <div class="row mb-3 g-2">
-                        <div class="col-md-10">
+                        <div class="col-md-8">
                             <select class="form-select" id="select_servicio">
                                 <option value="">-- Agregar Servicio --</option>
                                 {% for s in servicios %}
@@ -151,6 +151,14 @@
                                 </option>
                                 {% endfor %}
                             </select>
+                        </div>
+                        <div
+                            class="col-md-2 d-flex align-items-center justify-content-center bg-dark rounded border border-secondary">
+                            <div class="form-check form-switch pt-1">
+                                <input class="form-check-input" type="checkbox" id="chk_es_extra">
+                                <label class="form-check-label text-warning fw-bold small" for="chk_es_extra">Es
+                                    Extra</label>
+                            </div>
                         </div>
                         <div class="col-md-2">
                             <button type="button" class="btn btn-primary w-100" onclick="agregarItem('servicio')">
@@ -193,6 +201,21 @@
                             <tbody id="tabla_items_body"></tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="venta-section">
+                    <h4 class="text-warning mb-3"><i class="fas fa-coins me-2"></i>Pago</h4>
+
+                    <!-- Content skipped -->
+
+                    <!-- SECCIÓN JS UPDATE -->
+                    <!-- NOTA: No podemos cerrar el template aqui, esto es solo reemplazo parcial. 
+                         Necesitamos actualizar el JS que está al final del archivo.
+                         Como replace_file limita a un bloque contiguo, haremos primero el HTML y luego otro call para el JS.
+                    -->
+
                 </div>
             </div>
 
@@ -495,15 +518,27 @@
         if (!id) return;
 
         const opt = sel.options[sel.selectedIndex];
+
+        let esExtra = false;
+        if (tipo === 'servicio') {
+            const chk = document.getElementById('chk_es_extra');
+            if (chk && chk.checked) esExtra = true;
+        }
+
         const item = {
             id, tipo,
             descripcion: opt.dataset.nombre,
             precio: parseFloat(opt.dataset.precio),
             stock: parseInt(opt.dataset.stock || 0),
-            cantidad: 1
+            cantidad: 1,
+            es_extra: esExtra
         };
 
-        const existe = listaItems.find(i => i.id === id && i.tipo === tipo);
+        const existe = listaItems.find(i => i.id === id && i.tipo === tipo && i.es_extra === esExtra);
+        // NOTA: Si es extra y el existente no, o viceversa, se consideran items distintos (para poder tener normal y extra del mismo servicio si se quisiera, 
+        // aunque la logica de 'existe' podria complicarse si queremos agruparlos. 
+        // Si el usuario marca extra, se añade como nuevo item si no existe uno igual extra.
+
         if (existe) {
             if (tipo === 'producto' && existe.cantidad >= item.stock) { alert('Sin stock suficiente'); return; }
             existe.cantidad++;
@@ -511,8 +546,14 @@
             if (tipo === 'producto' && item.stock < 1) { alert('Producto agotado'); return; }
             listaItems.push(item);
         }
+
         renderTabla();
         sel.value = '';
+
+        // Reset checkbox
+        if (tipo === 'servicio') {
+            document.getElementById('chk_es_extra').checked = false;
+        }
     }
 
     function renderTabla() {
@@ -520,9 +561,11 @@
         tbody.innerHTML = '';
         listaItems.forEach((it, i) => {
             const total = it.cantidad * it.precio;
+            const badgeExtra = it.es_extra ? '<span class="badge bg-warning text-dark ms-1" style="font-size:0.7em;">EXTRA</span>' : '';
+
             tbody.innerHTML += `
                 <tr>
-                    <td>${it.descripcion} <small class='text-muted'>${it.tipo}</small></td>
+                    <td>${it.descripcion} ${badgeExtra} <small class='text-muted'>${it.tipo}</small></td>
                 <td><input type="number" class="form-control form-control-sm text-center" value="${it.cantidad}" min="1" onchange="updateCant(${i}, this.value)"></td>
                 <td>
                     <div class="input-group input-group-sm">

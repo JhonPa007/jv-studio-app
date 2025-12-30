@@ -5306,8 +5306,8 @@ def nueva_venta():
 
             # 6. Insertar Ítems y Actualizar Stock
             sql_item = """
-                INSERT INTO venta_items (venta_id, servicio_id, producto_id, descripcion_item_venta, cantidad, precio_unitario_venta, subtotal_item_bruto, subtotal_item_neto) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO venta_items (venta_id, servicio_id, producto_id, descripcion_item_venta, cantidad, precio_unitario_venta, subtotal_item_bruto, subtotal_item_neto, es_extra) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             for item in items:
                 total_item = float(item['precio']) * float(item['cantidad'])
@@ -5316,7 +5316,8 @@ def nueva_venta():
                     item['id'] if item['tipo'] == 'servicio' else None,
                     item['id'] if item['tipo'] == 'producto' else None,
                     item['descripcion'], item['cantidad'], item['precio'], 
-                    total_item, total_item
+                    total_item, total_item,
+                    item.get('es_extra', False)
                 ))
                 if item['tipo'] == 'producto':
                     # KARDEX
