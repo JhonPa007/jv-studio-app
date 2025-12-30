@@ -1410,7 +1410,7 @@
         });
 
         // =========================================================
-        // 🟢 MAGIA: EFECTO HOVER (CÁLCULO MATEMÁTICO DE HORA)
+        // 🟢 MAGIA: EFECTO HOVER (CÁLCULO MATEMÁTICO DE HORA + TOOLTIP POPUP)
         // =========================================================
 
         const indicadorDiv = document.createElement('div');
@@ -1419,20 +1419,36 @@
         indicadorDiv.style.left = '0';
         indicadorDiv.style.pointerEvents = 'none';
         indicadorDiv.style.zIndex = '9999';
-        // ESTILO TIPO SCREENSHOT
-        indicadorDiv.style.backgroundColor = '#e0e7ff';
-        indicadorDiv.style.color = '#4338ca';
-        indicadorDiv.style.padding = '2px 8px';
-        indicadorDiv.style.borderRadius = '4px';
-        indicadorDiv.style.fontSize = '0.85rem';
-        indicadorDiv.style.fontWeight = '700';
-        indicadorDiv.style.display = 'none';
-        indicadorDiv.style.alignItems = 'center';
-        indicadorDiv.style.height = 'auto';
-        indicadorDiv.style.boxShadow = '0 4px 6px rgba(0,0,0,0.15)';
-        indicadorDiv.style.transform = 'translateY(-50%)'; // Centrado vertical exacto
 
-        // const HORA_INICIO = 8; // YA NO SE USA AQUÍ, LO CALCULAMOS DINÁMICAMENTE ABAJO
+        // ESTILO TIPO "POP UP" / TOOLTIP
+        indicadorDiv.style.display = 'none';
+        indicadorDiv.style.flexDirection = 'column'; // Para alinear línea y etiqueta
+        indicadorDiv.style.alignItems = 'flex-start';
+        indicadorDiv.style.width = '100%';
+        indicadorDiv.style.transform = 'translateY(-50%)'; // Centrado vertical sobre la línea
+
+        // 1. La Línea Guía
+        const lineaGuia = document.createElement('div');
+        lineaGuia.style.width = '100%';
+        lineaGuia.style.height = '2px';
+        lineaGuia.style.backgroundColor = '#6c63ff'; // Color principal
+        lineaGuia.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
+
+        // 2. La Etiqueta de Hora (El "Pop up")
+        const etiquetaHora = document.createElement('div');
+        etiquetaHora.style.backgroundColor = '#6c63ff';
+        etiquetaHora.style.color = '#ffffff';
+        etiquetaHora.style.padding = '4px 10px';
+        etiquetaHora.style.borderRadius = '20px'; // Bordes muy redondeados
+        etiquetaHora.style.fontSize = '0.85rem';
+        etiquetaHora.style.fontWeight = 'bold';
+        etiquetaHora.style.boxShadow = '0 4px 6px rgba(0,0,0,0.15)';
+        etiquetaHora.style.marginBottom = '2px'; // Un poco de espacio antes de la línea
+        etiquetaHora.style.marginLeft = '0px'; // Pegado a la izquierda (o dinámico)
+        etiquetaHora.style.whiteSpace = 'nowrap';
+
+        indicadorDiv.appendChild(etiquetaHora);
+        indicadorDiv.appendChild(lineaGuia);
 
         agendaContainer.addEventListener('mousemove', function (e) {
             // Recalcular minutos dinámicamente SIEMPRE (por si cambia config en runtime)
@@ -1444,26 +1460,27 @@
                 }
             }
 
-
-            // 1. Validar target
-            // Buscamos el slot o la columna base
-            const slot = e.target.closest('.fc-timegrid-slot');
+            // 1. Validar target: Buscamos la columna bajo el mouse
             const col = e.target.closest('.fc-timegrid-col');
-
             if (!col) {
                 indicadorDiv.style.display = 'none';
                 return;
             }
 
-            // 2. Obtener altura del slot (dinámico, FullCalendar lo calcula)
-            // Necesitamos un slot de referencia. Si no hay slot bajo el mouse (ej. evento encima), buscamos uno en la columna
-            let referenceSlot = slot || col.querySelector('.fc-timegrid-slot');
+            // 2. Obtener altura del slot (dinámico)
+            // CRÍTICO: Buscar GLOBALMENTE un slot para referencia, no dentro de la columna actual
+            // ya que FullCalendar v6 a veces separa el grid de fondo de los eventos.
+            const referenceSlot = agendaContainer.querySelector('.fc-timegrid-slot');
 
-            if (!referenceSlot) return;
+            if (!referenceSlot) {
+                // Fallback de seguridad si no se encuentra (raro en TimeGrid)
+                console.warn("No se encontró referencia de .fc-timegrid-slot");
+                return;
+            }
 
             // Altura real renderizada
             const slotHeight = referenceSlot.getBoundingClientRect().height;
-            if (slotHeight < 5) return; // Evitar divisiones por cero o valores absurdos
+            if (slotHeight < 5) return; // Evitar divisiones por cero
 
             // 3. Cálculos de Posición
             const rectCol = col.getBoundingClientRect();
@@ -1476,16 +1493,16 @@
             // 4. Mover la Barra
             // Evitamos parpadeo: solo append si cambió de columna
             if (indicadorDiv.parentElement !== col) {
-                // Limpiar anterior si existe en otra columna (aunque el CSS lo oculta, mejor moverlo)
                 col.appendChild(indicadorDiv);
-                indicadorDiv.style.width = '100%';
             }
-            // CRÍTICO: Asegurar siempre display flex (corrige bug de re-entrada tras mouseleave)
+            // Mostrar
             indicadorDiv.style.display = 'flex';
 
-            // Forzar altura siempre por si el zoom cambió
-            indicadorDiv.style.height = `${slotHeight}px`;
+            // Posicionar
             indicadorDiv.style.top = `${snappedY}px`;
+
+            // Ajustar ancho de la línea al ancho de la columna
+            lineaGuia.style.width = `${rectCol.width}px`;
 
             // 5. CALCULAR LA HORA MATEMÁTICAMENTE (Infalible)
             const minutosDesdeInicio = slotIndex * minutos_slot_dynamic;
@@ -1505,7 +1522,7 @@
                 hour12: true
             });
 
-            indicadorDiv.innerHTML = `${horaStr}`;
+            etiquetaHora.innerText = horaStr;
         });
 
         agendaContainer.addEventListener('mouseleave', function () {
