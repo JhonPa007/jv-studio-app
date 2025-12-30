@@ -270,17 +270,20 @@ def proceso_cierre_mensual_fondo():
 
 
 
+import json
+
+# ... (imports existing) ...
+
 # ==============================================================================
 # 1. FUNCIÓN AUXILIAR: LÓGICA DE TRAMOS (CEREBRO MATEMÁTICO)
 # ==============================================================================
-def _calcular_desglose_tramos(cursor, venta_pagable, acumulado_histórico_mes):
+def _calcular_desglose_tramos(tramos, venta_pagable, acumulado_histórico_mes):
     """
     Calcula cuánto pagar por la 'venta_pagable' actual, basándose en el 
-    'acumulado_histórico_mes' para determinar el nivel (50%, 55%, 60%).
-    """
-    cursor.execute("SELECT * FROM esquema_comisiones ORDER BY monto_minimo ASC")
-    tramos = cursor.fetchall()
+    'acumulado_histórico_mes' y una lista de 'tramos' dada.
     
+    tramos espera: [{'min': 0, 'max': 4000, 'pct': 50}, ...]
+    """
     desglose = []
     monto_restante_por_pagar = float(venta_pagable)
     
@@ -289,20 +292,25 @@ def _calcular_desglose_tramos(cursor, venta_pagable, acumulado_histórico_mes):
     
     comision_total = 0.0
     
-    for tramo in tramos:
+    # Ordenar tramos por monto mínimo para asegurar orden lógico
+    tramos_ordenados = sorted(tramos, key=lambda x: float(x.get('min', 0)))
+    
+    for tramo in tramos_ordenados:
         if monto_restante_por_pagar <= 0:
             break
             
-        techo_tramo = float(tramo['monto_maximo']) if tramo['monto_maximo'] else float('inf')
-        piso_tramo = float(tramo['monto_minimo'])
-        tasa = float(tramo['porcentaje'])
+        techo_tramo = float(tramo.get('max')) if tramo.get('max') is not None else float('inf')
+        piso_tramo = float(tramo.get('min', 0))
+        tasa = float(tramo.get('pct', 0))
         
         # 1. ¿Este nivel ya fue superado por la producción histórica?
         if cursor_nivel >= techo_tramo:
             continue 
             
         # 2. ¿Cuánto espacio queda en este nivel?
-        espacio_disponible = techo_tramo - max(piso_tramo, cursor_nivel)
+        # El espacio es desde max(piso, cursor) hasta techo
+        inicio_efectivo = max(piso_tramo, cursor_nivel)
+        espacio_disponible = techo_tramo - inicio_efectivo
         
         # 3. ¿Cuánto de mi venta actual cabe aquí?
         monto_a_computar = min(monto_restante_por_pagar, espacio_disponible)
@@ -310,7 +318,7 @@ def _calcular_desglose_tramos(cursor, venta_pagable, acumulado_histórico_mes):
         if monto_a_computar > 0:
             subtotal_comision = monto_a_computar * (tasa / 100)
             desglose.append({
-                'nivel': tramo['nombre_nivel'],
+                'nivel': f"Tramo {piso_tramo} - {techo_tramo if techo_tramo != float('inf') else 'Inf'}",
                 'tasa': tasa,
                 'venta_base': monto_a_computar,
                 'comision': subtotal_comision
@@ -345,7 +353,10 @@ def calcular_planilla_preliminar():
         
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # A. Datos Básicos
-            cursor.execute("SELECT * FROM empleados WHERE id = %s", (empleado_id,))
+            cursor.execute("""
+                SELECT id, nombres, apellidos, tipo_contrato, configuracion_comision, sueldo_base 
+                FROM empleados WHERE id = %s
+            """, (empleado_id,))
             empleado = cursor.fetchone()
             if not empleado: return jsonify({'error': 'Empleado no encontrado'}), 404
             
@@ -353,6 +364,15 @@ def calcular_planilla_preliminar():
             config = cursor.fetchone()
             smv = float(config['sueldo_minimo_vital']) if config else 1130.00
             
+            tipo_contrato = empleado.get('tipo_contrato', 'FIJO')
+            # Parsear config comision si viene como string (aunque psycopg2 con JSONB suele devolver dict)
+            conf_comision = empleado.get('configuracion_comision') or {}
+            if isinstance(conf_comision, str):
+                try:
+                    conf_comision = json.loads(conf_comision)
+                except:
+                    conf_comision = {}
+
             total_comisiones_periodo = 0.00
             detalle_final = []
             mensajes_alerta = []
@@ -380,42 +400,83 @@ def calcular_planilla_preliminar():
                     WHERE v.empleado_id = %s 
                       AND v.fecha_venta BETWEEN %s AND %s 
                       AND v.estado != 'Anulada'
-                      AND v.pago_nomina_id IS NULL -- <--- CLAVE: Solo lo no pagado
+                      AND v.pago_nomina_id IS NULL 
                 """, (empleado_id, p_ini, p_fin))
                 venta_pagable = float(cursor.fetchone()['total'])
                 
-                # 2. ACUMULADO HISTÓRICO DEL MES (Todo lo vendido en el mes, pagado o no, para definir nivel)
+                # 2. ACUMULADO HISTÓRICO DEL MES (Para nivel de escala o meta)
                 inicio_de_ese_mes = p_ini.replace(day=1)
                 cursor.execute("""
                     SELECT COALESCE(SUM(vi.subtotal_item_neto), 0) as total
                     FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id
                     WHERE v.empleado_id = %s 
-                      AND v.fecha_venta >= %s AND v.fecha_venta < %s -- Desde día 1 hasta ayer
+                      AND v.fecha_venta >= %s AND v.fecha_venta < %s 
                       AND v.estado != 'Anulada'
                 """, (empleado_id, inicio_de_ese_mes, p_ini))
                 acumulado_histórico = float(cursor.fetchone()['total'])
                 
-                # 3. Cálculo de Tramos
-                desglose_tramos, comision_sub = _calcular_desglose_tramos(cursor, venta_pagable, acumulado_histórico)
-                total_comisiones_periodo += comision_sub
+                comision_sub = 0.00
+                desglose_tramos = []
                 
                 if venta_pagable > 0:
+                    # --- LÓGICA SEGÚN TIPO DE CONTRATO ---
+                    if tipo_contrato == 'FIJO':
+                        # Sueldo fijo no gana comisión por producción (salvo bonos manuales)
+                        comision_sub = 0.00
+                        desglose_tramos.append({'nivel': 'Contrato Fijo', 'tasa': 0, 'venta_base': venta_pagable, 'comision': 0})
+                        
+                    elif tipo_contrato == 'MIXTO':
+                        meta = float(conf_comision.get('meta', 0))
+                        pct_exceso = float(conf_comision.get('porcentaje', 0))
+                        
+                        # Definir trampo simple: Hasta meta = 0%, Desde meta = pct_exceso%
+                        tramos_mixtos = [
+                            {'min': 0, 'max': meta, 'pct': 0},
+                            {'min': meta, 'max': None, 'pct': pct_exceso}
+                        ]
+                        desglose_tramos, comision_sub = _calcular_desglose_tramos(tramos_mixtos, venta_pagable, acumulado_histórico)
+                        
+                    elif tipo_contrato == 'ESCALONADA':
+                        # Obtener tramos de la configuración del empleado
+                        tramos_config = conf_comision.get('tramos', [])
+                        # Si no hay configuración, usar un default seguro (0%) o un fallback
+                        if not tramos_config:
+                             tramos_config = [{'min': 0, 'max': None, 'pct': 0}] # Sin comisión si no se configuró
+                        
+                        desglose_tramos, comision_sub = _calcular_desglose_tramos(tramos_config, venta_pagable, acumulado_histórico)
+
+                    total_comisiones_periodo += comision_sub
+                    
                     detalle_final.append({
                         'fechas': f"{p_ini.strftime('%d/%m')} al {p_fin.strftime('%d/%m')}",
                         'venta_nueva': venta_pagable,
                         'acumulado_previo': acumulado_histórico,
+                        'tipo_calculo': tipo_contrato,
                         'desglose': desglose_tramos
                     })
 
-                # 4. Validación SMV (Solo fin de mes)
+                # 4. Validación SMV (Solo fin de mes Y si es Escalonada/Mixta que dependa solo de prod)
+                # En Fijo se asume que gana > SMV o se ajusta en sueldo base.
+                # En Escalonada es donde dice la ley que no puede ganar menos del mínimo si cumple horario.
                 ultimo_dia_del_mes_actual = date(p_ini.year, p_ini.month, monthrange(p_ini.year, p_ini.month)[1])
-                if p_fin == ultimo_dia_del_mes_actual:
-                    total_mes_real = acumulado_histórico + venta_pagable
-                    _, comision_teorica_mes = _calcular_desglose_tramos(cursor, total_mes_real, 0)
-                    if comision_teorica_mes < smv:
-                        diferencia = smv - comision_teorica_mes
-                        reintegro_smv_total += diferencia
-                        mensajes_alerta.append(f"⚠️ Reintegro Ley ({p_ini.strftime('%B')}): S/ {diferencia:.2f}")
+                
+                if p_fin == ultimo_dia_del_mes_actual and tipo_contrato == 'ESCALONADA':
+                    # Calcular cuánto ganó en TOTAL de comisiones en el mes (lo pagado + lo actual)
+                    # Nota: Esto es complejo porque requeriría sumar las comisiones YA PAGADAS.
+                    # Simplificación: Recalcular comisión teórica sobre la Producción Total del Mes
+                    total_prod_mes = acumulado_histórico + venta_pagable
+                    
+                    # Usamos la misma función de tramos para ver cuánto COMISIONARÍA por todo el mes
+                    tramos_config = conf_comision.get('tramos', [])
+                    _, comision_teorica_total_mes = _calcular_desglose_tramos(tramos_config, total_prod_mes, 0)
+                    
+                    if comision_teorica_total_mes < smv:
+                        diferencia = smv - comision_teorica_total_mes
+                        if diferencia > 0:
+                            # OJO: Aquí habría que ver si YA se le pagó algún reintegro antes, 
+                            # pero asumimos que el reintegro se hace al cierre de mes.
+                            reintegro_smv_total += diferencia
+                            mensajes_alerta.append(f"⚠️ Reintegro SMV ({p_ini.strftime('%B')}): S/ {diferencia:.2f} (Comisión Real: {comision_teorica_total_mes:.2f} vs Mínimo {smv})")
 
             # D. DEDUCCIÓN DE ADELANTOS (Solo los NO deducidos)
             cursor.execute("""
@@ -423,7 +484,7 @@ def calcular_planilla_preliminar():
                 FROM gastos 
                 WHERE empleado_beneficiario_id = %s 
                   AND fecha BETWEEN %s AND %s
-                  AND deducido_en_planilla_id IS NULL -- <--- CLAVE: Solo no cobrados
+                  AND deducido_en_planilla_id IS NULL 
             """, (empleado_id, f_inicio, f_fin))
             total_adelantos = float(cursor.fetchone()['total_adelantos'])
             
@@ -446,6 +507,8 @@ def calcular_planilla_preliminar():
 
     except Exception as e:
         print(f"Error planilla: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     
 @finanzas_bp.route('/api/guardar-planilla', methods=['POST'])
