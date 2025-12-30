@@ -37,3 +37,51 @@ def close_db(e=None):
 
 def init_app(app):
     app.teardown_appcontext(close_db)
+
+def check_schema_updates(app):
+    """
+    Función de auto-migración simple para asegurar que las columnas existan en Producción.
+    Se debe llamar al iniciar la app.
+    """
+    with app.app_context():
+        db = get_db()
+        if not db:
+            return
+            
+        try:
+            with db.cursor() as cursor:
+                # Lista de Columnas Nuevas a Verificar/Agregar
+                columns_to_check = [
+                    # tabla, columna, definición
+                    ("configuracion_sucursal", "agenda_hora_inicio", "TIME DEFAULT '08:00:00'"),
+                    ("configuracion_sucursal", "agenda_hora_fin", "TIME DEFAULT '22:00:00'"),
+                    # Agregamos las de empleados también por seguridad
+                    ("empleados", "tipo_contrato", "VARCHAR(20) DEFAULT 'FIJO'"),
+                    ("empleados", "puede_realizar_servicios", "BOOLEAN DEFAULT TRUE"),
+                    ("empleados", "porcentaje_comision_productos", "DECIMAL(5,2) DEFAULT 0.00"),
+                    ("empleados", "configuracion_comision", "JSONB DEFAULT '{}'"),
+                ]
+                
+                print("--- Iniciando Verificación de Schema (Auto-Migration) ---")
+                for table, col, definition in columns_to_check:
+                    try:
+                        # Intentar agregar columna. Si falla porque existe, ignoramos.
+                        # Postgres no tiene "ADD COLUMN IF NOT EXISTS" nativo en versiones viejas,
+                        # pero el try/except es robusto.
+                        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
+                        print(f"✅ Columna Agregada: {table}.{col}")
+                    except psycopg2.errors.DuplicateColumn:
+                        db.rollback() # Importante rollbackear el error
+                        # print(f"ℹ️ Columna ya existe: {table}.{col}")
+                    except psycopg2.errors.UndefinedTable:
+                         db.rollback()
+                         print(f"⚠️ Tabla no encontrada: {table}")
+                    except Exception as e:
+                        db.rollback()
+                        print(f"❌ Error migrando {table}.{col}: {e}")
+                    else:
+                        db.commit()
+                print("--- Verificación de Schema Finalizada ---")
+                
+        except Exception as e:
+            print(f"Error general en check_schema_updates: {e}")
