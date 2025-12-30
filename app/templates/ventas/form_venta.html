@@ -518,10 +518,10 @@
             precio: parseFloat(opt.dataset.precio),
             stock: parseInt(opt.dataset.stock || 0),
             cantidad: 1,
-            es_extra: esExtra
+            es_hora_extra: esExtra
         };
 
-        const existe = listaItems.find(i => i.id === id && i.tipo === tipo && i.es_extra === esExtra);
+        const existe = listaItems.find(i => i.id === id && i.tipo === tipo && i.es_hora_extra === esExtra);
         // NOTA: Si es extra y el existente no, o viceversa, se consideran items distintos (para poder tener normal y extra del mismo servicio si se quisiera, 
         // aunque la logica de 'existe' podria complicarse si queremos agruparlos. 
         // Si el usuario marca extra, se añade como nuevo item si no existe uno igual extra.
@@ -548,7 +548,7 @@
         tbody.innerHTML = '';
         listaItems.forEach((it, i) => {
             const total = it.cantidad * it.precio;
-            const badgeExtra = it.es_extra ? '<span class="badge bg-warning text-dark ms-1" style="font-size:0.7em;">EXTRA</span>' : '';
+            const badgeExtra = it.es_hora_extra ? '<span class="badge bg-warning text-dark ms-1" style="font-size:0.7em;">EXTRA</span>' : '';
 
             tbody.innerHTML += `
                 <tr>
