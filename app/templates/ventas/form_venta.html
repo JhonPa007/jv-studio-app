@@ -154,10 +154,16 @@
                         </div>
                         <div
                             class="col-md-2 d-flex align-items-center justify-content-center bg-dark rounded border border-secondary">
-                            <div class="form-check form-switch pt-1">
-                                <input class="form-check-input" type="checkbox" id="chk_es_extra">
-                                <label class="form-check-label text-warning fw-bold small" for="chk_es_extra">Es
-                                    Extra</label>
+                            <div class="d-flex flex-column align-items-center w-100">
+                                <div class="form-check form-switch pt-1">
+                                    <input class="form-check-input" type="checkbox" id="chk_es_extra"
+                                        onchange="togglePorcentajeExtra()">
+                                    <label class="form-check-label text-warning fw-bold small" for="chk_es_extra">Es
+                                        Extra</label>
+                                </div>
+                                <input type="number" id="txt_porcentaje_extra"
+                                    class="form-control form-control-sm text-center mt-1 bg-dark text-white border-warning"
+                                    placeholder="%" style="display:none; width: 60px;" min="0" max="100">
                             </div>
                         </div>
                         <div class="col-md-2">
@@ -499,6 +505,18 @@
     }
 
     // --- LOGICA VENTA ---
+    function togglePorcentajeExtra() {
+        const chk = document.getElementById('chk_es_extra');
+        const txt = document.getElementById('txt_porcentaje_extra');
+        if (chk.checked) {
+            txt.style.display = 'block';
+            txt.focus();
+        } else {
+            txt.style.display = 'none';
+            txt.value = '';
+        }
+    }
+
     function agregarItem(tipo) {
         const sel = document.getElementById(tipo === 'servicio' ? 'select_servicio' : 'select_producto');
         const id = sel.value;
@@ -507,9 +525,20 @@
         const opt = sel.options[sel.selectedIndex];
 
         let esExtra = false;
+        let pctExtra = 0;
+
         if (tipo === 'servicio') {
             const chk = document.getElementById('chk_es_extra');
-            if (chk && chk.checked) esExtra = true;
+            if (chk && chk.checked) {
+                esExtra = true;
+                const txt = document.getElementById('txt_porcentaje_extra');
+                pctExtra = parseFloat(txt.value);
+                if (isNaN(pctExtra) || pctExtra <= 0) {
+                    alert("Si marca 'Es Extra', debe ingresar un porcentaje de comisión válido.");
+                    txt.focus();
+                    return;
+                }
+            }
         }
 
         const item = {
@@ -518,13 +547,11 @@
             precio: parseFloat(opt.dataset.precio),
             stock: parseInt(opt.dataset.stock || 0),
             cantidad: 1,
-            es_hora_extra: esExtra
+            es_hora_extra: esExtra,
+            porcentaje_servicio_extra: pctExtra
         };
 
-        const existe = listaItems.find(i => i.id === id && i.tipo === tipo && i.es_hora_extra === esExtra);
-        // NOTA: Si es extra y el existente no, o viceversa, se consideran items distintos (para poder tener normal y extra del mismo servicio si se quisiera, 
-        // aunque la logica de 'existe' podria complicarse si queremos agruparlos. 
-        // Si el usuario marca extra, se añade como nuevo item si no existe uno igual extra.
+        const existe = listaItems.find(i => i.id === id && i.tipo === tipo && i.es_hora_extra === esExtra && i.porcentaje_servicio_extra === pctExtra);
 
         if (existe) {
             if (tipo === 'producto' && existe.cantidad >= item.stock) { alert('Sin stock suficiente'); return; }
@@ -540,6 +567,7 @@
         // Reset checkbox
         if (tipo === 'servicio') {
             document.getElementById('chk_es_extra').checked = false;
+            togglePorcentajeExtra(); // Ocultar input
         }
     }
 
@@ -548,7 +576,10 @@
         tbody.innerHTML = '';
         listaItems.forEach((it, i) => {
             const total = it.cantidad * it.precio;
-            const badgeExtra = it.es_hora_extra ? '<span class="badge bg-warning text-dark ms-1" style="font-size:0.7em;">EXTRA</span>' : '';
+            let badgeExtra = '';
+            if (it.es_hora_extra) {
+                badgeExtra = `<span class="badge bg-warning text-dark ms-1" style="font-size:0.7em;">EXTRA ${it.porcentaje_servicio_extra}%</span>`;
+            }
 
             tbody.innerHTML += `
                 <tr>

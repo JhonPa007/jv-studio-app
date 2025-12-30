@@ -62,7 +62,9 @@ def check_schema_updates(app):
                     ("empleados", "configuracion_comision", "JSONB DEFAULT '{}'"),
                     # VENTAS
                     ("venta_items", "es_hora_extra", "BOOLEAN DEFAULT FALSE"),
-                    ("venta_items", "pagado_al_empleado", "BOOLEAN DEFAULT FALSE"),
+                    ("venta_items", "porcentaje_servicio_extra", "DECIMAL(5,2) DEFAULT 0.00"),
+                    ("venta_items", "comision_servicio_extra", "DECIMAL(10,2) DEFAULT 0.00"),
+                    ("venta_items", "entregado_al_colaborador", "BOOLEAN DEFAULT FALSE"),
                 ]
                 
                 print("--- Iniciando Verificación de Schema (Auto-Migration) ---")

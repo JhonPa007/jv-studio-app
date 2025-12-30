@@ -5306,18 +5306,29 @@ def nueva_venta():
 
             # 6. Insertar Ítems y Actualizar Stock
             sql_item = """
-                INSERT INTO venta_items (venta_id, servicio_id, producto_id, descripcion_item_venta, cantidad, precio_unitario_venta, subtotal_item_bruto, subtotal_item_neto, es_hora_extra) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO venta_items (venta_id, servicio_id, producto_id, descripcion_item_venta, cantidad, precio_unitario_venta, subtotal_item_bruto, subtotal_item_neto, es_hora_extra, porcentaje_servicio_extra, comision_servicio_extra, entregado_al_colaborador) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
             """
             for item in items:
                 total_item = float(item['precio']) * float(item['cantidad'])
+                
+                # Cálculo de Comisión Extra
+                es_extra = item.get('es_hora_extra', False)
+                pct_extra = float(item.get('porcentaje_servicio_extra', 0)) if es_extra else 0.00
+                comision_extra = 0.00
+                
+                if es_extra and pct_extra > 0:
+                    comision_extra = total_item * (pct_extra / 100.0)
+
                 cursor.execute(sql_item, (
                     venta_id, 
                     item['id'] if item['tipo'] == 'servicio' else None,
                     item['id'] if item['tipo'] == 'producto' else None,
                     item['descripcion'], item['cantidad'], item['precio'], 
                     total_item, total_item,
-                    item.get('es_hora_extra', False)
+                    es_extra,
+                    pct_extra,
+                    comision_extra
                 ))
                 if item['tipo'] == 'producto':
                     # KARDEX
@@ -7500,6 +7511,21 @@ def gestionar_caja():
                 ORDER BY p.fecha_registro DESC
             """)
             propinas_pendientes = cursor.fetchall()
+            
+            # --- SERVICIOS EXTRA PENDIENTES (COMISIONES) ---
+            cursor.execute("""
+                SELECT vi.id, vi.comision_servicio_extra, vi.porcentaje_servicio_extra, 
+                       v.fecha_venta, e.nombres, e.apellidos,
+                       vi.descripcion_item_venta
+                FROM venta_items vi
+                JOIN ventas v ON vi.venta_id = v.id
+                JOIN empleados e ON v.empleado_id = e.id
+                WHERE vi.es_hora_extra = TRUE 
+                  AND vi.entregado_al_colaborador = FALSE 
+                  AND v.estado != 'Anulada'
+                ORDER BY v.fecha_venta DESC
+            """)
+            extras_pendientes = cursor.fetchall()
 
             # --- 🟢 TAMBIÉN FALTABA ESTO: EMPLEADOS (Para el modal) ---
             cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE")
@@ -7514,6 +7540,7 @@ def gestionar_caja():
                                    movimientos=movimientos_caja,
                                    comisiones_pendientes=comisiones,
                                    propinas_pendientes=propinas_pendientes, # <--- Enviamos la lista
+                                   extras_pendientes=extras_pendientes, # <--- NEW
                                    empleados=empleados) # <--- Enviamos empleados
 
     except Exception as e:
@@ -7779,6 +7806,51 @@ def pagar_comision_caja(comision_id):
         flash(f"Error al pagar comisión: {e}", "danger")
 
     return redirect(url_for('main.pagina_caja', sucursal_id=sucursal_id))
+
+@main_bp.route('/finanzas/caja/pagar-extra/<int:item_id>', methods=['POST'])
+@login_required
+def pagar_extra_caja(item_id):
+    db_conn = get_db()
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Verificar Caja Abierta
+            sucursal_id = session.get('sucursal_id')
+            cursor.execute("SELECT id FROM caja_sesiones WHERE sucursal_id = %s AND estado = 'Abierta'", (sucursal_id,))
+            caja = cursor.fetchone()
+            if not caja:
+                 flash("No hay caja abierta.", "warning")
+                 return redirect(url_for('main.gestionar_caja'))
+
+            # 2. Obtener Datos del Item
+            cursor.execute("SELECT comision_servicio_extra, descripcion_item_venta FROM venta_items WHERE id = %s", (item_id,))
+            item = cursor.fetchone()
+            monto = float(item['comision_servicio_extra'] or 0)
+
+            # 3. Registrar Gasto
+            cursor.execute("SELECT id FROM categorias_gastos WHERE nombre = 'Pago Servicios Extra'")
+            cat = cursor.fetchone()
+            if not cat:
+                cursor.execute("INSERT INTO categorias_gastos (nombre) VALUES ('Pago Servicios Extra') RETURNING id")
+                cat_id = cursor.fetchone()['id']
+            else:
+                cat_id = cat['id']
+
+            cursor.execute("""
+                INSERT INTO gastos (sucursal_id, categoria_gasto_id, caja_sesion_id, fecha, descripcion, monto, metodo_pago, registrado_por_colaborador_id)
+                VALUES (%s, %s, %s, CURRENT_DATE, %s, %s, 'Efectivo', %s)
+            """, (sucursal_id, cat_id, caja['id'], f"Pago Extra: {item['descripcion_item_venta']}", monto, current_user.id))
+
+            # 4. Actualizar estado
+            cursor.execute("UPDATE venta_items SET entregado_al_colaborador = TRUE WHERE id = %s", (item_id,))
+            
+            db_conn.commit()
+            flash(f"Pago de extra (S/ {monto:.2f}) registrado.", "success")
+            
+    except Exception as e:
+        db_conn.rollback()
+        flash(f"Error: {e}", "danger")
+
+    return redirect(url_for('main.gestionar_caja'))
 
 @main_bp.route('/api/clientes/<int:cliente_id>/puntos', methods=['GET'])
 @login_required

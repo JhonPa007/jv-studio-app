@@ -6,19 +6,23 @@
 <div class="container mt-4">
     <div class="row justify-content-center">
         <div class="col-lg-11">
-            
+
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
-                    <h2 class="text-light mb-0"><i class="fas fa-cash-register text-warning me-2"></i>Gestión de Caja</h2>
+                    <h2 class="text-light mb-0"><i class="fas fa-cash-register text-warning me-2"></i>Gestión de Caja
+                    </h2>
                     <span class="badge bg-success">TURNO ABIERTO</span>
                 </div>
                 <div class="text-end">
-                    <button class="btn btn-warning fw-bold shadow-sm mb-2" data-bs-toggle="modal" data-bs-target="#modalPropina">
+                    <button class="btn btn-warning fw-bold shadow-sm mb-2" data-bs-toggle="modal"
+                        data-bs-target="#modalPropina">
                         <i class="fas fa-hand-holding-usd me-1"></i> Registrar Propina
                     </button>
                     <br>
-                    <small class="text-muted">Apertura: {{ sesion.fecha_apertura.strftime('%d/%m/%Y %H:%M') }}</small><br>
-                    <small class="text-muted">Responsable: <span class="text-white">{{ current_user.nombres }}</span></small>
+                    <small class="text-muted">Apertura: {{ sesion.fecha_apertura.strftime('%d/%m/%Y %H:%M')
+                        }}</small><br>
+                    <small class="text-muted">Responsable: <span class="text-white">{{ current_user.nombres
+                            }}</span></small>
                 </div>
             </div>
 
@@ -52,17 +56,20 @@
                     <div class="card bg-secondary bg-opacity-25 border-warning h-100">
                         <div class="card-body text-center">
                             <h6 class="text-warning text-uppercase mb-2">Total en Cajón</h6>
-                            <h2 class="text-warning fw-bold" id="txt_saldo_teorico">S/ {{ "%.2f"|format(saldo_teorico) }}</h2>
+                            <h2 class="text-warning fw-bold" id="txt_saldo_teorico">S/ {{ "%.2f"|format(saldo_teorico)
+                                }}</h2>
                             <small class="text-light">Debe haber físico</small>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="alert alert-warning border-secondary d-flex justify-content-between align-items-center py-2 px-3 mb-4 text-dark">
+            <div
+                class="alert alert-warning border-secondary d-flex justify-content-between align-items-center py-2 px-3 mb-4 text-dark">
                 <small>
-                    <i class="fas fa-info-circle text-dark me-2"></i>Ventas Digitales (Yape/Plin/Tarjeta) - No afectan caja chica:
-                </small>            
+                    <i class="fas fa-info-circle text-dark me-2"></i>Ventas Digitales (Yape/Plin/Tarjeta) - No afectan
+                    caja chica:
+                </small>
                 <span class="fw-bold text-dark fs-5">S/ {{ "%.2f"|format(total_digital) }}</span>
             </div>
 
@@ -89,10 +96,14 @@
                                 <tr>
                                     <td>{{ com.fecha_fmt }}</td>
                                     <td>{{ com.colaborador }}</td>
-                                    <td>{{ com.concepto }} <br><small class="text-muted">{{ com.numero_comprobante }}</small></td>
-                                    <td class="text-end text-success fw-bold">S/ {{ "%.2f"|format(com.monto_comision) }}</td>
+                                    <td>{{ com.concepto }} <br><small class="text-muted">{{ com.numero_comprobante
+                                            }}</small></td>
+                                    <td class="text-end text-success fw-bold">S/ {{ "%.2f"|format(com.monto_comision) }}
+                                    </td>
                                     <td class="text-center">
-                                        <form action="{{ url_for('main.pagar_comision_caja', comision_id=com.id) }}" method="POST" onsubmit="return confirm('¿Pagar esta comisión con dinero de caja ahora?');">
+                                        <form action="{{ url_for('main.pagar_comision_caja', comision_id=com.id) }}"
+                                            method="POST"
+                                            onsubmit="return confirm('¿Pagar esta comisión con dinero de caja ahora?');">
                                             <button type="submit" class="btn btn-sm btn-outline-success">
                                                 <i class="fas fa-money-bill-wave me-1"></i> Pagar
                                             </button>
@@ -109,7 +120,8 @@
 
             <div class="card bg-dark border-secondary mb-4 border-start border-warning border-3">
                 <div class="card-header border-secondary d-flex justify-content-between align-items-center">
-                    <h5 class="text-white mb-0"><i class="fas fa-piggy-bank text-warning me-2"></i>Propinas por Entregar</h5>
+                    <h5 class="text-white mb-0"><i class="fas fa-piggy-bank text-warning me-2"></i>Propinas por Entregar
+                    </h5>
                     <span class="badge bg-secondary">Dinero ajeno en caja</span>
                 </div>
                 <div class="card-body p-0">
@@ -126,37 +138,87 @@
                             </thead>
                             <tbody>
                                 {% if propinas_pendientes %}
-                                    {% for p in propinas_pendientes %}
-                                    <tr id="row-prop-{{ p.id }}">
-                                        <td class="ps-3 text-muted small">{{ p.fecha_registro.strftime('%H:%M') }}</td>
-                                        <td class="fw-bold">{{ p.nombres }} {{ p.apellidos }}</td>
-                                        <td>
-                                            {% if p.metodo_pago == 'Efectivo' %}
-                                                <span class="badge bg-success">Efectivo</span>
-                                            {% else %}
-                                                <span class="badge bg-info text-dark">{{ p.metodo_pago }}</span>
-                                            {% endif %}
-                                        </td>
-                                        <td class="fw-bold text-warning fs-5">S/ {{ "%.2f"|format(p.monto) }}</td>
-                                        <td class="text-end pe-3">
-                                            <button class="btn btn-sm btn-outline-warning" onclick="liquidarPropina({{ p.id }}, '{{ p.nombres }}', '{{ p.monto }}')">
-                                                <i class="fas fa-hand-holding-usd me-1"></i> Entregar
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
+                                {% for p in propinas_pendientes %}
+                                <tr id="row-prop-{{ p.id }}">
+                                    <td class="ps-3 text-muted small">{{ p.fecha_registro.strftime('%H:%M') }}</td>
+                                    <td class="fw-bold">{{ p.nombres }} {{ p.apellidos }}</td>
+                                    <td>
+                                        {% if p.metodo_pago == 'Efectivo' %}
+                                        <span class="badge bg-success">Efectivo</span>
+                                        {% else %}
+                                        <span class="badge bg-info text-dark">{{ p.metodo_pago }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="fw-bold text-warning fs-5">S/ {{ "%.2f"|format(p.monto) }}</td>
+                                    <td class="text-end pe-3">
+                                        <button class="btn btn-sm btn-outline-warning"
+                                            onclick="liquidarPropina({{ p.id }}, '{{ p.nombres }}', '{{ p.monto }}')">
+                                            <i class="fas fa-hand-holding-usd me-1"></i> Entregar
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
                                 {% else %}
-                                    <tr>
-                                        <td colspan="5" class="text-center py-3 text-muted">
-                                            <small>No hay propinas pendientes de entrega.</small>
-                                        </td>
-                                    </tr>
+                                <tr>
+                                    <td colspan="5" class="text-center py-3 text-muted">
+                                        <small>No hay propinas pendientes de entrega.</small>
+                                    </td>
+                                </tr>
                                 {% endif %}
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
+
+            {% if extras_pendientes %}
+            <div class="card bg-dark border-secondary mb-4 border-start border-info border-3">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <h5 class="text-white mb-0"><i class="fas fa-concierge-bell text-info me-2"></i>Servicios Extra
+                        Pendientes</h5>
+                    <span class="badge bg-secondary">Comisión por Pagar</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0 align-middle">
+                            <thead>
+                                <tr>
+                                    <th class="ps-3">Fecha</th>
+                                    <th>Colaborador</th>
+                                    <th>Servicio</th>
+                                    <th>% Extra</th>
+                                    <th>Comisión</th>
+                                    <th class="text-end pe-3">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for extra in extras_pendientes %}
+                                <tr>
+                                    <td class="ps-3 text-muted small">{{ extra.fecha_venta.strftime('%d/%m %H:%M') }}
+                                    </td>
+                                    <td class="fw-bold">{{ extra.nombres }} {{ extra.apellidos }}</td>
+                                    <td>{{ extra.descripcion_item_venta }}</td>
+                                    <td><span class="badge bg-info text-dark">{{ extra.porcentaje_servicio_extra
+                                            }}%</span></td>
+                                    <td class="fw-bold text-success fs-5">S/ {{
+                                        "%.2f"|format(extra.comision_servicio_extra) }}</td>
+                                    <td class="text-end pe-3">
+                                        <form action="{{ url_for('main.pagar_extra_caja', item_id=extra.id) }}"
+                                            method="POST" onsubmit="return confirm('¿Pagar S/ {{ "
+                                            %.2f"|format(extra.comision_servicio_extra) }} a {{ extra.nombres }}?');">
+                                            <button type="submit" class="btn btn-sm btn-outline-success">
+                                                <i class="fas fa-hand-holding-usd me-1"></i> Pagar
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
 
             <hr class="border-secondary my-4">
 
@@ -178,20 +240,24 @@
                                     </thead>
                                     <tbody>
                                         {% if movimientos %}
-                                            {% for mov in movimientos %}
-                                            <tr>
-                                                <td>{{ mov.fecha.strftime('%H:%M') }}</td>
-                                                <td>
-                                                    {{ mov.descripcion }} <br>
-                                                    <small class="text-muted">{{ mov.metodo_pago }}</small>
-                                                </td>
-                                                <td class="text-end {% if mov.monto > 0 %}text-success{% else %}text-danger{% endif %}">
-                                                    {{ "%.2f"|format(mov.monto) }}
-                                                </td>
-                                            </tr>
-                                            {% endfor %}
+                                        {% for mov in movimientos %}
+                                        <tr>
+                                            <td>{{ mov.fecha.strftime('%H:%M') }}</td>
+                                            <td>
+                                                {{ mov.descripcion }} <br>
+                                                <small class="text-muted">{{ mov.metodo_pago }}</small>
+                                            </td>
+                                            <td
+                                                class="text-end {% if mov.monto > 0 %}text-success{% else %}text-danger{% endif %}">
+                                                {{ "%.2f"|format(mov.monto) }}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
                                         {% else %}
-                                            <tr><td colspan="3" class="text-center text-muted py-3">No hay movimientos detallados aún.</td></tr>
+                                        <tr>
+                                            <td colspan="3" class="text-center text-muted py-3">No hay movimientos
+                                                detallados aún.</td>
+                                        </tr>
                                         {% endif %}
                                     </tbody>
                                 </table>
@@ -206,19 +272,23 @@
                             <h5 class="mb-0 text-white"><i class="fas fa-lock me-2"></i>Arqueo y Cierre</h5>
                         </div>
                         <div class="card-body">
-                            <form action="{{ url_for('main.cerrar_caja', sesion_id=sesion.id) }}" method="POST" id="formCierre">
-                                
+                            <form action="{{ url_for('main.cerrar_caja', sesion_id=sesion.id) }}" method="POST"
+                                id="formCierre">
+
                                 <div class="mb-3">
                                     <label class="form-label text-light">Dinero Contado (Físico)</label>
                                     <div class="input-group">
-                                        <span class="input-group-text bg-secondary border-secondary text-light">S/</span>
-                                        <input type="number" step="0.01" class="form-control bg-dark text-white border-secondary fw-bold" 
-                                               id="monto_final_real" name="monto_final_real" required 
-                                               placeholder="0.00" oninput="calcularDiferencia()">
+                                        <span
+                                            class="input-group-text bg-secondary border-secondary text-light">S/</span>
+                                        <input type="number" step="0.01"
+                                            class="form-control bg-dark text-white border-secondary fw-bold"
+                                            id="monto_final_real" name="monto_final_real" required placeholder="0.00"
+                                            oninput="calcularDiferencia()">
                                     </div>
                                 </div>
 
-                                <div class="text-center mb-3 p-2 rounded border border-secondary" style="background-color: #1a1a1a;">
+                                <div class="text-center mb-3 p-2 rounded border border-secondary"
+                                    style="background-color: #1a1a1a;">
                                     <small class="text-muted d-block">Resultado del Cuadre</small>
                                     <h4 id="txt_diferencia" class="fw-bold mb-0 text-muted">---</h4>
                                     <small id="lbl_estado_cuadre" class="text-muted">Ingresa el monto...</small>
@@ -227,12 +297,14 @@
                                 <div class="mb-3">
                                     <label class="form-label small text-muted">Destino del Efectivo</label>
                                     <div class="btn-group w-100" role="group">
-                                        <input type="radio" class="btn-check" name="destino_remanente" id="destino_caja" value="Caja" checked>
+                                        <input type="radio" class="btn-check" name="destino_remanente" id="destino_caja"
+                                            value="Caja" checked>
                                         <label class="btn btn-outline-secondary" for="destino_caja">
                                             <i class="fas fa-archive me-1"></i> En Caja
                                         </label>
 
-                                        <input type="radio" class="btn-check" name="destino_remanente" id="destino_gerencia" value="Gerencia">
+                                        <input type="radio" class="btn-check" name="destino_remanente"
+                                            id="destino_gerencia" value="Gerencia">
                                         <label class="btn btn-outline-secondary" for="destino_gerencia">
                                             <i class="fas fa-user-tie me-1"></i> A Gerencia
                                         </label>
@@ -240,11 +312,12 @@
                                 </div>
 
                                 <div class="mb-3">
-                                    <textarea class="form-control bg-dark text-light border-secondary" 
-                                              name="notas_cierre" rows="2" placeholder="Notas del cierre..."></textarea>
+                                    <textarea class="form-control bg-dark text-light border-secondary"
+                                        name="notas_cierre" rows="2" placeholder="Notas del cierre..."></textarea>
                                 </div>
 
-                                <button type="submit" class="btn btn-danger w-100 fw-bold" onclick="return confirm('¿Estás seguro de CERRAR el turno?');">
+                                <button type="submit" class="btn btn-danger w-100 fw-bold"
+                                    onclick="return confirm('¿Estás seguro de CERRAR el turno?');">
                                     CERRAR TURNO
                                 </button>
                             </form>
@@ -269,7 +342,7 @@
                 </div>
                 <div class="modal-body">
                     <p class="text-muted small">Registra dinero extra ingresado para el personal.</p>
-                    
+
                     <div class="mb-3">
                         <label class="fw-bold">¿Para quién es?</label>
                         <select name="empleado_id" class="form-select" required>
@@ -278,11 +351,12 @@
                             {% endfor %}
                         </select>
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-6 mb-3">
                             <label class="fw-bold">Monto (S/)</label>
-                            <input type="number" step="0.50" name="monto" class="form-control fw-bold text-success" placeholder="0.00" required>
+                            <input type="number" step="0.50" name="monto" class="form-control fw-bold text-success"
+                                placeholder="0.00" required>
                         </div>
                         <div class="col-6 mb-3">
                             <label class="fw-bold">Medio Pago</label>
@@ -316,7 +390,7 @@
         const teorico = parseFloat(document.getElementById('val_saldo_teorico').value) || 0;
         const real = parseFloat(document.getElementById('monto_final_real').value) || 0;
         const diferencia = real - teorico;
-        
+
         const txtDiff = document.getElementById('txt_diferencia');
         const lblEstado = document.getElementById('lbl_estado_cuadre');
         const diffFormatted = "S/ " + diferencia.toFixed(2);
@@ -338,20 +412,20 @@
 
     // 2. 🟢 Liquidar (Pagar) Propina al Barbero
     async function liquidarPropina(id, nombre, monto) {
-        if(!confirm(`¿Entregar S/ ${monto} en EFECTIVO a ${nombre}?\n\nEsto registrará una salida de caja.`)) return;
-        
+        if (!confirm(`¿Entregar S/ ${monto} en EFECTIVO a ${nombre}?\n\nEsto registrará una salida de caja.`)) return;
+
         const formData = new FormData();
         formData.append('propina_id', id);
 
         try {
             const res = await fetch('/finanzas/propinas/pagar', { method: 'POST', body: formData });
             const data = await res.json();
-            
-            if(data.mensaje) {
+
+            if (data.mensaje) {
                 alert("✅ " + data.mensaje);
-                
+
                 // 🟢 AQUÍ ESTÁ EL CAMBIO: Recargar la página para actualizar saldos visualmente
-                window.location.reload(); 
+                window.location.reload();
             } else {
                 alert("❌ Error: " + data.error);
             }
