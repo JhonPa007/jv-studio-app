@@ -657,9 +657,17 @@
                 allDaySlot: false,
                 // PRUEBA DE FUEGO: FORZAR 5 MINUTOS
                 slotDuration: '00:05:00', // currentConfig.agenda_intervalo ? currentConfig.agenda_intervalo : '00:15:00',
+                slotLabelInterval: '00:30', // Etiquetas cada 30 min para no saturar
 
-                // Forzar etiquetas de hora cada hora para limpieza visual si el slot es muy pequeño
-                slotLabelInterval: '01:00',
+                // 🟢 INTERACCIÓN HOVER (MOSTRAR HORA)
+                eventMouseEnter: function (info) {
+                    // Opcional: Si quieres tooltip en eventos
+                },
+
+                // Usamos 'datesSet' o 'viewDidMount' para bindear eventos globales si fuera necesario,
+                // pero FullCalendar no tiene 'slotMouseEnter' nativo fácil.
+                // Usaremos delegación de eventos en el contenedor.
+
 
                 // 🟢 CONFIGURACIÓN DE IMÁGENES DE COLABORADORES
                 resourceLabelContent: function (arg) {
@@ -719,7 +727,7 @@
                     return { domNodes: [container] };
                 },
 
-                slotDuration: '00:15:00',
+                slotDuration: '00:05:00',
                 slotMinTime: '08:00:00',
                 slotMaxTime: '22:00:00',
                 slotLabelInterval: '01:00',
@@ -1393,23 +1401,26 @@
         indicadorDiv.id = 'indicadorHoraHover';
         indicadorDiv.style.position = 'absolute';
         indicadorDiv.style.left = '0';
-        indicadorDiv.style.pointerEvents = 'none'; // CRITICO: Permite hacer clic "a través" de la barra
-        indicadorDiv.style.zIndex = '5'; // Encima de celdas, debajo de eventos (eventos suelen ser z=6 o más)
-        indicadorDiv.style.borderTop = '2px dashed var(--agenda-bg-reserva, #6c63ff)';
-        indicadorDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
-        indicadorDiv.style.display = 'none'; // Oculto x default
-        indicadorDiv.style.alignItems = 'center'; // Centrar vertical
-        indicadorDiv.style.paddingLeft = '5px';
-        indicadorDiv.style.fontSize = '0.85rem';
-        indicadorDiv.style.fontWeight = 'bold';
-        indicadorDiv.style.color = 'var(--agenda-bg-reserva, #6c63ff)';
+        indicadorDiv.style.pointerEvents = 'none';
+        indicadorDiv.style.zIndex = '5';
+        // ESTILO TIPO SCREENSHOT
+        indicadorDiv.style.backgroundColor = '#e0e7ff'; // Fondo azulito/lila suave
+        indicadorDiv.style.color = '#4338ca'; // Texto oscuro
+        indicadorDiv.style.padding = '2px 8px';
+        indicadorDiv.style.borderRadius = '4px';
+        indicadorDiv.style.fontSize = '0.8rem';
+        indicadorDiv.style.fontWeight = '600';
+        indicadorDiv.style.display = 'none';
+        indicadorDiv.style.alignItems = 'center';
+        indicadorDiv.style.height = 'auto'; // Ajuste automático
+        indicadorDiv.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
 
-        const HORA_INICIO = 8; // Asegúrate de que esto coincida con slotMinTime (8:00 AM)
+        const HORA_INICIO = 8;
 
         agendaContainer.addEventListener('mousemove', function (e) {
-            // Recalcular minutos dinámicamente SIEMPRE (por si cambia config en runtime aunque no debería)
-            const parts = (currentConfig.agenda_intervalo || '00:15:00').split(':');
-            const minutos_slot_dynamic = (parseInt(parts[0]) * 60) + parseInt(parts[1]);
+            // FORZAR 5 MINUTOS (Ya que lo forzamos en el calendario)
+            const minutos_slot_dynamic = 5;
+
 
             // 1. Validar target
             // Buscamos el slot o la columna base
@@ -1467,7 +1478,7 @@
                 hour12: true
             });
 
-            indicadorDiv.innerHTML = `<i class="fas fa-clock me-1" style="font-size: 0.7rem; margin-top: 3px;"></i> ${horaStr}`;
+            indicadorDiv.innerHTML = `${horaStr}`;
         });
 
         agendaContainer.addEventListener('mouseleave', function () {
