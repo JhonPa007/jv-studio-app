@@ -4,8 +4,18 @@
 
 {% block head_extra %}
 <style>
-    .form-section { background-color: #3a3a3a; padding: 25px; border-radius: 8px; }
-    .form-section h2 { color: var(--color-acento-dorado); margin-bottom: 20px; border-bottom: 1px solid var(--color-secundario-gris); padding-bottom: 10px;}
+    .form-section {
+        background-color: #3a3a3a;
+        padding: 25px;
+        border-radius: 8px;
+    }
+
+    .form-section h2 {
+        color: var(--color-acento-dorado);
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--color-secundario-gris);
+        padding-bottom: 10px;
+    }
 </style>
 {% endblock %}
 
@@ -16,8 +26,8 @@
             <i class="fas {{ 'fa-user-plus' if es_nueva else 'fa-user-edit' }} me-2"></i>
             {{ titulo_form }}
         </h2>
-        
-       
+
+
 
         {% set data_source = form_data if form_data else (empleado if empleado else {}) %}
 
@@ -25,27 +35,29 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="nombres" class="form-label">Nombres Completos <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="nombres" name="nombres" 
-                           value="{{ data_source.get('nombres', '') }}" required>
+                    <input type="text" class="form-control" id="nombres" name="nombres"
+                        value="{{ data_source.get('nombres', '') }}" required>
                 </div>
                 <div class="col-md-6 mb-3">
-                    <label for="apellidos" class="form-label">Apellidos Completos <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="apellidos" name="apellidos" 
-                           value="{{ data_source.get('apellidos', '') }}" required>
+                    <label for="apellidos" class="form-label">Apellidos Completos <span
+                            class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="apellidos" name="apellidos"
+                        value="{{ data_source.get('apellidos', '') }}" required>
                 </div>
             </div>
 
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="nombre_display" class="form-label">Nombre a Mostrar (Resumido)</label>
-                    <input type="text" class="form-control" id="nombre_display" name="nombre_display" 
-                           value="{{ data_source.get('nombre_display', '') }}" placeholder="Ej: Pablo Casas">
-                     <small class="form-text text-muted">Para la agenda, ventas, etc. Si se deja vacío, se generará uno.</small>
+                    <input type="text" class="form-control" id="nombre_display" name="nombre_display"
+                        value="{{ data_source.get('nombre_display', '') }}" placeholder="Ej: Pablo Casas">
+                    <small class="form-text text-muted">Para la agenda, ventas, etc. Si se deja vacío, se generará
+                        uno.</small>
                 </div>
                 <div class="col-md-6 mb-3">
                     <label for="dni" class="form-label">DNI (Opcional)</label>
-                    <input type="text" class="form-control" id="dni" name="dni" 
-                           value="{{ data_source.get('dni', '') }}" maxlength="15">
+                    <input type="text" class="form-control" id="dni" name="dni" value="{{ data_source.get('dni', '') }}"
+                        maxlength="15">
                 </div>
             </div>
 
@@ -55,39 +67,39 @@
                     {# Formatear fecha para el input type="date" si estamos editando #}
                     {% set fn_value = data_source.get('fecha_nacimiento', '') %}
                     {% if fn_value and fn_value is not string and fn_value.strftime is defined %}
-                        {% set fn_value_str = fn_value.strftime('%Y-%m-%d') %}
+                    {% set fn_value_str = fn_value.strftime('%Y-%m-%d') %}
                     {% else %}
-                        {% set fn_value_str = fn_value %}
+                    {% set fn_value_str = fn_value %}
                     {% endif %}
                     <input type="date" class="form-control" id="fecha_nacimiento" name="fecha_nacimiento"
-                           value="{{ fn_value_str }}">
+                        value="{{ fn_value_str }}">
                 </div>
                 <div class="col-md-6 mb-3">
                     <label for="fecha_contratacion" class="form-label">Fecha de Contratación (Opcional)</label>
                     {% set fc_value = data_source.get('fecha_contratacion', '') %}
                     {% if fc_value and fc_value is not string and fc_value.strftime is defined %}
-                        {% set fc_value_str = fc_value.strftime('%Y-%m-%d') %}
+                    {% set fc_value_str = fc_value.strftime('%Y-%m-%d') %}
                     {% else %}
-                        {% set fc_value_str = fc_value %}
+                    {% set fc_value_str = fc_value %}
                     {% endif %}
                     <input type="date" class="form-control" id="fecha_contratacion" name="fecha_contratacion"
-                           value="{{ fc_value_str }}">
+                        value="{{ fc_value_str }}">
                 </div>
             </div>
 
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="email" class="form-label">Correo Electrónico (Opcional)</label>
-                    <input type="email" class="form-control" id="email" name="email" 
-                           value="{{ data_source.get('email', '') }}">
+                    <input type="email" class="form-control" id="email" name="email"
+                        value="{{ data_source.get('email', '') }}">
                 </div>
                 <div class="col-md-6 mb-3">
                     <label for="telefono" class="form-label">Teléfono (Opcional)</label>
-                    <input type="tel" class="form-control" id="telefono" name="telefono" 
-                           value="{{ data_source.get('telefono', '') }}">
+                    <input type="tel" class="form-control" id="telefono" name="telefono"
+                        value="{{ data_source.get('telefono', '') }}">
                 </div>
             </div>
-            
+
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="rol_id" class="form-label">Rol <span class="text-danger">*</span></label>
@@ -95,7 +107,8 @@
                         <option value="">Seleccione un rol...</option>
                         {# La variable 'roles' la pasaremos desde la función de Flask #}
                         {% for rol_opcion in roles %}
-                        <option value="{{ rol_opcion.id }}" {% if data_source.get('rol_id')|string == rol_opcion.id|string %}selected{% endif %}>
+                        <option value="{{ rol_opcion.id }}" {% if data_source.get('rol_id')|string==rol_opcion.id|string
+                            %}selected{% endif %}>
                             {{ rol_opcion.nombre }}
                         </option>
                         {% endfor %}
@@ -103,41 +116,212 @@
                 </div>
                 <div class="col-md-6 mb-3">
                     <label for="sueldo_base" class="form-label">Sueldo Base Mensual (S/)</label>
-                    <input type="number" step="0.01" min="0" class="form-control" id="sueldo_base" name="sueldo_base" 
-                           value="{{ data_source.get('sueldo_base', '0.00') }}">
+                    <input type="number" step="0.01" min="0" class="form-control" id="sueldo_base" name="sueldo_base"
+                        value="{{ data_source.get('sueldo_base', '0.00') }}">
                 </div>
                 <div class="col-md-6 mb-3">
                     <label class="form-label">Acceso a Sucursales</label>
                     <div class="card bg-dark border-secondary p-3">
                         {% if sucursales %}
-                            {% for suc in sucursales %}
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="sucursales_ids" value="{{ suc.id }}" id="sucursal_{{ suc.id }}"
-                                       {% if suc.id in sucursales_asignadas %}checked{% endif %}>
-                                <label class="form-check-label" for="sucursal_{{ suc.id }}">
-                                    {{ suc.nombre }}
-                                </label>
-                            </div>
-                            {% endfor %}
+                        {% for suc in sucursales %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="sucursales_ids" value="{{ suc.id }}"
+                                id="sucursal_{{ suc.id }}" {% if suc.id in sucursales_asignadas %}checked{% endif %}>
+                            <label class="form-check-label" for="sucursal_{{ suc.id }}">
+                                {{ suc.nombre }}
+                            </label>
+                        </div>
+                        {% endfor %}
                         {% else %}
-                            <p class="text-muted">No hay sucursales activas para asignar.</p>
+                        <p class="text-muted">No hay sucursales activas para asignar.</p>
                         {% endif %}
                     </div>
                 </div>
             </div>
-            
+
             <div class="mb-3">
                 <label for="notas" class="form-label">Notas Adicionales</label>
-                <textarea class="form-control" id="notas" name="notas" 
-                          rows="3">{{ data_source.get('notas', '') }}</textarea>
+                <textarea class="form-control" id="notas" name="notas"
+                    rows="3">{{ data_source.get('notas', '') }}</textarea>
             </div>
 
             <div class="mb-3 form-check">
                 {% set activo_val = True if es_nueva and not form_data else data_source.get('activo', False) %}
                 {% if activo_val == 'activo' %}{% set activo_val = True %}{% endif %}
-                <input type="checkbox" class="form-check-input" id="activo" name="activo" value="activo" {% if activo_val %}checked{% endif %}>
+                <input type="checkbox" class="form-check-input" id="activo" name="activo" value="activo" {% if
+                    activo_val %}checked{% endif %}>
                 <label class="form-check-label" for="activo">Colaborador Activo</label>
             </div>
+
+            {# --- SECCIÓN DE CONFIGURACIÓN DE CONTRATO Y COMISIONES --- #}
+            <hr class="my-4" style="border-color: var(--color-secundario-gris);">
+            <h4 class="text-light mb-3"><i class="fas fa-file-contract me-2"></i>Configuración de Contrato</h4>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="form-check form-switch custom-switch-lg">
+                        <input class="form-check-input" type="checkbox" id="puede_realizar_servicios"
+                            name="puede_realizar_servicios" {% if data_source.get('puede_realizar_servicios')
+                            %}checked{% endif %}>
+                        <label class="form-check-label" for="puede_realizar_servicios">
+                            <strong>¿Puede realizar servicios?</strong>
+                            <small class="d-block text-muted">Habilita a este colaborador para ser agendado en
+                                citas.</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label for="porcentaje_comision_productos" class="form-label">Comisión por Venta de Productos
+                        (%)</label>
+                    <div class="input-group">
+                        <input type="number" step="0.01" min="0" max="100" class="form-control"
+                            id="porcentaje_comision_productos" name="porcentaje_comision_productos"
+                            value="{{ data_source.get('porcentaje_comision_productos', '0') }}">
+                        <span class="input-group-text">%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="tipo_contrato" class="form-label">Tipo de Contrato</label>
+                    <select class="form-select" id="tipo_contrato" name="tipo_contrato"
+                        onchange="toggleContractFields()">
+                        <option value="FIJO" {% if data_source.get('tipo_contrato')=='FIJO' %}selected{% endif %}>Sueldo
+                            Fijo (Sin Comisión Producción)</option>
+                        <option value="MIXTO" {% if data_source.get('tipo_contrato')=='MIXTO' %}selected{% endif %}>
+                            Mixto (Base + Comisión por Exceso)</option>
+                        <option value="ESCALONADA" {% if data_source.get('tipo_contrato')=='ESCALONADA' %}selected{%
+                            endif %}>Comisión Escalonada (Por Metas)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Panel: Contrato Mixto -->
+            <div id="panel_mixto" class="card bg-dark border-secondary p-3 mb-3 d-none">
+                <h5 class="text-warning mb-3">Configuración Contrato Mixto</h5>
+                <p class="small text-muted">El colaborador recibe sueldo base. Si su producción supera la meta (ej.
+                    doble del sueldo), gana comisión sobre el excedente.</p>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="mixto_meta" class="form-label">Meta de Producción (S/)</label>
+                        <input type="number" step="0.01" class="form-control" id="mixto_meta" name="mixto_meta"
+                            placeholder="Ej: 3600.00">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="mixto_porcentaje" class="form-label">Porcentaje Comisión sobre Exceso (%)</label>
+                        <div class="input-group">
+                            <input type="number" step="0.01" max="100" class="form-control" id="mixto_porcentaje"
+                                name="mixto_porcentaje" placeholder="Ej: 50">
+                            <span class="input-group-text">%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel: Contrato Escalonado -->
+            <div id="panel_escalonada" class="card bg-dark border-secondary p-3 mb-3 d-none">
+                <h5 class="text-info mb-3">Configuración Comisión Escalonada</h5>
+                <p class="small text-muted">Define tramos de producción. La comisión aplica sobre el total producido
+                    según el tramo alcanzado.</p>
+
+                <table class="table table-dark table-sm table-bordered text-center" id="tabla_tramos">
+                    <thead>
+                        <tr>
+                            <th>Desde (S/)</th>
+                            <th>Hasta (S/)</th>
+                            <th>Comisión (%)</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Filas generadas por JS -->
+                    </tbody>
+                </table>
+                <button type="button" class="btn btn-sm btn-outline-success" onclick="agregarFilaTramo()"><i
+                        class="fas fa-plus"></i> Agregar Tramo</button>
+                <input type="hidden" name="escalonada_json" id="escalonada_json">
+            </div>
+
+            <script>
+                // Datos iniciales de configuración (inyectados desde Flask)
+                // Se asume que 'data_source.configuracion_comision' es un dict o None
+                const configComision = {{ data_source.get('configuracion_comision', {}) | tojson if data_source.get('configuracion_comision') else '{}' }};
+
+                function initContractForm() {
+                    const tipo = document.getElementById('tipo_contrato').value;
+
+                    // Cargar valores iniciales si existen
+                    if (tipo === 'MIXTO' && configComision) {
+                        if (configComision.meta) document.getElementById('mixto_meta').value = configComision.meta;
+                        if (configComision.porcentaje) document.getElementById('mixto_porcentaje').value = configComision.porcentaje;
+                    }
+
+                    if (tipo === 'ESCALONADA' && configComision && configComision.tramos) {
+                        configComision.tramos.forEach(t => agregarFilaTramo(t.min, t.max, t.pct));
+                    } else if (tipo === 'ESCALONADA') {
+                        // Agregar una fila vacía por defecto si no hay datos
+                        agregarFilaTramo(0, 4000, 50);
+                    }
+
+                    toggleContractFields();
+                }
+
+                function toggleContractFields() {
+                    const tipo = document.getElementById('tipo_contrato').value;
+                    const pMixto = document.getElementById('panel_mixto');
+                    const pEscalonada = document.getElementById('panel_escalonada');
+
+                    pMixto.classList.add('d-none');
+                    pEscalonada.classList.add('d-none');
+
+                    if (tipo === 'MIXTO') {
+                        pMixto.classList.remove('d-none');
+                    } else if (tipo === 'ESCALONADA') {
+                        pEscalonada.classList.remove('d-none');
+                        // Si no hay filas, agregar una inicial
+                        if (document.querySelector('#tabla_tramos tbody').children.length === 0) {
+                            agregarFilaTramo(0, 4000, 50);
+                        }
+                    }
+                }
+
+                function agregarFilaTramo(min = '', max = '', pct = '') {
+                    const tbody = document.querySelector('#tabla_tramos tbody');
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><input type="number" step="0.01" class="form-control form-control-sm tramo-min" value="${min}" placeholder="0"></td>
+                        <td><input type="number" step="0.01" class="form-control form-control-sm tramo-max" value="${max}" placeholder="Sin límite"></td>
+                        <td><input type="number" step="0.01" class="form-control form-control-sm tramo-pct" value="${pct}" placeholder="%"></td>
+                        <td><button type="button" class="btn btn-danger btn-sm" onclick="this.closest('tr').remove()"><i class="fas fa-trash"></i></button></td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+
+                // Antes de enviar, serializar la tabla de tramos
+                document.querySelector('form').addEventListener('submit', function (e) {
+                    const tipo = document.getElementById('tipo_contrato').value;
+                    if (tipo === 'ESCALONADA') {
+                        const tramos = [];
+                        document.querySelectorAll('#tabla_tramos tbody tr').forEach(tr => {
+                            const min = tr.querySelector('.tramo-min').value;
+                            const max = tr.querySelector('.tramo-max').value;
+                            const pct = tr.querySelector('.tramo-pct').value;
+                            if (min !== '' && pct !== '') {
+                                tramos.push({
+                                    min: parseFloat(min),
+                                    max: max ? parseFloat(max) : null, // null para infinito ('a más')
+                                    pct: parseFloat(pct)
+                                });
+                            }
+                        });
+                        document.getElementById('escalonada_json').value = JSON.stringify({ tramos: tramos });
+                    }
+                });
+
+                // Ejecutar al cargar
+                document.addEventListener('DOMContentLoaded', initContractForm);
+            </script>
             {# --- NUEVA SECCIÓN PARA CAMBIAR CONTRASEÑA --- #}
             <hr class="my-4" style="border-color: var(--color-secundario-gris);">
             <h4 class="text-light mb-3">Establecer / Cambiar Contraseña</h4>
@@ -145,20 +329,23 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="password_nuevo" class="form-label">Nueva Contraseña</label>
-                    <input type="password" class="form-control" id="password_nuevo" name="password_nuevo" autocomplete="new-password">
+                    <input type="password" class="form-control" id="password_nuevo" name="password_nuevo"
+                        autocomplete="new-password">
                 </div>
                 <div class="col-md-6 mb-3">
                     <label for="password_confirmacion" class="form-label">Confirmar Nueva Contraseña</label>
-                    <input type="password" class="form-control" id="password_confirmacion" name="password_confirmacion" autocomplete="new-password">
+                    <input type="password" class="form-control" id="password_confirmacion" name="password_confirmacion"
+                        autocomplete="new-password">
                 </div>
             </div>
-            
+
             <div class="d-flex justify-content-end mt-4">
                 <a href="{{ url_for('main.listar_empleados') }}" class="btn btn-secondary me-2">
                     <i class="fas fa-times me-1"></i>Cancelar
                 </a>
                 <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-save me-1"></i>{{ 'Guardar Colaborador' if es_nuevo else 'Actualizar Colaborador' }}
+                    <i class="fas fa-save me-1"></i>{{ 'Guardar Colaborador' if es_nuevo else 'Actualizar Colaborador'
+                    }}
                 </button>
             </div>
         </form>

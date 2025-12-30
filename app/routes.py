@@ -1498,6 +1498,27 @@ def nuevo_empleado():
         notas = request.form.get('notas')
         password_nuevo = request.form.get('password_nuevo')
 
+        # ---> NUEVOS CAMPOS CONTRATO/COMISION
+        tipo_contrato = request.form.get('tipo_contrato', 'FIJO')
+        puede_realizar_servicios = 'puede_realizar_servicios' in request.form
+        porcentaje_comision_productos_str = request.form.get('porcentaje_comision_productos')
+        porcentaje_comision_productos = float(porcentaje_comision_productos_str) if porcentaje_comision_productos_str else 0.00
+        
+        # Construir JSON de configuración
+        configuracion_comision = {}
+        if tipo_contrato == 'MIXTO':
+            configuracion_comision = {
+                'meta': float(request.form.get('mixto_meta') or 0),
+                'porcentaje': float(request.form.get('mixto_porcentaje') or 0)
+            }
+        elif tipo_contrato == 'ESCALONADA':
+            escalonada_json = request.form.get('escalonada_json')
+            if escalonada_json:
+                try:
+                    configuracion_comision = json.loads(escalonada_json)
+                except Exception:
+                    configuracion_comision = {}
+
         # Validaciones (igual que antes)
         errores = []
         if not nombres: errores.append('El nombre es obligatorio.')
@@ -1536,18 +1557,19 @@ def nuevo_empleado():
         try:
             with db_conn.cursor() as cursor:
                 # 1. Insertar en 'empleados' (sin sucursal_id) y obtener el ID del nuevo empleado
-                hashed_password = None
                 if password_nuevo:
                     hashed_password = generate_password_hash(password_nuevo)
 
                 sql_empleado = """INSERT INTO empleados 
                                     (nombres, apellidos, nombre_display, dni, fecha_nacimiento, email, telefono, 
-                                     rol_id, sueldo_base, fecha_contratacion, activo, notas, password)
-                                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id"""
+                                     rol_id, sueldo_base, fecha_contratacion, activo, notas, password,
+                                     tipo_contrato, puede_realizar_servicios, porcentaje_comision_productos, configuracion_comision)
+                                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id"""
                 
                 val_empleado = (nombres, apellidos, nombre_display, dni_db, fecha_nacimiento, email_db, 
                                 (telefono if telefono else None), rol_id, sueldo_base,
-                                fecha_contratacion, activo, (notas if notas else None), hashed_password)
+                                fecha_contratacion, activo, (notas if notas else None), hashed_password,
+                                tipo_contrato, puede_realizar_servicios, porcentaje_comision_productos, json.dumps(configuracion_comision))
                 
                 cursor.execute(sql_empleado, val_empleado)
                 nuevo_empleado_id = cursor.fetchone()[0] # Obtenemos el ID retornado
@@ -1646,6 +1668,27 @@ def editar_empleado(empleado_id):
             password_nuevo = request.form.get('password_nuevo')
             password_confirmacion = request.form.get('password_confirmacion')
 
+            # ---> NUEVOS CAMPOS CONTRATO/COMISION
+            tipo_contrato = request.form.get('tipo_contrato', 'FIJO')
+            puede_realizar_servicios = 'puede_realizar_servicios' in request.form
+            porcentaje_comision_productos_str = request.form.get('porcentaje_comision_productos')
+            porcentaje_comision_productos = float(porcentaje_comision_productos_str) if porcentaje_comision_productos_str else 0.00
+            
+            # Construir JSON de configuración (igual que en nuevo)
+            configuracion_comision = {}
+            if tipo_contrato == 'MIXTO':
+                configuracion_comision = {
+                    'meta': float(request.form.get('mixto_meta') or 0),
+                    'porcentaje': float(request.form.get('mixto_porcentaje') or 0)
+                }
+            elif tipo_contrato == 'ESCALONADA':
+                escalonada_json = request.form.get('escalonada_json')
+                if escalonada_json:
+                    try:
+                        configuracion_comision = json.loads(escalonada_json)
+                    except Exception:
+                        configuracion_comision = {}
+
             # Validaciones
             errores = []
             if not all([nombres, apellidos, rol_id]):
@@ -1675,10 +1718,17 @@ def editar_empleado(empleado_id):
             if errores: raise ValueError("; ".join(errores))
 
             # --- Lógica de actualización en la BD ---
+            # --- Lógica de actualización en la BD ---
             with db_conn.cursor() as cursor:
                 # 1. Actualizar la tabla principal 'empleados'
-                sql_base = "UPDATE empleados SET nombres=%s, apellidos=%s, nombre_display=%s, dni=%s, fecha_nacimiento=%s, email=%s, telefono=%s, rol_id=%s, sueldo_base=%s, fecha_contratacion=%s, activo=%s, notas=%s"
-                params = [nombres, apellidos, nombre_display, dni_nuevo, (fecha_nacimiento_str or None), email_nuevo, telefono, rol_id, (float(sueldo_base_str) if sueldo_base_str else 0.00), (fecha_contratacion_str or None), activo_nuevo, notas]
+                sql_base = """UPDATE empleados SET nombres=%s, apellidos=%s, nombre_display=%s, dni=%s, 
+                              fecha_nacimiento=%s, email=%s, telefono=%s, rol_id=%s, sueldo_base=%s, 
+                              fecha_contratacion=%s, activo=%s, notas=%s,
+                              tipo_contrato=%s, puede_realizar_servicios=%s, porcentaje_comision_productos=%s, configuracion_comision=%s
+                           """
+                params = [nombres, apellidos, nombre_display, dni_nuevo, (fecha_nacimiento_str or None), email_nuevo, telefono, rol_id, 
+                          (float(sueldo_base_str) if sueldo_base_str else 0.00), (fecha_contratacion_str or None), activo_nuevo, notas,
+                          tipo_contrato, puede_realizar_servicios, porcentaje_comision_productos, json.dumps(configuracion_comision)]
                 
                 if password_hash_para_guardar:
                     sql_base += ", password = %s"
