@@ -261,6 +261,32 @@ def _get_porcentaje_fondo(cursor, anio, mes, empleado_id=None):
     
     return 2.00 # Default solicitado por usuario
 
+def _ensure_fondo_table_exists(cursor):
+    """Crea la tabla de configuración si no existe (Lazy Init para Producción)"""
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS configuracion_fondo_mensual (
+            anio INT NOT NULL,
+            mes INT NOT NULL,
+            empleado_id INT DEFAULT NULL,
+            porcentaje DECIMAL(5,2) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    # Unique Index Global
+    cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_fondo_conf_global 
+        ON configuracion_fondo_mensual (anio, mes) 
+        WHERE empleado_id IS NULL;
+    """)
+    # Unique Index Empleado
+    cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_fondo_conf_empleado 
+        ON configuracion_fondo_mensual (anio, mes, empleado_id) 
+        WHERE empleado_id IS NOT NULL;
+    """)
+
+
 # --- HELPER: Calcular Producción en Rango ---
 def _calcular_produccion_rango(cursor, empleado_id, tipo_salario, f_inicio, f_fin, sueldo_basico=0):
     produccion = 0.00
@@ -306,6 +332,9 @@ def configurar_porcentaje_fondo():
     try:
         db = get_db()
         with db.cursor() as cursor:
+            # Check/Create table first (Fixes Production missing table issue)
+            _ensure_fondo_table_exists(cursor)
+
             # Upsert Logic (Postgres 9.5+)
             # ON CONFLICT update.
             # Convert empty string to None for empleado_id
