@@ -8317,14 +8317,28 @@ def reporte_produccion():
                 total_comisiones_servicios = float(comisiones_servicios['total']) if comisiones_servicios and comisiones_servicios['total'] else 0.0
                 total_comisiones_generadas = total_comisiones_productos + total_comisiones_servicios
 
+                # --- NUEVO: Propinas y Fidelidad ---
+                cursor.execute("SELECT * FROM propinas WHERE empleado_id = %s AND DATE(fecha_registro) BETWEEN %s AND %s ORDER BY fecha_registro DESC", (colaborador_id, fecha_inicio, fecha_fin))
+                propinas = cursor.fetchall()
+                total_propinas = sum(float(p['monto']) for p in propinas)
+
+                cursor.execute("SELECT * FROM ajustes_pago WHERE empleado_id = %s AND tipo ILIKE '%%Fidelidad%%' AND DATE(fecha) BETWEEN %s AND %s ORDER BY fecha DESC", (colaborador_id, fecha_inicio, fecha_fin))
+                ajustes_fidelidad = cursor.fetchall()
+                total_fidelidad = sum(abs(float(a['monto'])) for a in ajustes_fidelidad)
+
                 resultados = {
                     "servicios_vendidos": servicios_vendidos, 
                     "productos_vendidos": productos_vendidos,
-                    "total_produccion_servicios_regular": total_produccion_servicios_regular, # NEW
-                    "total_produccion_servicios_extra": total_produccion_servicios_extra,     # NEW
+                    "propinas": propinas, # NEW
+                    "ajustes_fidelidad": ajustes_fidelidad, # NEW
+                    
+                    "total_produccion_servicios_regular": total_produccion_servicios_regular,
+                    "total_produccion_servicios_extra": total_produccion_servicios_extra,
                     "total_produccion_servicios": total_produccion_servicios,
                     "total_produccion_productos": total_produccion_productos,
-                    "total_comisiones": total_comisiones_generadas  # Correction: using total_comisiones_generadas variable calculated above
+                    "total_comisiones": total_comisiones_generadas,
+                    "total_propinas": total_propinas, # NEW
+                    "total_fidelidad": total_fidelidad # NEW
                 }
                 
         except Exception as err:
@@ -8449,7 +8463,7 @@ def reporte_produccion_general():
                         SUM(CASE WHEN vi.producto_id IS NOT NULL THEN vi.subtotal_item_neto ELSE 0 END) as produccion_productos,
                         (SELECT SUM(c.monto_comision) FROM comisiones c JOIN venta_items vi_c ON c.venta_item_id = vi_c.id JOIN ventas v_c ON vi_c.venta_id = v_c.id WHERE v_c.empleado_id = e.id AND DATE(v_c.fecha_venta) BETWEEN %s AND %s) as total_comisiones,
                         (SELECT COALESCE(SUM(p.monto), 0) FROM propinas p WHERE p.empleado_id = e.id AND DATE(p.fecha_registro) BETWEEN %s AND %s) as total_propinas,
-                        (SELECT COALESCE(ABS(SUM(a.monto)), 0) FROM ajustes_pago a WHERE a.colaborador_id = e.id AND a.tipo ILIKE '%%Fidelidad%%' AND DATE(a.fecha) BETWEEN %s AND %s) as total_fidelidad
+                        (SELECT COALESCE(ABS(SUM(a.monto)), 0) FROM ajustes_pago a WHERE a.empleado_id = e.id AND a.tipo ILIKE '%%Fidelidad%%' AND DATE(a.fecha) BETWEEN %s AND %s) as total_fidelidad
                     FROM ventas v
                     JOIN empleados e ON v.empleado_id = e.id
                     JOIN venta_items vi ON v.id = vi.venta_id

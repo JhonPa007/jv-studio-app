@@ -80,45 +80,92 @@
 
     {% if resultados %}
     <div class="report-section">
-        <h3>Resumen del Período</h3>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3>Resumen del Período</h3>
+            <div class="dropdown">
+                <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="dropdownMetrics"
+                    data-bs-toggle="dropdown" aria-expanded="false">
+                    Ver Métricas
+                </button>
+                <ul class="dropdown-menu p-3" aria-labelledby="dropdownMetrics">
+                    <li>
+                        <div class="form-check"><input class="form-check-input toggle-card" type="checkbox"
+                                value="card-serv-reg" checked id="c1"><label class="form-check-label" for="c1">Prod.
+                                Base (Metas)</label></div>
+                    </li>
+                    <li>
+                        <div class="form-check"><input class="form-check-input toggle-card" type="checkbox"
+                                value="card-serv-extra" checked id="c2"><label class="form-check-label" for="c2">Serv.
+                                Extra</label></div>
+                    </li>
+                    <li>
+                        <div class="form-check"><input class="form-check-input toggle-card" type="checkbox"
+                                value="card-prod" checked id="c3"><label class="form-check-label"
+                                for="c3">Productos</label></div>
+                    </li>
+                    <li>
+                        <div class="form-check"><input class="form-check-input toggle-card" type="checkbox"
+                                value="card-tips" checked id="c4"><label class="form-check-label"
+                                for="c4">Propinas</label></div>
+                    </li>
+                    <li>
+                        <div class="form-check"><input class="form-check-input toggle-card" type="checkbox"
+                                value="card-fid" checked id="c5"><label class="form-check-label" for="c5">Fondo
+                                Fidelidad</label></div>
+                    </li>
+                    <li>
+                        <div class="form-check"><input class="form-check-input toggle-card" type="checkbox"
+                                value="card-com" checked id="c6"><label class="form-check-label"
+                                for="c6">Comisiones</label></div>
+                    </li>
+                </ul>
+            </div>
+        </div>
 
         <div class="row mb-3">
-            <div class="col-md-3">
-                <div class="card summary-card text-center p-2 mb-2">
-                    <h6 class="card-title text-light">Prod. Servicios (Regular)</h6>
-                    <p class="card-text text-white">S/ {{ "%.2f"|format(resultados.total_produccion_servicios_regular)
-                        }}</p>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card summary-card text-center p-2 mb-2">
-                    <h6 class="card-title text-light">Venta Productos (No Meta)</h6>
-                    <p class="card-text text-white">S/ {{ "%.2f"|format(resultados.total_produccion_productos) }}</p>
-                </div>
-            </div>
-            <div class="col-md-3">
+            <div class="col-md-3 card-serv-reg">
                 <div class="card summary-card text-center p-2 mb-2 border-warning">
                     <h6 class="card-title text-warning fw-bold">PROD. BASE (METAS)</h6>
                     <p class="card-text text-warning">S/ {{ "%.2f"|format(resultados.total_produccion_servicios_regular)
                         }}</p>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card summary-card text-center p-2 mb-2">
-                    <h6 class="card-title text-light">Comisiones Generadas</h6>
-                    <p class="card-text text-success">S/ {{ "%.2f"|format(resultados.total_comisiones) }}</p>
-                </div>
-            </div>
-        </div>
 
-        <div class="row">
-            <div class="col-md-4">
+            <div class="col-md-3 card-serv-extra">
                 <div class="card summary-card text-center p-2 mb-2 bg-secondary bg-opacity-25">
                     <h6 class="card-title text-light">Prod. Servicios (Extra)</h6>
                     <p class="card-text text-info">S/ {{ "%.2f"|format(resultados.total_produccion_servicios_extra) }}
                     </p>
-                    <small class="text-muted d-block" style="font-size: 0.7em;">* Se paga aparte, no suma a
-                        metas</small>
+                    <small class="text-muted d-block" style="font-size: 0.7em;">* No suma a metas</small>
+                </div>
+            </div>
+
+            <div class="col-md-3 card-prod">
+                <div class="card summary-card text-center p-2 mb-2">
+                    <h6 class="card-title text-light">Venta Productos (No Meta)</h6>
+                    <p class="card-text text-white">S/ {{ "%.2f"|format(resultados.total_produccion_productos) }}</p>
+                </div>
+            </div>
+
+            <div class="col-md-3 card-tips">
+                <div class="card summary-card text-center p-2 mb-2">
+                    <h6 class="card-title text-light">Propinas</h6>
+                    <p class="card-text text-success">S/ {{ "%.2f"|format(resultados.total_propinas) }}</p>
+                </div>
+            </div>
+
+            <div class="col-md-3 card-fid">
+                <div class="card summary-card text-center p-2 mb-2">
+                    <h6 class="card-title text-light">Fondo Fidelidad</h6>
+                    <p class="card-text text-white text-opacity-75">S/ {{ "%.2f"|format(resultados.total_fidelidad) }}
+                    </p>
+                </div>
+            </div>
+
+            <div class="col-md-3 card-com">
+                <div class="card summary-card text-center p-2 mb-2">
+                    <h6 class="card-title text-light">Comisiones Generadas</h6>
+                    <p class="card-text text-info">S/ {{ "%.2f"|format(resultados.total_comisiones) }}</p>
                 </div>
             </div>
         </div>
@@ -203,4 +250,35 @@
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Manejo de visibilidad de tarjetas (Métricas)
+        const checkCards = document.querySelectorAll('.toggle-card');
+
+        function updateCardVisibility() {
+            checkCards.forEach(chk => {
+                const cardClass = chk.value;
+                const elements = document.querySelectorAll('.' + cardClass);
+                elements.forEach(el => {
+                    if (chk.checked) {
+                        el.classList.remove('d-none');
+                    } else {
+                        el.classList.add('d-none');
+                    }
+                });
+            });
+        }
+
+        checkCards.forEach(chk => {
+            chk.addEventListener('change', updateCardVisibility);
+        });
+
+        // Inicializar
+        updateCardVisibility();
+    });
+</script>
 {% endblock %}
