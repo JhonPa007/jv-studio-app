@@ -7795,7 +7795,7 @@ def pagar_comision_caja(comision_id):
                 return redirect(url_for('main.gestionar_caja', sucursal_id=sucursal_id))
 
             # 2. Obtener datos de la comisión
-            cursor.execute("SELECT monto_comision, colaborador_id FROM comisiones WHERE id = %s", (comision_id,))
+            cursor.execute("SELECT monto_comision, empleado_id FROM comisiones WHERE id = %s", (comision_id,))
             comision = cursor.fetchone()
 
             # 3. Registrar el GASTO en la caja (Salida de dinero)
