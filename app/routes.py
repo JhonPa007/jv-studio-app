@@ -8444,7 +8444,8 @@ def reporte_produccion_general():
                     SELECT
                         e.id as colaborador_id,
                         e.nombre_display AS colaborador_nombre,
-                        SUM(CASE WHEN vi.servicio_id IS NOT NULL THEN vi.subtotal_item_neto ELSE 0 END) as produccion_servicios,
+                        SUM(CASE WHEN vi.servicio_id IS NOT NULL AND vi.es_hora_extra = FALSE THEN vi.subtotal_item_neto ELSE 0 END) as produccion_servicios_regular,
+                        SUM(CASE WHEN vi.servicio_id IS NOT NULL AND vi.es_hora_extra = TRUE THEN vi.subtotal_item_neto ELSE 0 END) as produccion_servicios_extra,
                         SUM(CASE WHEN vi.producto_id IS NOT NULL THEN vi.subtotal_item_neto ELSE 0 END) as produccion_productos,
                         (SELECT SUM(c.monto_comision) FROM comisiones c JOIN venta_items vi_c ON c.venta_item_id = vi_c.id JOIN ventas v_c ON vi_c.venta_id = v_c.id WHERE v_c.empleado_id = e.id AND DATE(v_c.fecha_venta) BETWEEN %s AND %s) as total_comisiones
                     FROM ventas v
@@ -8461,11 +8462,13 @@ def reporte_produccion_general():
                 # Calcular los totales generales para el resumen
                 if resultados:
                     totales_generales = {
-                        'total_servicios': sum(float(r['produccion_servicios']) for r in resultados),
+                        'total_servicios_regular': sum(float(r['produccion_servicios_regular']) for r in resultados),
+                        'total_servicios_extra': sum(float(r['produccion_servicios_extra']) for r in resultados),
                         'total_productos': sum(float(r['produccion_productos']) for r in resultados),
-                        'total_produccion': sum(float(r['produccion_servicios']) + float(r['produccion_productos']) for r in resultados),
                         'total_comisiones': sum(float(r['total_comisiones'] or 0) for r in resultados)
                     }
+                    # Total Meta = Solo Regular
+                    totales_generales['total_meta'] = totales_generales['total_servicios_regular']
 
         except Exception as err:
             flash(f"Error al generar el reporte de producción: {err}", "danger")
