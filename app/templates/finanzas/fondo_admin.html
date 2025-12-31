@@ -7,35 +7,47 @@
             <h2 class="fw-bold"><i class="fas fa-piggy-bank text-primary"></i> Gestión Fondo de Lealtad</h2>
             <p class="text-muted">Administra los saldos acumulados, metas y disciplina del personal.</p>
         </div>
-        <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalPenalidad">
-            <i class="fas fa-gavel"></i> Registrar Infracción
-        </button>
+        <div>
+            <button class="btn btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#modalConfigFondo">
+                <i class="fas fa-cog"></i> Configurar % Mensual
+            </button>
+            <button class="btn btn-outline-warning me-2" data-bs-toggle="modal" data-bs-target="#modalCierreFondo">
+                <i class="fas fa-sync"></i> Cierre de Mes (Manual)
+            </button>
+            <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalPenalidad">
+                <i class="fas fa-gavel"></i> Registrar Infracción
+            </button>
+        </div>
     </div>
 
     <div class="row">
         {% for emp in empleados %}
         <div class="col-md-4 mb-4">
-            <div class="card h-100 shadow-sm border-start border-4 {% if emp.saldo_fondo_acumulado > 0 %}border-success{% else %}border-secondary{% endif %}">
+            <div
+                class="card h-100 shadow-sm border-start border-4 {% if emp.saldo_fondo_acumulado > 0 %}border-success{% else %}border-secondary{% endif %}">
                 <div class="card-body">
                     <h5 class="card-title text-primary fw-bold">{{ emp.nombres }} {{ emp.apellidos }}</h5>
-                    
+
                     <div class="d-flex justify-content-between align-items-end mt-4">
                         <div>
                             <small class="text-muted text-uppercase" style="font-size: 0.75rem;">Saldo Acumulado</small>
-                            <h3 class="fw-bold mb-0 {% if emp.saldo_fondo_acumulado > 0 %}text-success{% else %}text-muted{% endif %}">
+                            <h3
+                                class="fw-bold mb-0 {% if emp.saldo_fondo_acumulado > 0 %}text-success{% else %}text-muted{% endif %}">
                                 S/ {{ "%.2f"|format(emp.saldo_fondo_acumulado) }}
                             </h3>
                         </div>
 
                         <div class="text-end">
-                            <small class="d-block text-muted text-uppercase" style="font-size: 0.75rem;">Meta Mensual</small>
-                            <span class="badge bg-info text-dark p-2 shadow-sm" 
-                                  style="cursor: pointer; transition: 0.2s;" 
-                                  onmouseover="this.classList.add('bg-primary', 'text-white'); this.classList.remove('bg-info', 'text-dark')"
-                                  onmouseout="this.classList.remove('bg-primary', 'text-white'); this.classList.add('bg-info', 'text-dark')"
-                                  onclick="abrirModalMeta('{{ emp.id }}', '{{ emp.nombres }}', '{{ emp.meta_activacion_mensual }}')"
-                                  title="Clic para editar meta">
-                                S/ {{ "%.2f"|format(emp.meta_activacion_mensual) }} <i class="fas fa-pen small ms-1"></i>
+                            <small class="d-block text-muted text-uppercase" style="font-size: 0.75rem;">Meta
+                                Mensual</small>
+                            <span class="badge bg-info text-dark p-2 shadow-sm"
+                                style="cursor: pointer; transition: 0.2s;"
+                                onmouseover="this.classList.add('bg-primary', 'text-white'); this.classList.remove('bg-info', 'text-dark')"
+                                onmouseout="this.classList.remove('bg-primary', 'text-white'); this.classList.add('bg-info', 'text-dark')"
+                                onclick="abrirModalMeta('{{ emp.id }}', '{{ emp.nombres }}', '{{ emp.meta_activacion_mensual }}')"
+                                title="Clic para editar meta">
+                                S/ {{ "%.2f"|format(emp.meta_activacion_mensual) }} <i
+                                    class="fas fa-pen small ms-1"></i>
                             </span>
                         </div>
                     </div>
@@ -63,7 +75,8 @@
                     </div>
                     <div class="modal-body">
                         <div class="alert alert-warning small">
-                            <i class="fas fa-info-circle"></i> Esta acción descontará dinero del fondo acumulado del colaborador.
+                            <i class="fas fa-info-circle"></i> Esta acción descontará dinero del fondo acumulado del
+                            colaborador.
                         </div>
 
                         <div class="mb-3">
@@ -92,7 +105,8 @@
                             <label class="form-label fw-bold">Monto a Descontar (S/)</label>
                             <div class="input-group">
                                 <span class="input-group-text text-danger fw-bold">- S/</span>
-                                <input type="number" step="0.50" name="monto" id="inputMonto" class="form-control text-danger fw-bold" placeholder="0.00" required>
+                                <input type="number" step="0.50" name="monto" id="inputMonto"
+                                    class="form-control text-danger fw-bold" placeholder="0.00" required>
                             </div>
                         </div>
                     </div>
@@ -106,7 +120,7 @@
     </div>
 
     <div class="modal fade" id="modalMeta" tabindex="-1">
-        <div class="modal-dialog modal-sm"> 
+        <div class="modal-dialog modal-sm">
             <div class="modal-content">
                 <form action="{{ url_for('finanzas.actualizar_meta_fondo') }}" method="POST">
                     <div class="modal-header bg-info text-white">
@@ -116,19 +130,148 @@
                     <div class="modal-body text-center">
                         <p class="small text-muted mb-1">Colaborador</p>
                         <h5 class="fw-bold mb-3" id="lblNombreMeta">...</h5>
-                        
+
                         <input type="hidden" name="empleado_id" id="inputEmpleadoMeta">
-                        
+
                         <div class="form-floating mb-2">
-                            <input type="number" step="0.01" name="nueva_meta" id="inputNuevaMeta" class="form-control fw-bold text-center fs-4" placeholder="0.00" required>
+                            <input type="number" step="0.01" name="nueva_meta" id="inputNuevaMeta"
+                                class="form-control fw-bold text-center fs-4" placeholder="0.00" required>
                             <label>Nueva Meta (S/)</label>
                         </div>
-                        <small class="text-muted" style="font-size: 0.75rem;">Esto actualizará el objetivo para el cálculo de bonos.</small>
+                        <small class="text-muted" style="font-size: 0.75rem;">Esto actualizará el objetivo para el
+                            cálculo de bonos.</small>
                     </div>
                     <div class="modal-footer p-2">
                         <button type="submit" class="btn btn-primary w-100">Guardar Cambio</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIGURACIÓN MENSUAL -->
+    <div class="modal fade" id="modalConfigFondo" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="fas fa-cog"></i> Configurar Porcentajes Mensuales</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Año</label>
+                            <input type="number" id="confAnio" class="form-control" min="2020" value="2024">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Mes</label>
+                            <select id="confMes" class="form-select select-mes">
+                                <option value="1">Enero</option>
+                                <option value="2">Febrero</option>
+                                <option value="3">Marzo</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Mayo</option>
+                                <option value="6">Junio</option>
+                                <option value="7">Julio</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Porcentaje Global (%)</label>
+                            <input type="number" step="0.01" id="confPctGlobal"
+                                class="form-control text-primary font-weight-bold" value="2.00">
+                        </div>
+                    </div>
+
+                    <hr>
+                    <h6>Excepciones por Colaborador (Opcional)</h6>
+                    <small class="text-muted d-block mb-2">Deja vacio para usar el Global.</small>
+
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        <table class="table table-sm table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Colaborador</th>
+                                    <th style="width: 150px;">% Específico</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for emp in empleados %}
+                                <tr>
+                                    <td>{{ emp.nombres }} {{ emp.apellidos }}</td>
+                                    <td>
+                                        <input type="number" step="0.01"
+                                            class="form-control form-control-sm pct-override" data-empid="{{ emp.id }}"
+                                            placeholder="Global">
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-primary" id="btnSaveConfig"
+                        onclick="guardarConfiguracion()">Guardar Configuración</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CIERRE MANUAL -->
+    <div class="modal fade" id="modalCierreFondo" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title"><i class="fas fa-sync"></i> Procesar Cierre de Mes (Manual)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info small">
+                        <i class="fas fa-info-circle"></i> Usa esto si el sistema no corrió automáticamente o para
+                        recalcular meses pasados.
+                        <br><strong>Nota:</strong> Se usará el porcentaje configurado para ese mes específico.
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Año</label>
+                            <input type="number" id="cierreAnio" class="form-control" min="2020" value="2024">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Mes</label>
+                            <select id="cierreMes" class="form-select select-mes">
+                                <option value="1">Enero</option>
+                                <option value="2">Febrero</option>
+                                <option value="3">Marzo</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Mayo</option>
+                                <option value="6">Junio</option>
+                                <option value="7">Julio</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="resultadosCierre" class="mt-3 border p-2 bg-light"
+                        style="min-height: 50px; max-height: 150px; overflow-y: auto;">
+                        <small class="text-muted">Resultados aparecerán aquí...</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning" onclick="procesarCierre()">Procesar Cierre
+                        Ahora</button>
+                </div>
             </div>
         </div>
     </div>
@@ -145,7 +288,7 @@
             'Limpieza Deficiente': 15.00,
             'Falta Injustificada': 50.00
         };
-        
+
         if (precios[select.value]) {
             input.value = precios[select.value];
         } else if (select.value === 'Otro') {
@@ -160,10 +303,102 @@
         document.getElementById('inputEmpleadoMeta').value = id;
         document.getElementById('lblNombreMeta').innerText = nombre;
         document.getElementById('inputNuevaMeta').value = metaActual;
-        
+
         // Mostrar el modal usando Bootstrap 5
         var myModal = new bootstrap.Modal(document.getElementById('modalMeta'));
         myModal.show();
+    }
+
+    // --- NUEVO: Lógica de Configuración y Cierre ---
+    document.addEventListener('DOMContentLoaded', function () {
+        // Pre-seleccionar mes/año actual
+        const today = new Date();
+        const curMonth = today.getMonth() + 1; // 0-based
+        const curYear = today.getFullYear();
+
+        document.querySelectorAll('input[type="number"][min="2020"]').forEach(el => el.value = curYear);
+        document.querySelectorAll('select.select-mes').forEach(el => el.value = curMonth);
+    });
+
+    function guardarConfiguracion() {
+        const btn = document.getElementById('btnSaveConfig');
+        const anio = document.getElementById('confAnio').value;
+        const mes = document.getElementById('confMes').value;
+        const pctGlobal = document.getElementById('confPctGlobal').value;
+
+        // Recolectar overrides
+        const overrides = [];
+        document.querySelectorAll('.pct-override').forEach(input => {
+            const empId = input.dataset.empid;
+            const val = input.value;
+            if (val !== '') {
+                overrides.push({ id: empId, pct: val });
+            }
+        });
+
+        // Enviar Global
+        guardarPct(anio, mes, pctGlobal, null, false)
+            .then(() => {
+                // Enviar Overrides (Secuencial o Promise.all)
+                // Para simplicidad, se envian uno por uno (mejorar si hay muchos)
+                const promises = overrides.map(o => guardarPct(anio, mes, o.pct, o.id, true));
+                return Promise.all(promises);
+            })
+            .then(() => {
+                alert('Configuración guardada correctamente.');
+                // Cerrar modal
+                bootstrap.Modal.getInstance(document.getElementById('modalConfigFondo')).hide();
+            })
+            .catch(err => alert('Error al guardar: ' + err));
+    }
+
+    function guardarPct(anio, mes, pct, empId, isOverride) {
+        return fetch("{{ url_for('finanzas.configurar_porcentaje_fondo') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                'anio': anio, 'mes': mes,
+                'porcentaje': pct,
+                'empleado_id': empId || ''
+            })
+        }).then(res => {
+            if (!res.ok) throw new Error("Fallo en red");
+            return res.json();
+        });
+    }
+
+    function procesarCierre() {
+        if (!confirm('¿Estás seguro de procesar el cierre? Esto generará los fondos y deudas para TODOS los empleados seleccionados.')) return;
+
+        const anio = document.getElementById('cierreAnio').value;
+        const mes = document.getElementById('cierreMes').value;
+        const resultadosDiv = document.getElementById('resultadosCierre');
+
+        resultadosDiv.innerHTML = '<div class="text-info">Procesando...</div>';
+
+        fetch("{{ url_for('finanzas.generar_cierre_fondo_manual') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ anio: anio, mes: mes })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    resultadosDiv.innerHTML = `<div class="text-danger">Error: ${data.error}</div>`;
+                } else {
+                    let html = '<ul class="list-group small">';
+                    data.detalle.forEach(item => {
+                        html += `<li class="list-group-item">${item}</li>`;
+                    });
+                    html += '</ul>';
+                    resultadosDiv.innerHTML = html;
+                    alert('Proceso completado.');
+                    location.reload(); // Recargar para ver saldos actualizados
+                }
+            })
+            .catch(err => {
+                resultadosDiv.innerHTML = `<div class="text-danger">Error de conexión: ${err}</div>`;
+            });
     }
 </script>
 {% endblock %}

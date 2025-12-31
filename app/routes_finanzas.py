@@ -225,47 +225,211 @@ def dashboard_fondo_lealtad():
         return jsonify({'error': str(e)}), 500
 
 
-def proceso_cierre_mensual_fondo():
+# --- HELPER: Obtener Porcentaje Configurado (Jerárquico) ---
+def _get_porcentaje_fondo(cursor, anio, mes, empleado_id=None):
+    # 1. Específico del Colaborador para ese Mes
+    if empleado_id:
+        cursor.execute("""
+            SELECT porcentaje FROM configuracion_fondo_mensual 
+            WHERE anio=%s AND mes=%s AND empleado_id=%s
+        """, (anio, mes, empleado_id))
+        res = cursor.fetchone()
+        if res: return float(res[0]) # psycopg2 tuple access or RealDictCursor check needed?
+        # Note: If cursor_factory is RealDictCursor, res is dict. 
+        # But this helper might be called with different cursors. 
+        # Safe access:
+        if res and isinstance(res, dict): return float(res['porcentaje'])
+        if res and isinstance(res, tuple): return float(res[0])
     
-    # Esto corre automáticamente a fin de mes.
-    # Verifica quién cumplió la meta y consolida el dinero en su 'bolsa'.
-    
-    db = get_db()
-    # Rango del mes que cerramos (Ej: estamos 1ro dic, cerramos nov)
-    # ... lógica de fechas ...
-    
-    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-        cursor.execute("SELECT id, meta_activacion_mensual, porcentaje_fondo, tipo_salario FROM empleados WHERE activo=TRUE")
-        empleados = cursor.fetchall()
+    # 2. Global para ese Mes
+    cursor.execute("""
+        SELECT porcentaje FROM configuracion_fondo_mensual 
+        WHERE anio=%s AND mes=%s AND empleado_id IS NULL
+    """, (anio, mes))
+    res = cursor.fetchone()
+    if res:
+        if isinstance(res, dict): return float(res['porcentaje'])
+        if isinstance(res, tuple): return float(res[0])
 
-        for emp in empleados:
-            produccion = _calcular_produccion_mes_actual(cursor, emp['id'], emp['tipo_salario'])
-            
-            # REGLA C: Cierre de Mes
-            if produccion >= float(emp['meta_activacion_mensual']):
-                aporte = produccion * (float(emp['porcentaje_fondo']) / 100)
-                
-                # Sumar al acumulado
-                cursor.execute("""
-                    UPDATE empleados 
-                    SET saldo_fondo_acumulado = saldo_fondo_acumulado + %s 
-                    WHERE id = %s
-                """, (aporte, emp['id']))
+    # 3. Default del Sistema (Global General) o 2%
+    cursor.execute("SELECT porcentaje_fondo_global FROM configuracion_sistema LIMIT 1")
+    conf = cursor.fetchone()
+    # Si es Dict
+    if conf and isinstance(conf, dict): return float(conf['porcentaje_fondo_global'])
+    # Si es Tuple
+    if conf and isinstance(conf, tuple): return float(conf[0])
+    
+    return 2.00 # Default solicitado por usuario
 
-                # Registrar Historial
-                cursor.execute("""
-                    INSERT INTO movimientos_fondo (empleado_id, tipo_movimiento, monto, motivo)
-                    VALUES (%s, 'Aporte_Mensual', %s, 'Meta Cumplida - Cierre Mes')
-                """, (emp['id'], aporte))
-            else:
-                # No llegó a la meta - Registro Neutro
-                cursor.execute("""
-                    INSERT INTO movimientos_fondo (empleado_id, tipo_movimiento, monto, motivo)
-                    VALUES (%s, 'Intento_Fallido', 0, 'No alcanzó meta mensual')
-                """, (emp['id'],))
+# --- HELPER: Calcular Producción en Rango ---
+def _calcular_produccion_rango(cursor, empleado_id, tipo_salario, f_inicio, f_fin, sueldo_basico=0):
+    produccion = 0.00
+
+    if tipo_salario == 'Fijo_Recepcion':
+        produccion = float(sueldo_basico or 0)
+
+    elif tipo_salario in ['Comisionista', 'Mixto_Instructor']:
+        cursor.execute("""
+            SELECT COALESCE(SUM(vi.subtotal_item_neto), 0) as total
+            FROM venta_items vi
+            JOIN ventas v ON vi.venta_id = v.id
+            WHERE v.empleado_id = %s 
+              AND v.fecha_venta BETWEEN %s AND %s
+              AND v.estado != 'Anulada'
+        """, (empleado_id, f_inicio, f_fin))
         
-        db.commit()
-        print("✅ Cierre de Fondo de Lealtad completado.")
+        result = cursor.fetchone()
+        if result:
+            # Safe access
+            val = result['total'] if isinstance(result, dict) else result[0]
+            produccion = float(val)
+    
+    return produccion
+
+@finanzas_bp.route('/fondo/configurar', methods=['POST'])
+@login_required
+def configurar_porcentaje_fondo():
+    if getattr(current_user, 'rol_nombre', '') != 'Administrador':
+        return jsonify({'error': 'No autorizado'}), 403
+
+    anio = request.form.get('anio')
+    mes = request.form.get('mes')
+    porcentaje = request.form.get('porcentaje') # Global del mes
+    
+    # Opcional: Configuración por empleado (Array/JSON o inputs individuales)
+    # Para simplicidad, este endpoint puede manejar ambos si se envia 'empleado_id'
+    empleado_id = request.form.get('empleado_id') # Si viene vacio es Global
+
+    if not anio or not mes or not porcentaje:
+        return jsonify({'error': 'Faltan datos'}), 400
+
+    try:
+        db = get_db()
+        with db.cursor() as cursor:
+            # Upsert Logic (Postgres 9.5+)
+            # ON CONFLICT update.
+            # Convert empty string to None for empleado_id
+            emp_id_val = int(empleado_id) if (empleado_id and empleado_id != 'null') else None
+            
+            # Check existenc
+            if emp_id_val:
+                query_check = "SELECT 1 FROM configuracion_fondo_mensual WHERE anio=%s AND mes=%s AND empleado_id=%s"
+                params_check = (anio, mes, emp_id_val)
+            else:
+                query_check = "SELECT 1 FROM configuracion_fondo_mensual WHERE anio=%s AND mes=%s AND empleado_id IS NULL"
+                params_check = (anio, mes)
+
+            cursor.execute(query_check, params_check)
+            exists = cursor.fetchone()
+
+            if exists:
+                if emp_id_val:
+                    cursor.execute("""
+                        UPDATE configuracion_fondo_mensual SET porcentaje=%s, updated_at=NOW()
+                        WHERE anio=%s AND mes=%s AND empleado_id=%s
+                    """, (porcentaje, anio, mes, emp_id_val))
+                else:
+                    cursor.execute("""
+                        UPDATE configuracion_fondo_mensual SET porcentaje=%s, updated_at=NOW()
+                        WHERE anio=%s AND mes=%s AND empleado_id IS NULL
+                    """, (porcentaje, anio, mes))
+            else:
+                cursor.execute("""
+                    INSERT INTO configuracion_fondo_mensual (anio, mes, empleado_id, porcentaje)
+                    VALUES (%s, %s, %s, %s)
+                """, (anio, mes, emp_id_val, porcentaje))
+            
+            db.commit()
+            return jsonify({'mensaje': 'Configuración guardada'})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@finanzas_bp.route('/fondo/generar-cierre', methods=['POST'])
+@login_required
+def generar_cierre_fondo_manual():
+    if getattr(current_user, 'rol_nombre', '') != 'Administrador':
+        return jsonify({'error': 'No autorizado'}), 403
+
+    data = request.json
+    anio = int(data.get('anio'))
+    mes = int(data.get('mes'))
+    
+    # 1. Definir rango de fechas para ESE mes
+    import calendar
+    last_day = calendar.monthrange(anio, mes)[1]
+    f_inicio = date(anio, mes, 1)
+    f_fin = date(anio, mes, last_day)
+
+    db = get_db()
+    try:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 2. Obtener empleados activos
+            cursor.execute("SELECT id, meta_activacion_mensual, tipo_salario, nombres, apellidos FROM empleados WHERE activo=TRUE")
+            empleados = cursor.fetchall()
+            
+            resumen_generado = []
+
+            for emp in empleados:
+                # 3. Calcular Producción para ese mes específico
+                produccion = _calcular_produccion_rango(cursor, emp['id'], emp['tipo_salario'], f_inicio, f_fin)
+                
+                # 4. Obtener Porcentaje Configurado (Time Travel Logic)
+                pct = _get_porcentaje_fondo(cursor, anio, mes, emp['id'])
+                
+                meta = float(emp['meta_activacion_mensual'] or 0)
+                
+                # REGLA: ¿Cumplió meta?
+                if produccion >= meta:
+                    monto_fondo = produccion * (pct / 100)
+                    
+                    # 5. Insertar o Actualizar el Fondo
+                    # IMPORTANTE: Para evitar duplicados si se corre 2 veces el mismo mes,
+                    # deberíamos borrar primero el 'Aporte_Mensual' de ese mes o hacer un upsert inteligente.
+                    # Asumiremos que el usuario sabe lo que hace, o borramos preventivamente movimientos de tipo 'Aporte_Mensual' en ese rango?
+                    # Riesgoso borrar historial. Mejor verificamos si ya existe.
+                    
+                    cursor.execute("""
+                        SELECT id FROM movimientos_fondo 
+                        WHERE empleado_id=%s AND tipo_movimiento='Aporte_Mensual' 
+                        AND fecha BETWEEN %s AND %s
+                    """, (emp['id'], f_inicio, f_fin))
+                    ya_existe = cursor.fetchone()
+                    
+                    if not ya_existe:
+                        # A. Registrar Movimiento (Historial interno Fondo)
+                        cursor.execute("""
+                            INSERT INTO movimientos_fondo (empleado_id, tipo_movimiento, monto, motivo, fecha)
+                            VALUES (%s, 'Aporte_Mensual', %s, %s, %s)
+                        """, (emp['id'], monto_fondo, f'Cierre Mes {mes}/{anio} - {pct}%', f_fin))
+                        
+                        # B. Actualizar Saldo Acumulado Empleado
+                        cursor.execute("UPDATE empleados SET saldo_fondo_acumulado = saldo_fondo_acumulado + %s WHERE id=%s", (monto_fondo, emp['id']))
+                        
+                        # C. Registrar Ajuste de Pago (Para reporte Producción)
+                        # Tipo 'Fondo Fidelidad' para que salga en la columna "Fondo Fidelidad"
+                        # Lo registramos con fecha fin de mes para que salga en reportes de ese mes.
+                        cursor.execute("""
+                            INSERT INTO ajustes_pago (empleado_id, fecha, tipo, monto, descripcion)
+                            VALUES (%s, %s, 'Fondo Fidelidad', %s, %s)
+                        """, (emp['id'], f_fin, -monto_fondo, f'Retención Fondo Fidelidad {mes}/{anio}')) 
+                        # Nota: Monto negativo porque es descuento/retención? 
+                        # En reportes: ABS(SUM(monto)). Aqui lo guardo negativo para consistencia contable (sale de su "bolsillo" hacia el fondo).
+                        
+                        resumen_generado.append(f"{emp['nombres']}: S/ {monto_fondo:.2f} ({pct}%)")
+                    else:
+                        resumen_generado.append(f"{emp['nombres']}: Ya procesado.")
+
+                else:
+                    resumen_generado.append(f"{emp['nombres']}: No llegó a meta ({produccion} < {meta})")
+
+            db.commit()
+            return jsonify({'mensaje': 'Cierre procesado correctamente', 'detalle': resumen_generado})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 
 
