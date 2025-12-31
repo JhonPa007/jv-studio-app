@@ -8261,7 +8261,7 @@ def reporte_produccion():
                         COALESCE(CONCAT(cl.razon_social_nombres, ' ', cl.apellidos), 'Cliente Varios') AS cliente_nombre,
                         s.nombre as servicio_nombre, 
                         vi.precio_unitario_venta, 
-                        vi.valor_produccion,
+                        vi.subtotal_item_neto as valor_produccion,
                         vi.usado_como_beneficio,
                         ca.nombre as campana_nombre, 
                         vi.es_trabajo_extra
@@ -8287,7 +8287,7 @@ def reporte_produccion():
                         vi.cantidad, 
                         vi.precio_unitario_venta, 
                         vi.subtotal_item_neto,
-                        vi.valor_produccion,
+                        vi.subtotal_item_neto as valor_produccion,
                         com.monto_comision
                     FROM venta_items vi
                     JOIN ventas v ON vi.venta_id = v.id
@@ -8309,7 +8309,7 @@ def reporte_produccion():
 
                 # Las comisiones se calculan aparte, no cambian
                 total_comisiones_productos = sum(float(p['monto_comision']) for p in productos_vendidos if p.get('monto_comision'))
-                cursor.execute("""SELECT SUM(c.monto_comision) as total FROM comisiones c JOIN venta_items vi ON c.venta_item_id = vi.id JOIN ventas v ON vi.venta_id = v.id WHERE c.colaborador_id = %s AND vi.servicio_id IS NOT NULL AND DATE(c.fecha_generacion) BETWEEN %s AND %s""", (colaborador_id, fecha_inicio, fecha_fin))
+                cursor.execute("""SELECT SUM(c.monto_comision) as total FROM comisiones c JOIN venta_items vi ON c.venta_item_id = vi.id JOIN ventas v ON vi.venta_id = v.id WHERE c.empleado_id = %s AND vi.servicio_id IS NOT NULL AND DATE(c.fecha_generacion) BETWEEN %s AND %s""", (colaborador_id, fecha_inicio, fecha_fin))
                 comisiones_servicios = cursor.fetchone()
                 total_comisiones_servicios = float(comisiones_servicios['total']) if comisiones_servicios and comisiones_servicios['total'] else 0.0
                 total_comisiones_generadas = total_comisiones_productos + total_comisiones_servicios
@@ -8439,8 +8439,8 @@ def reporte_produccion_general():
                     SELECT
                         e.id as colaborador_id,
                         e.nombre_display AS colaborador_nombre,
-                        SUM(CASE WHEN vi.servicio_id IS NOT NULL THEN vi.valor_produccion ELSE 0 END) as produccion_servicios,
-                        SUM(CASE WHEN vi.producto_id IS NOT NULL THEN vi.valor_produccion ELSE 0 END) as produccion_productos,
+                        SUM(CASE WHEN vi.servicio_id IS NOT NULL THEN vi.subtotal_item_neto ELSE 0 END) as produccion_servicios,
+                        SUM(CASE WHEN vi.producto_id IS NOT NULL THEN vi.subtotal_item_neto ELSE 0 END) as produccion_productos,
                         (SELECT SUM(c.monto_comision) FROM comisiones c JOIN venta_items vi_c ON c.venta_item_id = vi_c.id JOIN ventas v_c ON vi_c.venta_id = v_c.id WHERE v_c.empleado_id = e.id AND DATE(v_c.fecha_venta) BETWEEN %s AND %s) as total_comisiones
                     FROM ventas v
                     JOIN empleados e ON v.empleado_id = e.id
