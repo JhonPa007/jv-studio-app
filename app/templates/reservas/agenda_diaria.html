@@ -547,7 +547,7 @@
         // Esto evita que el calendario cargue con defaults mientras espera el fetch
         const serverConfig = {
             agenda_intervalo: "{{ config_sucursal.agenda_intervalo if config_sucursal and config_sucursal.agenda_intervalo else '00:15:00' }}",
-            agenda_color_bloqueo: "{{ config_sucursal.agenda_color_bloqueo if config_sucursal else '#ffecec' }}",
+            agenda_color_bloqueo: "{{ config_sucursal.agenda_color_bloqueo if config_sucursal else '#C7C7C7' }}",
             agenda_color_habilitado: "{{ config_sucursal.agenda_color_habilitado if config_sucursal else '#ffffff' }}",
             agenda_color_reserva: "{{ config_sucursal.agenda_color_reserva if config_sucursal else '#6c63ff' }}",
             agenda_color_completado: "{{ config_sucursal.agenda_color_completado if config_sucursal else '#198754' }}",
