@@ -8302,11 +8302,14 @@ def reporte_produccion():
                 cursor.execute(sql_productos, (colaborador_id, sucursal_id, fecha_inicio, fecha_fin))
                 productos_vendidos = cursor.fetchall()
                 
-                # Cálculos para el resumen usando 'valor_produccion'
-                total_produccion_servicios = sum(float(s['valor_produccion']) for s in servicios_vendidos)
+                # Cálculos para el resumen usando 'valor_produccion' (que ahora es el subtotal neto correjido)
+                total_produccion_servicios_regular = sum(float(s['valor_produccion']) for s in servicios_vendidos if not s.get('es_trabajo_extra'))
+                total_produccion_servicios_extra = sum(float(s['valor_produccion']) for s in servicios_vendidos if s.get('es_trabajo_extra'))
+                
+                total_produccion_servicios = total_produccion_servicios_regular + total_produccion_servicios_extra
+                
                 total_produccion_productos = sum(float(p['valor_produccion']) for p in productos_vendidos)
-                total_comisiones = sum(float(p['monto_comision']) for p in productos_vendidos if p.get('monto_comision'))
-
+                
                 # Las comisiones se calculan aparte, no cambian
                 total_comisiones_productos = sum(float(p['monto_comision']) for p in productos_vendidos if p.get('monto_comision'))
                 cursor.execute("""SELECT SUM(c.monto_comision) as total FROM comisiones c JOIN venta_items vi ON c.venta_item_id = vi.id JOIN ventas v ON vi.venta_id = v.id WHERE c.empleado_id = %s AND vi.servicio_id IS NOT NULL AND DATE(c.fecha_generacion) BETWEEN %s AND %s""", (colaborador_id, fecha_inicio, fecha_fin))
@@ -8317,9 +8320,11 @@ def reporte_produccion():
                 resultados = {
                     "servicios_vendidos": servicios_vendidos, 
                     "productos_vendidos": productos_vendidos,
+                    "total_produccion_servicios_regular": total_produccion_servicios_regular, # NEW
+                    "total_produccion_servicios_extra": total_produccion_servicios_extra,     # NEW
                     "total_produccion_servicios": total_produccion_servicios,
                     "total_produccion_productos": total_produccion_productos,
-                    "total_comisiones": total_comisiones
+                    "total_comisiones": total_comisiones_generadas  # Correction: using total_comisiones_generadas variable calculated above
                 }
                 
         except Exception as err:
