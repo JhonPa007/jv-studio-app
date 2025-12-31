@@ -7682,7 +7682,7 @@ def abrir_caja():
     # Validación de que todos los datos necesarios fueron enviados
     if not sucursal_id or not usuario_apertura_id or monto_inicial is None or monto_inicial < 0:
         flash("Datos inválidos. Se requiere sucursal, colaborador y un monto inicial no negativo.", "warning")
-        return redirect(url_for('main.pagina_caja'))
+        return redirect(url_for('main.gestionar_caja'))
 
     try:
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
@@ -7690,7 +7690,7 @@ def abrir_caja():
             cursor.execute("SELECT id FROM caja_sesiones WHERE sucursal_id = %s AND estado = 'Abierta'", (sucursal_id,))
             if cursor.fetchone():
                 flash(f"Ya existe una sesión de caja abierta para esta sucursal.", "warning")
-                return redirect(url_for('main.pagina_caja'))
+                return redirect(url_for('main.gestionar_caja'))
             
             # Insertar la nueva sesión de caja
             sql = """
@@ -7708,7 +7708,7 @@ def abrir_caja():
         flash(f"Error al abrir la caja: {err}", "danger")
         current_app.logger.error(f"Error en abrir_caja: {err}")
 
-    return redirect(url_for('main.pagina_caja'))
+    return redirect(url_for('main.gestionar_caja'))
 
 # -------------------------------------------------------------------------
 # HISTORIAL DE CAJA Y CONFIRMACIÓN
@@ -7792,7 +7792,7 @@ def pagar_comision_caja(comision_id):
             
             if not caja:
                 flash("No hay caja abierta para registrar este pago.", "warning")
-                return redirect(url_for('main.pagina_caja', sucursal_id=sucursal_id))
+                return redirect(url_for('main.gestionar_caja', sucursal_id=sucursal_id))
 
             # 2. Obtener datos de la comisión
             cursor.execute("SELECT monto_comision, colaborador_id FROM comisiones WHERE id = %s", (comision_id,))
@@ -7827,7 +7827,7 @@ def pagar_comision_caja(comision_id):
         db_conn.rollback()
         flash(f"Error al pagar comisión: {e}", "danger")
 
-    return redirect(url_for('main.pagina_caja', sucursal_id=sucursal_id))
+    return redirect(url_for('main.gestionar_caja', sucursal_id=sucursal_id))
 
 @main_bp.route('/finanzas/caja/pagar-extra/<int:item_id>', methods=['POST'])
 @login_required
