@@ -97,6 +97,21 @@ def check_schema_updates(app):
                         fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
                 """)
+
+                # Tabla Comisiones (Generales)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS comisiones (
+                        id SERIAL PRIMARY KEY,
+                        venta_item_id INTEGER REFERENCES venta_items(id) ON DELETE CASCADE,
+                        empleado_id INTEGER REFERENCES empleados(id),
+                        monto_comision DECIMAL(10, 2) NOT NULL,
+                        porcentaje DECIMAL(5, 2) DEFAULT 0.00,
+                        fecha_generacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        estado VARCHAR(20) DEFAULT 'Pendiente',
+                        pago_caja_sesion_id INTEGER, 
+                        fecha_pago TIMESTAMP
+                    );
+                """)
                 db.commit()
 
                 # Lista de Columnas Nuevas a Verificar/Agregar

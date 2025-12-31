@@ -5305,9 +5305,19 @@ def nueva_venta():
             venta_id = cursor.fetchone()['id']
 
             # 6. Insertar Ítems y Actualizar Stock
+            
+            # 6.1 Obtener % Comisión Productos del Empleado
+            pct_comision_prod = 0.00
+            if empleado_id:
+                cursor.execute("SELECT porcentaje_comision_productos FROM empleados WHERE id = %s", (empleado_id,))
+                res_emp = cursor.fetchone()
+                if res_emp and res_emp['porcentaje_comision_productos']:
+                    pct_comision_prod = float(res_emp['porcentaje_comision_productos'])
+
             sql_item = """
                 INSERT INTO venta_items (venta_id, servicio_id, producto_id, descripcion_item_venta, cantidad, precio_unitario_venta, subtotal_item_bruto, subtotal_item_neto, es_hora_extra, porcentaje_servicio_extra, comision_servicio_extra, entregado_al_colaborador) 
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
+                RETURNING id
             """
             for item in items:
                 total_item = float(item['precio']) * float(item['cantidad'])
@@ -5330,10 +5340,21 @@ def nueva_venta():
                     pct_extra,
                     comision_extra
                 ))
+                venta_item_id = cursor.fetchone()['id']
+
                 if item['tipo'] == 'producto':
-                    # KARDEX
+                    # A. COMISIÓN POR PRODUCTO
+                    if pct_comision_prod > 0:
+                        monto_com_prod = total_item * (pct_comision_prod / 100.0)
+                        cursor.execute("""
+                            INSERT INTO comisiones (venta_item_id, empleado_id, monto_comision, porcentaje, fecha_generacion, estado)
+                            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, 'Pendiente')
+                        """, (venta_item_id, empleado_id, monto_com_prod, pct_comision_prod))
+
+                    # B. KARDEX
                     cursor.execute("SELECT stock_actual FROM productos WHERE id = %s", (item['id'],))
-                    stock_anterior = cursor.fetchone()['stock_actual']
+                    stock_res = cursor.fetchone()
+                    stock_anterior = stock_res['stock_actual'] if stock_res else 0
                     cantidad_salida = float(item['cantidad'])
                     nuevo_stock = stock_anterior - cantidad_salida
 
@@ -7492,14 +7513,15 @@ def gestionar_caja():
             # --- COMISIONES PENDIENTES ---
             cursor.execute("""
                 SELECT c.id, c.monto_comision, TO_CHAR(c.fecha_generacion, 'DD/MM HH24:MI') as fecha_fmt,
-                       vi.descripcion_item_venta as concepto, v.numero_comprobante
+                       vi.descripcion_item_venta as concepto, v.numero_comprobante,
+                       e.nombre_display as colaborador
                 FROM comisiones c
                 JOIN empleados e ON c.empleado_id = e.id
                 JOIN venta_items vi ON c.venta_item_id = vi.id
                 JOIN ventas v ON vi.venta_id = v.id
-                WHERE c.empleado_id = %s AND c.estado = 'Pendiente' AND v.sucursal_id = %s
+                WHERE c.estado = 'Pendiente' AND v.sucursal_id = %s
                 ORDER BY c.fecha_generacion DESC
-            """, (usuario_id, sucursal_id))
+            """, (sucursal_id,))
             comisiones = cursor.fetchall()
 
             # --- 🟢 AQUÍ ESTÁ LO QUE FALTABA: PROPINAS PENDIENTES ---
