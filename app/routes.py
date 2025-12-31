@@ -2592,7 +2592,7 @@ def api_configuracion():
             if not config:
                 config = {
                     "agenda_intervalo": "00:15:00",
-                    "agenda_color_bloqueo": "#ffecec",
+                    "agenda_color_bloqueo": "#c7c7c7",
                     "agenda_color_habilitado": "#ffffff",
                     "agenda_color_reserva": "#6c63ff",
                     "agenda_color_completado": "#198754",
@@ -2629,7 +2629,7 @@ def api_configuracion():
             
             # Valores
             val_intervalo = data.get('agenda_intervalo', '00:15:00')
-            val_bloqueo = data.get('agenda_color_bloqueo', '#ffecec')
+            val_bloqueo = data.get('agenda_color_bloqueo', '#c7c7c7')
             val_habilitado = data.get('agenda_color_habilitado', '#ffffff')
             val_reserva = data.get('agenda_color_reserva', '#6c63ff')
             val_completado = data.get('agenda_color_completado', '#198754')
