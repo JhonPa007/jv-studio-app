@@ -92,15 +92,15 @@
             </div>
             <div class="col-md-3">
                 <div class="card summary-card text-center p-2 mb-2">
-                    <h6 class="card-title text-light">Prod. Productos</h6>
+                    <h6 class="card-title text-light">Venta Productos (No Meta)</h6>
                     <p class="card-text text-white">S/ {{ "%.2f"|format(resultados.total_produccion_productos) }}</p>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="card summary-card text-center p-2 mb-2 border-warning">
-                    <h6 class="card-title text-warning fw-bold">TOTAL REGULAR (METAS)</h6>
-                    <p class="card-text text-warning">S/ {{ "%.2f"|format(resultados.total_produccion_servicios_regular
-                        + resultados.total_produccion_productos) }}</p>
+                    <h6 class="card-title text-warning fw-bold">PROD. BASE (METAS)</h6>
+                    <p class="card-text text-warning">S/ {{ "%.2f"|format(resultados.total_produccion_servicios_regular)
+                        }}</p>
                 </div>
             </div>
             <div class="col-md-3">
