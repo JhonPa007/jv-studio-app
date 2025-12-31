@@ -424,10 +424,10 @@
                                 {% else %}
                                 <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center me-2"
                                     style="width: 24px; height: 24px; font-size: 0.7rem;">
-                                    {{ emp.nombres[0] }}{{ emp.apellidos[0] }}
+                                    {{ emp.nombre_display[:2]|upper }}
                                 </div>
                                 {% endif %}
-                                <span>{{ emp.nombres }} {{ emp.apellidos }}</span>
+                                <span>{{ emp.nombre_display }}</span>
                                 {% if emp.citas_hoy > 0 %}
                                 <span class="badge bg-success ms-auto rounded-pill" style="font-size: 0.7em;">With
                                     Appts</span>

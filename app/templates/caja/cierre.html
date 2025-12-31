@@ -141,7 +141,7 @@
                                 {% for p in propinas_pendientes %}
                                 <tr id="row-prop-{{ p.id }}">
                                     <td class="ps-3 text-muted small">{{ p.fecha_registro.strftime('%H:%M') }}</td>
-                                    <td class="fw-bold">{{ p.nombres }} {{ p.apellidos }}</td>
+                                    <td class="fw-bold">{{ p.nombre_display }}</td>
                                     <td>
                                         {% if p.metodo_pago == 'Efectivo' %}
                                         <span class="badge bg-success">Efectivo</span>
@@ -152,7 +152,7 @@
                                     <td class="fw-bold text-warning fs-5">S/ {{ "%.2f"|format(p.monto) }}</td>
                                     <td class="text-end pe-3">
                                         <button class="btn btn-sm btn-outline-warning"
-                                            onclick="liquidarPropina({{ p.id }}, '{{ p.nombres }}', '{{ p.monto }}')">
+                                            onclick="liquidarPropina({{ p.id }}, '{{ p.nombre_display }}', '{{ p.monto }}')">
                                             <i class="fas fa-hand-holding-usd me-1"></i> Entregar
                                         </button>
                                     </td>
@@ -196,7 +196,7 @@
                                 <tr>
                                     <td class="ps-3 text-muted small">{{ extra.fecha_venta.strftime('%d/%m %H:%M') }}
                                     </td>
-                                    <td class="fw-bold">{{ extra.nombres }} {{ extra.apellidos }}</td>
+                                    <td class="fw-bold">{{ extra.nombre_display }}</td>
                                     <td>{{ extra.descripcion_item_venta }}</td>
                                     <td><span class="badge bg-info text-dark">{{ extra.porcentaje_servicio_extra
                                             }}%</span></td>
@@ -205,7 +205,8 @@
                                     <td class="text-end pe-3">
                                         <form action="{{ url_for('main.pagar_extra_caja', item_id=extra.id) }}"
                                             method="POST" onsubmit="return confirm('¿Pagar S/ {{ "
-                                            %.2f"|format(extra.comision_servicio_extra) }} a {{ extra.nombres }}?');">
+                                            %.2f"|format(extra.comision_servicio_extra) }} a {{ extra.nombre_display
+                                            }}?');">
                                             <button type="submit" class="btn btn-sm btn-outline-success">
                                                 <i class="fas fa-hand-holding-usd me-1"></i> Pagar
                                             </button>
@@ -347,7 +348,7 @@
                         <label class="fw-bold">¿Para quién es?</label>
                         <select name="empleado_id" class="form-select" required>
                             {% for e in empleados %}
-                            <option value="{{ e.id }}">{{ e.nombres }} {{ e.apellidos }}</option>
+                            <option value="{{ e.id }}">{{ e.nombre_display }}</option>
                             {% endfor %}
                         </select>
                     </div>

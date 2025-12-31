@@ -252,7 +252,7 @@
                                     class="fas fa-heart me-1"></i>Propina Voluntaria</h6>
                             <div class="row g-1">
                                 <div class="col-4">
-                                    <input type="number" step="0.50" name="monto_propina"
+                                    <input type="number" step="0.50" name="monto_propina" id="input_monto_propina"
                                         class="form-control form-control-sm bg-dark text-warning border-secondary fw-bold"
                                         placeholder="S/ 0.00">
                                 </div>
@@ -479,6 +479,16 @@
         document.getElementById('bloqueSolicitar').style.display = 'block';
     }
 
+    // --- SINCRONIZACIÓN DE PROPINA ---
+    const selEmpleado = document.getElementById('empleado_id');
+    const selPropina = document.getElementById('empleado_propina_id');
+
+    if (selEmpleado && selPropina) {
+        selEmpleado.addEventListener('change', function () {
+            selPropina.value = this.value; // Sincronizar valor
+        });
+    }
+
     async function responderCampana(accion) {
         const fecha = document.getElementById('inputFechaCampana').value;
         if (accion === 'actualizar' && !fecha) { alert('Ingrese fecha'); return; }
@@ -681,6 +691,15 @@
         }
         if (tipo === 'Boleta Electrónica' && total >= 700 && (!doc || doc.length !== 8)) {
             alert('Para boletas >= S/ 700 se requiere DNI.'); return;
+        }
+
+        // Validación Propina
+        const montoPropina = parseFloat(document.getElementById('input_monto_propina').value) || 0;
+        const colabPropina = document.getElementById('empleado_propina_id').value;
+        if (montoPropina > 0 && !colabPropina) {
+            alert('Si ingresa una propina, debe seleccionar "¿A quién?".');
+            document.getElementById('empleado_propina_id').focus();
+            return;
         }
 
         // Preparar Pagos

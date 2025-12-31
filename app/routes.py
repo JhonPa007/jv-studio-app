@@ -7504,7 +7504,7 @@ def gestionar_caja():
             # --- 🟢 AQUÍ ESTÁ LO QUE FALTABA: PROPINAS PENDIENTES ---
             cursor.execute("""
                 SELECT p.id, p.monto, p.metodo_pago, p.fecha_registro, 
-                       e.nombres, e.apellidos
+                       e.nombre_display
                 FROM propinas p
                 JOIN empleados e ON p.empleado_id = e.id
                 WHERE p.entregado_al_barbero = FALSE
@@ -7515,7 +7515,7 @@ def gestionar_caja():
             # --- SERVICIOS EXTRA PENDIENTES (COMISIONES) ---
             cursor.execute("""
                 SELECT vi.id, vi.comision_servicio_extra, vi.porcentaje_servicio_extra, 
-                       v.fecha_venta, e.nombres, e.apellidos,
+                       v.fecha_venta, e.nombre_display,
                        vi.descripcion_item_venta
                 FROM venta_items vi
                 JOIN ventas v ON vi.venta_id = v.id
@@ -7528,7 +7528,7 @@ def gestionar_caja():
             extras_pendientes = cursor.fetchall()
 
             # --- 🟢 TAMBIÉN FALTABA ESTO: EMPLEADOS (Para el modal) ---
-            cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE")
+            cursor.execute("SELECT id, nombre_display FROM empleados WHERE activo = TRUE")
             empleados = cursor.fetchall()
 
             return render_template('caja/cierre.html', 
@@ -7711,7 +7711,7 @@ def listar_historial_caja():
                 # Consulta GLOBAL (sin filtro de sucursal)
                 sql = """
                     SELECT cs.*, 
-                           e.nombres || ' ' || e.apellidos as cajero_nombre,
+                           e.nombre_display as cajero_nombre,
                            s.nombre as sucursal_nombre, -- Agregamos el nombre de la sede
                            TO_CHAR(cs.fecha_apertura, 'DD/MM/YYYY HH24:MI') as inicio_fmt,
                            TO_CHAR(cs.fecha_cierre, 'DD/MM/YYYY HH24:MI') as fin_fmt
@@ -7727,7 +7727,7 @@ def listar_historial_caja():
                 # Consulta FILTRADA por sucursal
                 sql = """
                     SELECT cs.*, 
-                           e.nombres || ' ' || e.apellidos as cajero_nombre,
+                           e.nombre_display as cajero_nombre,
                            s.nombre as sucursal_nombre,
                            TO_CHAR(cs.fecha_apertura, 'DD/MM/YYYY HH24:MI') as inicio_fmt,
                            TO_CHAR(cs.fecha_cierre, 'DD/MM/YYYY HH24:MI') as fin_fmt
