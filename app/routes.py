@@ -7787,7 +7787,7 @@ def pagar_comision_caja(comision_id):
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # 1. Verificar que exista caja abierta
             sucursal_id = session.get('sucursal_id')
-            cursor.execute("SELECT id FROM caja_sesiones WHERE sucursal_id = %s AND estado = 'Abierta'", (sucursal_id,))
+            cursor.execute("SELECT id FROM caja_sesiones WHERE sucursal_id = %s AND usuario_id = %s AND estado = 'Abierta'", (sucursal_id, current_user.id))
             caja = cursor.fetchone()
             
             if not caja:
@@ -7837,7 +7837,7 @@ def pagar_extra_caja(item_id):
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # 1. Verificar Caja Abierta
             sucursal_id = session.get('sucursal_id')
-            cursor.execute("SELECT id FROM caja_sesiones WHERE sucursal_id = %s AND estado = 'Abierta'", (sucursal_id,))
+            cursor.execute("SELECT id FROM caja_sesiones WHERE sucursal_id = %s AND usuario_id = %s AND estado = 'Abierta'", (sucursal_id, current_user.id))
             caja = cursor.fetchone()
             if not caja:
                  flash("No hay caja abierta.", "warning")
