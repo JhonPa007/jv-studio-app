@@ -50,6 +50,39 @@ def check_schema_updates(app):
             
         try:
             with db.cursor() as cursor:
+                # ---------------------------------------------------------
+                # 0. CREACIÓN DE TABLAS FALTANTES (Auto-Fix)
+                # ---------------------------------------------------------
+                # Tabla Compras
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS compras (
+                        id SERIAL PRIMARY KEY,
+                        proveedor_id INTEGER REFERENCES proveedores(id),
+                        sucursal_id INTEGER REFERENCES sucursales(id),
+                        fecha_compra DATE DEFAULT CURRENT_DATE,
+                        tipo_comprobante VARCHAR(50),
+                        serie_numero_comprobante VARCHAR(100),
+                        monto_subtotal DECIMAL(10, 2) DEFAULT 0.00,
+                        monto_impuestos DECIMAL(10, 2) DEFAULT 0.00,
+                        monto_total DECIMAL(10, 2) DEFAULT 0.00,
+                        estado_pago VARCHAR(20) DEFAULT 'Pendiente',
+                        notas TEXT,
+                        fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+                # Tabla Detalle Compras
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS compra_items (
+                        id SERIAL PRIMARY KEY,
+                        compra_id INTEGER REFERENCES compras(id) ON DELETE CASCADE,
+                        producto_id INTEGER REFERENCES productos(id),
+                        cantidad INTEGER NOT NULL,
+                        costo_unitario DECIMAL(10, 2) NOT NULL,
+                        subtotal DECIMAL(10, 2) NOT NULL
+                    );
+                """)
+                db.commit()
+
                 # Lista de Columnas Nuevas a Verificar/Agregar
                 columns_to_check = [
                     # tabla, columna, definición

@@ -7218,8 +7218,8 @@ def nueva_compra():
             flash(f"Compra #{compra_id} registrada exitosamente. El stock ha sido actualizado.", "success")
             return redirect(url_for('main.listar_compras'))
 
-        except (ValueError, Exception, Exception) as e:
-            if db_conn and db_conn.in_transaction: 
+        except (ValueError, Exception) as e:
+            if db_conn: 
                 db_conn.rollback()
             flash(f"No se pudo guardar la compra. Error: {str(e)}", "warning")
             current_app.logger.error(f"Error procesando compra: {e}")
