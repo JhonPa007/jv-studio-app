@@ -1420,41 +1420,41 @@
         indicadorDiv.appendChild(etiquetaHora);
         indicadorDiv.appendChild(lineaGuia);
 
-        agendaContainer.addEventListener('mousemove', function (e) {
-            // Recalcular minutos dinámicamente SIEMPRE (por si cambia config en runtime)
-            let minutos_slot_dynamic = 15; // Default
+        // 5. CALCULAR LA HORA MATEMÁTICAMENTE (Infalible)
+        // 🟢 OPTIMIZACIÓN: requestAnimationFrame para evitar "Layout Thrashing"
+        let requestRef = null;
+        let lastMouseY = 0;
+        let lastTarget = null;
+
+        // Cachear valores estáticos (o recalcular solo si config cambia)
+        let minutosSlotCached = 15;
+        function updateSlotDurationCache() {
             if (currentConfig.agenda_intervalo) {
                 const parts = currentConfig.agenda_intervalo.split(':');
-                if (parts.length >= 2) {
-                    minutos_slot_dynamic = (parseInt(parts[0]) * 60) + parseInt(parts[1]);
-                }
+                if (parts.length >= 2) minutosSlotCached = (parseInt(parts[0]) * 60) + parseInt(parts[1]);
             }
+        }
+        updateSlotDurationCache(); // Init
 
-            // 1. Validar target: Buscamos la columna bajo el mouse
-            const col = e.target.closest('.fc-timegrid-col');
-            if (!col) {
-                indicadorDiv.style.display = 'none';
-                return;
-            }
+        const updateHoverVisual = () => {
+            if (!lastTarget) return;
+
+            // 1. Validar target: Buscamos la columna (cacheada en el evento)
+            // Ya tenemos lastTarget como el .fc-timegrid-col
+            const col = lastTarget;
 
             // 2. Obtener altura del slot (dinámico)
             // CRÍTICO: Buscar GLOBALMENTE un slot para referencia, no dentro de la columna actual
-            // ya que FullCalendar v6 a veces separa el grid de fondo de los eventos.
             const referenceSlot = agendaContainer.querySelector('.fc-timegrid-slot');
-
-            if (!referenceSlot) {
-                // Fallback de seguridad si no se encuentra (raro en TimeGrid)
-                console.warn("No se encontró referencia de .fc-timegrid-slot");
-                return;
-            }
+            if (!referenceSlot) { requestRef = null; return; }
 
             // Altura real renderizada
             const slotHeight = referenceSlot.getBoundingClientRect().height;
-            if (slotHeight < 5) return; // Evitar divisiones por cero
+            if (slotHeight < 5) { requestRef = null; return; }
 
             // 3. Cálculos de Posición
             const rectCol = col.getBoundingClientRect();
-            const relativeY = e.clientY - rectCol.top;
+            const relativeY = lastMouseY - rectCol.top;
 
             // "Imantar" al slot más cercano
             const slotIndex = Math.floor(relativeY / slotHeight);
@@ -1467,16 +1467,11 @@
             }
             // Mostrar
             indicadorDiv.style.display = 'flex';
-
-            // Posicionar
             indicadorDiv.style.top = `${snappedY}px`;
-
-            // Ajustar ancho de la línea al ancho de la columna
             lineaGuia.style.width = `${rectCol.width}px`;
 
-            // 5. CALCULAR LA HORA MATEMÁTICAMENTE (Infalible)
-            const minutosDesdeInicio = slotIndex * minutos_slot_dynamic;
-
+            // 5. Calcular Hora
+            const minutosDesdeInicio = slotIndex * minutosSlotCached;
             const fechaBase = new Date();
             // Usar la hora de inicio real configurada
             const horaInicioReal = currentConfig.agenda_hora_inicio ? parseInt(currentConfig.agenda_hora_inicio.split(':')[0]) : 8;
@@ -1486,13 +1481,26 @@
             fechaBase.setMinutes(fechaBase.getMinutes() + minutosDesdeInicio);
 
             // Formatear: 10:15 a. m.
-            const horaStr = fechaBase.toLocaleTimeString('es-PE', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
+            etiquetaHora.innerText = fechaBase.toLocaleTimeString('es-PE', {
+                hour: 'numeric', minute: '2-digit', hour12: true
             });
 
-            etiquetaHora.innerText = horaStr;
+            requestRef = null; // Liberar lock
+        };
+
+        agendaContainer.addEventListener('mousemove', function (e) {
+            const col = e.target.closest('.fc-timegrid-col');
+            if (!col) {
+                // Si salimos de una columna, ocultar (opcional, o dejar que mouseleave lo haga)
+                return;
+            }
+
+            lastMouseY = e.clientY;
+            lastTarget = col;
+
+            if (!requestRef) {
+                requestRef = requestAnimationFrame(updateHoverVisual);
+            }
         });
 
         agendaContainer.addEventListener('mouseleave', function () {

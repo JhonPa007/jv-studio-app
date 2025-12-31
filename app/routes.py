@@ -2337,16 +2337,19 @@ def api_agenda_dia_data():
             
             ids_con_turno = {row['empleado_id'] for row in cursor.fetchall()}
 
-            # --- 1.B. QUERY PRINCIPAL DE EMPLEADOS ---
-            # Necesitamos citas_hoy para el filtro "Con Citas" se actualice.
+            # --- 1.B. QUERY PRINCIPAL DE EMPLEADOS (OPTIMIZADA) ---
+            # Usamos LEFT JOIN con una subquery pre-agrupada en lugar de una subquery correlacionada por cada fila.
             cursor.execute("""
                 SELECT e.id, e.nombre_display as title,
-                       (SELECT COUNT(*) FROM reservas r 
-                        WHERE r.empleado_id = e.id 
-                          AND DATE(r.fecha_hora_inicio) = %s
-                          AND r.estado NOT IN ('Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio')
-                       ) as citas_hoy_count
+                       COALESCE(citas.total, 0) as citas_hoy_count
                 FROM empleados e
+                LEFT JOIN (
+                    SELECT empleado_id, COUNT(*) as total
+                    FROM reservas 
+                    WHERE DATE(fecha_hora_inicio) = %s
+                      AND estado NOT IN ('Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio')
+                    GROUP BY empleado_id
+                ) citas ON e.id = citas.empleado_id
                 WHERE e.activo = TRUE 
                   AND e.realiza_servicios = TRUE  
                   AND e.id IN (SELECT empleado_id FROM empleado_sucursales WHERE sucursal_id = %s)
