@@ -5306,13 +5306,7 @@ def nueva_venta():
 
             # 6. Insertar Ítems y Actualizar Stock
             
-            # 6.1 Obtener % Comisión Productos del Empleado
-            pct_comision_prod = 0.00
-            if empleado_id:
-                cursor.execute("SELECT porcentaje_comision_productos FROM empleados WHERE id = %s", (empleado_id,))
-                res_emp = cursor.fetchone()
-                if res_emp and res_emp['porcentaje_comision_productos']:
-                    pct_comision_prod = float(res_emp['porcentaje_comision_productos'])
+            # (Se eliminó la lógica de % Comisión de Empleado - Ahora es por Producto Fijo)
 
             sql_item = """
                 INSERT INTO venta_items (venta_id, servicio_id, producto_id, descripcion_item_venta, cantidad, precio_unitario_venta, subtotal_item_bruto, subtotal_item_neto, es_hora_extra, porcentaje_servicio_extra, comision_servicio_extra, entregado_al_colaborador) 
@@ -5322,7 +5316,7 @@ def nueva_venta():
             for item in items:
                 total_item = float(item['precio']) * float(item['cantidad'])
                 
-                # Cálculo de Comisión Extra
+                # Cálculo de Comisión Extra (Solo Servicios)
                 es_extra = item.get('es_hora_extra', False)
                 pct_extra = float(item.get('porcentaje_servicio_extra', 0)) if es_extra else 0.00
                 comision_extra = 0.00
@@ -5343,20 +5337,25 @@ def nueva_venta():
                 venta_item_id = cursor.fetchone()['id']
 
                 if item['tipo'] == 'producto':
-                    # A. COMISIÓN POR PRODUCTO
-                    if pct_comision_prod > 0:
-                        monto_com_prod = total_item * (pct_comision_prod / 100.0)
-                        cursor.execute("""
-                            INSERT INTO comisiones (venta_item_id, empleado_id, monto_comision, porcentaje, fecha_generacion, estado)
-                            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, 'Pendiente')
-                        """, (venta_item_id, empleado_id, monto_com_prod, pct_comision_prod))
+                    # A. OBTENER DATOS DEL PRODUCTO (Stock y Comisión)
+                    cursor.execute("SELECT stock_actual, comision_vendedor_monto FROM productos WHERE id = %s", (item['id'],))
+                    res_prod = cursor.fetchone()
+                    
+                    if res_prod:
+                        stock_anterior = res_prod['stock_actual']
+                        comision_unitaria = float(res_prod.get('comision_vendedor_monto') or 0.00)
+                        
+                        # B. GENERAR COMISIÓN (Si existe monto)
+                        if comision_unitaria > 0:
+                            total_comision_prod = comision_unitaria * float(item['cantidad'])
+                            cursor.execute("""
+                                INSERT INTO comisiones (venta_item_id, empleado_id, monto_comision, porcentaje, fecha_generacion, estado)
+                                VALUES (%s, %s, %s, 0.00, CURRENT_TIMESTAMP, 'Pendiente')
+                            """, (venta_item_id, empleado_id, total_comision_prod))
 
-                    # B. KARDEX
-                    cursor.execute("SELECT stock_actual FROM productos WHERE id = %s", (item['id'],))
-                    stock_res = cursor.fetchone()
-                    stock_anterior = stock_res['stock_actual'] if stock_res else 0
-                    cantidad_salida = float(item['cantidad'])
-                    nuevo_stock = stock_anterior - cantidad_salida
+                        # C. ACTUALIZAR KARDEX (Stock)
+                        cantidad_salida = float(item['cantidad'])
+                        nuevo_stock = stock_anterior - cantidad_salida
 
                     cursor.execute("UPDATE productos SET stock_actual = %s WHERE id = %s", (nuevo_stock, item['id']))
 
