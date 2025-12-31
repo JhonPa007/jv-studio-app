@@ -8049,7 +8049,7 @@ def reporte_liquidacion():
                     monto_cuota = float(cuota_obj['monto_cuota']) if cuota_obj else 0.0
 
                     # 2. Calcular Métricas de Rendimiento del Mes
-                    cursor.execute("SELECT SUM(vi.valor_produccion) as total FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id WHERE v.empleado_id = %s AND v.estado_pago != 'Anulado' AND DATE(v.fecha_venta) BETWEEN %s AND %s AND vi.servicio_id IS NOT NULL AND vi.es_trabajo_extra = FALSE", (colaborador_id, fecha_inicio_periodo, fecha_fin_periodo))
+                    cursor.execute("SELECT SUM(vi.valor_produccion) as total FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id WHERE v.empleado_id = %s AND v.estado_pago != 'Anulado' AND DATE(v.fecha_venta) BETWEEN %s AND %s AND vi.servicio_id IS NOT NULL AND vi.es_hora_extra = FALSE", (colaborador_id, fecha_inicio_periodo, fecha_fin_periodo))
                     produccion_servicios = float(cursor.fetchone()['total'] or 0.0)
                     
                     cursor.execute("SELECT SUM(c.monto_comision) as total FROM comisiones c JOIN venta_items vi ON c.venta_item_id = vi.id JOIN ventas v ON vi.venta_id = v.id WHERE c.colaborador_id = %s AND vi.producto_id IS NOT NULL AND DATE(c.fecha_generacion) BETWEEN %s AND %s", (colaborador_id, fecha_inicio_periodo, fecha_fin_periodo))
@@ -8264,7 +8264,7 @@ def reporte_produccion():
                         vi.subtotal_item_neto as valor_produccion,
                         vi.usado_como_beneficio,
                         ca.nombre as campana_nombre, 
-                        vi.es_trabajo_extra
+                        vi.es_hora_extra
                     FROM venta_items vi
                     JOIN ventas v ON vi.venta_id = v.id
                     JOIN servicios s ON vi.servicio_id = s.id
@@ -8303,8 +8303,8 @@ def reporte_produccion():
                 productos_vendidos = cursor.fetchall()
                 
                 # Cálculos para el resumen usando 'valor_produccion' (que ahora es el subtotal neto correjido)
-                total_produccion_servicios_regular = sum(float(s['valor_produccion']) for s in servicios_vendidos if not s.get('es_trabajo_extra'))
-                total_produccion_servicios_extra = sum(float(s['valor_produccion']) for s in servicios_vendidos if s.get('es_trabajo_extra'))
+                total_produccion_servicios_regular = sum(float(s['valor_produccion']) for s in servicios_vendidos if not s.get('es_hora_extra'))
+                total_produccion_servicios_extra = sum(float(s['valor_produccion']) for s in servicios_vendidos if s.get('es_hora_extra'))
                 
                 total_produccion_servicios = total_produccion_servicios_regular + total_produccion_servicios_extra
                 
@@ -8367,7 +8367,7 @@ def exportar_reporte_produccion():
 
             # Ejecutar las mismas consultas que en el reporte en pantalla
             # Consulta para SERVICIOS
-            sql_servicios = """SELECT v.fecha_venta, cl.nombres as cliente_nombres, cl.apellidos as cliente_apellidos, s.nombre as servicio_nombre, vi.precio_unitario_venta, ca.nombre as campana_nombre, vi.es_trabajo_extra FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id JOIN servicios s ON vi.servicio_id = s.id LEFT JOIN clientes cl ON v.cliente_id = cl.id LEFT JOIN campanas ca ON v.campana_id = ca.id WHERE v.empleado_id = %s AND v.sucursal_id = %s AND DATE(v.fecha_venta) BETWEEN %s AND %s ORDER BY v.fecha_venta DESC"""
+            sql_servicios = """SELECT v.fecha_venta, cl.nombres as cliente_nombres, cl.apellidos as cliente_apellidos, s.nombre as servicio_nombre, vi.precio_unitario_venta, ca.nombre as campana_nombre, vi.es_hora_extra FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id JOIN servicios s ON vi.servicio_id = s.id LEFT JOIN clientes cl ON v.cliente_id = cl.id LEFT JOIN campanas ca ON v.campana_id = ca.id WHERE v.empleado_id = %s AND v.sucursal_id = %s AND DATE(v.fecha_venta) BETWEEN %s AND %s ORDER BY v.fecha_venta DESC"""
             cursor.execute(sql_servicios, (colaborador_id, sucursal_id, fecha_inicio, fecha_fin))
             servicios_vendidos = cursor.fetchall()
 
@@ -8382,7 +8382,7 @@ def exportar_reporte_produccion():
 
         # Renombrar columnas para que se vean bien en Excel
         if not df_servicios.empty:
-            df_servicios.rename(columns={'fecha_venta': 'Fecha', 'cliente_nombres': 'Nombres Cliente', 'cliente_apellidos': 'Apellidos Cliente', 'servicio_nombre': 'Servicio', 'precio_unitario_venta': 'Precio', 'campana_nombre': 'Campaña', 'es_trabajo_extra': 'Es Extra'}, inplace=True)
+            df_servicios.rename(columns={'fecha_venta': 'Fecha', 'cliente_nombres': 'Nombres Cliente', 'cliente_apellidos': 'Apellidos Cliente', 'servicio_nombre': 'Servicio', 'precio_unitario_venta': 'Precio', 'campana_nombre': 'Campaña', 'es_hora_extra': 'Es Extra'}, inplace=True)
         if not df_productos.empty:
             df_productos.rename(columns={'fecha_venta': 'Fecha', 'cliente_nombres': 'Nombres Cliente', 'cliente_apellidos': 'Apellidos Cliente', 'producto_nombre': 'Producto', 'marca_nombre': 'Marca', 'cantidad': 'Cantidad', 'precio_unitario_venta': 'P. Venta Unit.', 'subtotal_item_neto': 'Subtotal', 'monto_comision': 'Comisión'}, inplace=True)
 
@@ -8678,7 +8678,7 @@ def nueva_comanda():
                     
                     sql_item = """
                         INSERT INTO venta_items (venta_id, servicio_id, producto_id, descripcion_item_venta, 
-                                                 cantidad, precio_unitario_venta, subtotal_item_bruto, subtotal_item_neto, es_trabajo_extra, notas_item)
+                                                 cantidad, precio_unitario_venta, subtotal_item_bruto, subtotal_item_neto, es_hora_extra, notas_item)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     val_item = (
@@ -8690,7 +8690,7 @@ def nueva_comanda():
                         float(item['precio_unitario_venta']),
                         subtotal_item,
                         subtotal_item,
-                        bool(item.get('es_trabajo_extra', False)),
+                        bool(item.get('es_hora_extra', False)),
                         item.get('notas_item') # Guardar la nota del estilo
                     )
                     cursor.execute(sql_item, val_item)
@@ -9321,7 +9321,7 @@ def pagar_liquidacion():
             cuota_obj = cursor.fetchone()
             monto_cuota = float(cuota_obj['monto_cuota']) if cuota_obj else 0.0
             
-            cursor.execute("SELECT SUM(vi.valor_produccion) as total FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id WHERE v.empleado_id = %s AND v.estado_pago != 'Anulado' AND DATE(v.fecha_venta) BETWEEN %s AND %s AND (vi.producto_id IS NOT NULL OR (vi.servicio_id IS NOT NULL AND vi.es_trabajo_extra = FALSE))", (colaborador_id, fecha_inicio_periodo, fecha_fin_periodo))
+            cursor.execute("SELECT SUM(vi.valor_produccion) as total FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id WHERE v.empleado_id = %s AND v.estado_pago != 'Anulado' AND DATE(v.fecha_venta) BETWEEN %s AND %s AND (vi.producto_id IS NOT NULL OR (vi.servicio_id IS NOT NULL AND vi.es_hora_extra = FALSE))", (colaborador_id, fecha_inicio_periodo, fecha_fin_periodo))
             produccion = cursor.fetchone()
             total_produccion = float(produccion['total'] or 0.0)
             bono_produccion = max(0, (total_produccion - monto_cuota) * 0.50)
