@@ -131,6 +131,8 @@ def check_schema_updates(app):
                     ("venta_items", "entregado_al_colaborador", "BOOLEAN DEFAULT FALSE"),
                     # PRODUCTOS
                     ("productos", "comision_vendedor_monto", "DECIMAL(10,2) DEFAULT 0.00"),
+                    # COMISIONES (Fix para tablas antiguas)
+                    ("comisiones", "porcentaje", "DECIMAL(5, 2) DEFAULT 0.00"),
                 ]
                 
                 print("--- Iniciando Verificación de Schema (Auto-Migration) ---")
