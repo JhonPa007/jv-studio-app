@@ -7198,10 +7198,11 @@ def nueva_compra():
                                      serie_numero_comprobante, monto_subtotal, monto_impuestos, monto_total,
                                      estado_pago, notas)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
             """
             val_compra = (int(proveedor_id_str), int(sucursal_id_str), fecha_compra_str, (tipo_comprobante or None), (serie_numero_comprobante or None), subtotal_compra, impuestos, total_compra, estado_pago, (notas or None))
             cursor_post.execute(sql_compra, val_compra)
-            compra_id = cursor_post.lastrowid
+            compra_id = cursor_post.fetchone()[0]
 
             for item in lista_items:
                 producto_id = int(item['producto_id'])
