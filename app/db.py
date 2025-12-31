@@ -81,6 +81,22 @@ def check_schema_updates(app):
                         subtotal DECIMAL(10, 2) NOT NULL
                     );
                 """)
+                
+                # Tabla Kardex (Movimientos de Inventario)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS kardex (
+                        id SERIAL PRIMARY KEY,
+                        producto_id INTEGER REFERENCES productos(id),
+                        tipo_movimiento VARCHAR(50), 
+                        cantidad INTEGER,
+                        stock_anterior INTEGER,
+                        stock_actual INTEGER,
+                        motivo TEXT,
+                        usuario_id INTEGER REFERENCES empleados(id),
+                        venta_id INTEGER REFERENCES ventas(id),
+                        fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
                 db.commit()
 
                 # Lista de Columnas Nuevas a Verificar/Agregar

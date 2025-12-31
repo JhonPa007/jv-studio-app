@@ -104,7 +104,7 @@ def ver_kardex_producto(producto_id):
         cursor.execute("""
             SELECT k.*, u.nombres as usuario
             FROM kardex k
-            LEFT JOIN usuarios u ON k.usuario_id = u.id
+            LEFT JOIN empleados u ON k.usuario_id = u.id
             WHERE k.producto_id = %s
             ORDER BY k.fecha DESC
         """, (producto_id,))
