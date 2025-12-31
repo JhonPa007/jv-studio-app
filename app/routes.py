@@ -8447,7 +8447,9 @@ def reporte_produccion_general():
                         SUM(CASE WHEN vi.servicio_id IS NOT NULL AND vi.es_hora_extra = FALSE THEN vi.subtotal_item_neto ELSE 0 END) as produccion_servicios_regular,
                         SUM(CASE WHEN vi.servicio_id IS NOT NULL AND vi.es_hora_extra = TRUE THEN vi.subtotal_item_neto ELSE 0 END) as produccion_servicios_extra,
                         SUM(CASE WHEN vi.producto_id IS NOT NULL THEN vi.subtotal_item_neto ELSE 0 END) as produccion_productos,
-                        (SELECT SUM(c.monto_comision) FROM comisiones c JOIN venta_items vi_c ON c.venta_item_id = vi_c.id JOIN ventas v_c ON vi_c.venta_id = v_c.id WHERE v_c.empleado_id = e.id AND DATE(v_c.fecha_venta) BETWEEN %s AND %s) as total_comisiones
+                        (SELECT SUM(c.monto_comision) FROM comisiones c JOIN venta_items vi_c ON c.venta_item_id = vi_c.id JOIN ventas v_c ON vi_c.venta_id = v_c.id WHERE v_c.empleado_id = e.id AND DATE(v_c.fecha_venta) BETWEEN %s AND %s) as total_comisiones,
+                        (SELECT COALESCE(SUM(p.monto), 0) FROM propinas p WHERE p.empleado_id = e.id AND DATE(p.fecha_registro) BETWEEN %s AND %s) as total_propinas,
+                        (SELECT COALESCE(ABS(SUM(a.monto)), 0) FROM ajustes_pago a WHERE a.colaborador_id = e.id AND a.tipo ILIKE '%%Fidelidad%%' AND DATE(a.fecha) BETWEEN %s AND %s) as total_fidelidad
                     FROM ventas v
                     JOIN empleados e ON v.empleado_id = e.id
                     JOIN venta_items vi ON v.id = vi.venta_id
@@ -8456,7 +8458,7 @@ def reporte_produccion_general():
                     GROUP BY e.id, e.nombre_display
                     ORDER BY colaborador_nombre;
                 """
-                cursor.execute(sql, (fecha_inicio, fecha_fin, sucursal_id, fecha_inicio, fecha_fin))
+                cursor.execute(sql, (fecha_inicio, fecha_fin, fecha_inicio, fecha_fin, fecha_inicio, fecha_fin, sucursal_id, fecha_inicio, fecha_fin))
                 resultados = cursor.fetchall()
                 
                 # Calcular los totales generales para el resumen
@@ -8465,7 +8467,9 @@ def reporte_produccion_general():
                         'total_servicios_regular': sum(float(r['produccion_servicios_regular']) for r in resultados),
                         'total_servicios_extra': sum(float(r['produccion_servicios_extra']) for r in resultados),
                         'total_productos': sum(float(r['produccion_productos']) for r in resultados),
-                        'total_comisiones': sum(float(r['total_comisiones'] or 0) for r in resultados)
+                        'total_comisiones': sum(float(r['total_comisiones'] or 0) for r in resultados),
+                        'total_propinas': sum(float(r['total_propinas'] or 0) for r in resultados),
+                        'total_fidelidad': sum(float(r['total_fidelidad'] or 0) for r in resultados)
                     }
                     # Total Meta = Solo Regular
                     totales_generales['total_meta'] = totales_generales['total_servicios_regular']

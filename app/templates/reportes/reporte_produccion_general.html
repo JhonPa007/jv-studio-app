@@ -68,7 +68,46 @@
                         required>
                 </div>
                 <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100">Generar Reporte</button>
+                    <button type="submit" class="btn btn-primary w-100 mb-2">Generar Reporte</button>
+                    <!-- Column Visibility Dropdown -->
+                    <div class="dropdown w-100">
+                        <button class="btn btn-secondary w-100 dropdown-toggle" type="button" id="dropdownMenuButton1"
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                            Ver Columnas
+                        </button>
+                        <ul class="dropdown-menu p-3" aria-labelledby="dropdownMenuButton1">
+                            <li>
+                                <div class="form-check"><input class="form-check-input toggle-col" type="checkbox"
+                                        value="col-serv-reg" checked id="chk1"><label class="form-check-label"
+                                        for="chk1">Serv. Regular</label></div>
+                            </li>
+                            <li>
+                                <div class="form-check"><input class="form-check-input toggle-col" type="checkbox"
+                                        value="col-serv-extra" checked id="chk2"><label class="form-check-label"
+                                        for="chk2">Serv. Extra</label></div>
+                            </li>
+                            <li>
+                                <div class="form-check"><input class="form-check-input toggle-col" type="checkbox"
+                                        value="col-prod" checked id="chk3"><label class="form-check-label"
+                                        for="chk3">Productos</label></div>
+                            </li>
+                            <li>
+                                <div class="form-check"><input class="form-check-input toggle-col" type="checkbox"
+                                        value="col-tips" checked id="chk4"><label class="form-check-label"
+                                        for="chk4">Propinas</label></div>
+                            </li>
+                            <li>
+                                <div class="form-check"><input class="form-check-input toggle-col" type="checkbox"
+                                        value="col-fid" checked id="chk5"><label class="form-check-label"
+                                        for="chk5">Fondo Fidelidad</label></div>
+                            </li>
+                            <li>
+                                <div class="form-check"><input class="form-check-input toggle-col" type="checkbox"
+                                        value="col-com" checked id="chk6"><label class="form-check-label"
+                                        for="chk6">Comisiones</label></div>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </form>
         </div>
@@ -84,34 +123,37 @@
                 <thead>
                     <tr>
                         <th>Colaborador</th>
-                        <th class="text-end">Prod. Serv. Regular</th>
-                        <th class="text-end">Prod. Serv. Extra</th>
-                        <th class="text-end">Venta Productos</th>
-                        <th class="text-end text-warning">PROD. META (Regular)</th>
-                        <th class="text-end">Comisiones Generadas</th>
+                        <th class="text-end col-serv-reg">Prod. Serv. Regular</th>
+                        <th class="text-end col-serv-extra">Prod. Serv. Extra</th>
+                        <th class="text-end col-prod">Venta Productos</th>
+                        <th class="text-end col-tips text-success">Propinas</th>
+                        <th class="text-end col-fid text-warning">Fondo Fidelidad</th>
+                        <th class="text-end col-com">Comisiones</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for r in resultados %}
                     <tr>
                         <td><strong>{{ r.colaborador_nombre }}</strong></td>
-                        <td class="text-end">{{ "%.2f"|format(r.produccion_servicios_regular) }}</td>
-                        <td class="text-end text-muted">{{ "%.2f"|format(r.produccion_servicios_extra) }}</td>
-                        <td class="text-end">{{ "%.2f"|format(r.produccion_productos) }}</td>
-                        <td class="text-end fw-bold text-warning">{{ "%.2f"|format(r.produccion_servicios_regular) }}
+                        <td class="text-end col-serv-reg">{{ "%.2f"|format(r.produccion_servicios_regular) }}</td>
+                        <td class="text-end col-serv-extra text-muted">{{ "%.2f"|format(r.produccion_servicios_extra) }}
                         </td>
-                        <td class="text-end text-info">{{ "%.2f"|format(r.total_comisiones or 0) }}</td>
+                        <td class="text-end col-prod">{{ "%.2f"|format(r.produccion_productos) }}</td>
+                        <td class="text-end col-tips text-success">{{ "%.2f"|format(r.total_propinas) }}</td>
+                        <td class="text-end col-fid text-warning">{{ "%.2f"|format(r.total_fidelidad) }}</td>
+                        <td class="text-end col-com text-info">{{ "%.2f"|format(r.total_comisiones or 0) }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot style="border-top: 2px solid var(--color-acento-dorado);">
                     <tr class="fw-bold">
                         <td>TOTALES GENERALES</td>
-                        <td class="text-end">S/ {{ "%.2f"|format(totales.total_servicios_regular) }}</td>
-                        <td class="text-end">S/ {{ "%.2f"|format(totales.total_servicios_extra) }}</td>
-                        <td class="text-end">S/ {{ "%.2f"|format(totales.total_productos) }}</td>
-                        <td class="text-end text-warning">S/ {{ "%.2f"|format(totales.total_meta) }}</td>
-                        <td class="text-end">S/ {{ "%.2f"|format(totales.total_comisiones) }}</td>
+                        <td class="text-end col-serv-reg">S/ {{ "%.2f"|format(totales.total_servicios_regular) }}</td>
+                        <td class="text-end col-serv-extra">S/ {{ "%.2f"|format(totales.total_servicios_extra) }}</td>
+                        <td class="text-end col-prod">S/ {{ "%.2f"|format(totales.total_productos) }}</td>
+                        <td class="text-end col-tips text-success">S/ {{ "%.2f"|format(totales.total_propinas) }}</td>
+                        <td class="text-end col-fid text-warning">S/ {{ "%.2f"|format(totales.total_fidelidad) }}</td>
+                        <td class="text-end col-com">S/ {{ "%.2f"|format(totales.total_comisiones) }}</td>
                     </tr>
                 </tfoot>
             </table>
@@ -121,4 +163,31 @@
     <div class="alert alert-info-custom">No se encontraron datos de producción para los filtros seleccionados.</div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Manejo de visibilidad de columnas
+        const checkboxes = document.querySelectorAll('.toggle-col');
+
+        function updateVisibility() {
+            checkboxes.forEach(chk => {
+                const colClass = chk.value;
+                const elements = document.querySelectorAll('.' + colClass);
+                elements.forEach(el => {
+                    el.style.display = chk.checked ? '' : 'none';
+                });
+            });
+        }
+
+        checkboxes.forEach(chk => {
+            chk.addEventListener('change', updateVisibility);
+        });
+
+        // Inicializar estado
+        updateVisibility();
+    });
+</script>
 {% endblock %}
