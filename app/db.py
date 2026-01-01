@@ -112,6 +112,31 @@ def check_schema_updates(app):
                         fecha_pago TIMESTAMP
                     );
                 """)
+
+                # Tabla Loyalty Rules
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS loyalty_rules (
+                        id SERIAL PRIMARY KEY,
+                        nombre VARCHAR(100) NOT NULL,
+                        servicio_id INTEGER REFERENCES servicios(id),
+                        cantidad_requerida INTEGER NOT NULL,
+                        periodo_meses INTEGER NOT NULL,
+                        descuento_porcentaje NUMERIC(5, 2) NOT NULL,
+                        activo BOOLEAN DEFAULT TRUE
+                    );
+                """)
+                
+                # Tabla CRM Config
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS crm_config (
+                        id SERIAL PRIMARY KEY,
+                        tipo_evento VARCHAR(50) NOT NULL,
+                        mensaje_plantilla TEXT,
+                        dias_anticipacion INTEGER DEFAULT 0,
+                        activo BOOLEAN DEFAULT TRUE
+                    );
+                """)
+
                 db.commit()
 
                 # Lista de Columnas Nuevas a Verificar/Agregar
