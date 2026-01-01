@@ -214,9 +214,18 @@
 
             {% if current_user.can('ver_campanas') %}
             <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('main.listar_campanas') }}" title="Campañas">
-                    <i class="fas fa-bullhorn fa-fw me-2"></i> <span class="link-text">Campañas</span>
+                <a class="nav-link dropdown-toggle" href="#marketingSubmenu" data-bs-toggle="collapse" role="button"
+                    title="Marketing">
+                    <i class="fas fa-bullhorn fa-fw me-2"></i> <span class="link-text">Marketing</span>
                 </a>
+                <div class="collapse" id="marketingSubmenu">
+                    <ul class="nav flex-column ms-3">
+                        <li><a class="nav-link small" href="{{ url_for('main.listar_campanas') }}">Promociones</a></li>
+                        <li><a class="nav-link small"
+                                href="{{ url_for('marketing.listar_reglas_fidelidad') }}">Fidelización</a></li>
+                        <li><a class="nav-link small" href="{{ url_for('marketing.listar_crm_config') }}">CRM</a></li>
+                    </ul>
+                </div>
             </li>
             {% endif %}
 

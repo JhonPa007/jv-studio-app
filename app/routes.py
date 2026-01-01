@@ -5325,8 +5325,18 @@ def nueva_venta():
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
                 RETURNING id
             """
+            
+            total_fidelidad = 0.0 # Acumulador para cubrir con Gasto
+            
             for item in items:
                 total_item = float(item['precio']) * float(item['cantidad'])
+                
+                # Detectar Fidelidad
+                desc_fid = 0.0
+                if item.get('loyalty_applied') and item.get('loyalty_pct'):
+                    pct_fid = float(item['loyalty_pct'])
+                    desc_fid = total_item * (pct_fid / 100.0)
+                    total_fidelidad += desc_fid
                 
                 # Cálculo de Comisión Extra (Solo Servicios)
                 es_extra = item.get('es_hora_extra', False)
@@ -5402,6 +5412,22 @@ def nueva_venta():
                             VALUES ('INGRESO', %s, %s, %s, %s)
                         """, (monto_p_float, f"Propina Venta #{serie_comprobante}-{numero_comprobante_str}", metodo_propina, current_user.id))
                 except ValueError: pass
+
+            # 9. (NUEVO) REGISTRAR GASTO POR FIDELIDAD
+            if total_fidelidad > 0:
+                # Buscar/Crear Categoría
+                cursor.execute("SELECT id FROM categorias_gastos WHERE nombre = 'Descuento Fidelidad'")
+                cat = cursor.fetchone()
+                if not cat:
+                    cursor.execute("INSERT INTO categorias_gastos (nombre) VALUES ('Descuento Fidelidad') RETURNING id")
+                    cat_id = cursor.fetchone()['id']
+                else:
+                    cat_id = cat['id']
+                
+                cursor.execute("""
+                    INSERT INTO gastos (sucursal_id, categoria_gasto_id, caja_sesion_id, fecha, descripcion, monto, metodo_pago, registrado_por_colaborador_id)
+                    VALUES (%s, %s, %s, CURRENT_DATE, %s, %s, 'Interno', %s)
+                """, (sucursal_id, cat_id, caja_id, f"Cobertura Fidelidad Venta {serie_comprobante}-{numero_comprobante_str}", total_fidelidad, current_user.id))
 
             db_conn.commit()
             flash(f'Venta registrada: {serie_comprobante}-{numero_comprobante_str}', 'success')

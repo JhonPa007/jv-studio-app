@@ -454,6 +454,11 @@
 
             const modal = new bootstrap.Modal(document.getElementById('modalCampanaDatos'));
             modal.show();
+
+            // 🟢 Al seleccionar cliente, re-verificar fidelidad de todos los servicios en lista
+            listaItems.forEach((it, idx) => {
+                if (it.tipo === 'servicio') verificarFidelidadItem(idx);
+            });
         });
 
         // VERIFICAR SI VENIMOS DE UNA VENTA EXITOSA
@@ -514,7 +519,41 @@
         } catch (e) { console.error(e); alert('Error de conexión'); }
     }
 
-    // --- LOGICA VENTA ---
+
+
+    // --- NUEVO: FUNCIONES FIDELIDAD (LOYALTY) ---
+    async function verificarFidelidadItem(idx) {
+        // Necesitamos cliente Y servicio
+        const clienteId = $('#cliente_id').val();
+        if (!clienteId || !listaItems[idx] || listaItems[idx].tipo !== 'servicio') return;
+
+        const servicioId = listaItems[idx].id;
+
+        try {
+            const res = await fetch(`/marketing/api/check-loyalty/${clienteId}/${servicioId}`);
+            const data = await res.json();
+
+            if (data.eligible) {
+                listaItems[idx].loyalty_eligible = true;
+                listaItems[idx].loyalty_pct = data.discount_pct;
+                listaItems[idx].loyalty_rule_id = data.rule_id;
+                listaItems[idx].loyalty_msg = data.message;
+
+                // Notificar visualmente (opcional: Toast)
+                // console.log("Fidelidad disponible:", data.message);
+            } else {
+                listaItems[idx].loyalty_eligible = false;
+                listaItems[idx].loyalty_applied = false; // Reset si cambia cliente y ya no cumple
+            }
+            renderTabla();
+        } catch (e) { console.error("Error check loyalty", e); }
+    }
+
+    function aplicarFidelidad(idx) {
+        listaItems[idx].loyalty_applied = true;
+        alert("✅ " + listaItems[idx].loyalty_msg);
+        renderTabla();
+    }
     function togglePorcentajeExtra() {
         const chk = document.getElementById('chk_es_extra');
         const txt = document.getElementById('txt_porcentaje_extra');
@@ -575,10 +614,11 @@
         sel.value = '';
 
         // Reset checkbox
-        if (tipo === 'servicio') {
-            document.getElementById('chk_es_extra').checked = false;
-            togglePorcentajeExtra(); // Ocultar input
-        }
+        document.getElementById('chk_es_extra').checked = false;
+        togglePorcentajeExtra(); // Ocultar input
+
+        // 🟢 Verificar Fidelidad del nuevo ítem
+        verificarFidelidadItem(listaItems.length - 1);
     }
 
     function renderTabla() {
@@ -591,9 +631,28 @@
                 badgeExtra = `<span class="badge bg-warning text-dark ms-1" style="font-size:0.7em;">EXTRA ${it.porcentaje_servicio_extra}%</span>`;
             }
 
+            let btnLoyalty = '';
+            if (it.tipo === 'servicio') {
+                // Lógica visual Fidelidad
+                if (it.loyalty_applied) {
+                    const pct = it.loyalty_pct || 0;
+                    badgeExtra += ` <span class="badge bg-info text-dark ms-1">FIDELIDAD -${pct}%</span>`;
+                } else if (it.loyalty_eligible) {
+                    const pct = it.loyalty_pct || 0;
+                    btnLoyalty = `<button class="btn btn-sm btn-outline-info ms-2" onclick="aplicarFidelidad(${i})"><i class="fas fa-gift me-1"></i>Aplicar -${pct}%</button>`;
+                }
+            }
+
+            // Calcular Total Visual (Con Descuento Fidelidad)
+            let rowTotal = total;
+            if (it.loyalty_applied) {
+                const desc = total * (it.loyalty_pct / 100);
+                rowTotal = total - desc;
+            }
+
             tbody.innerHTML += `
                 <tr>
-                    <td>${it.descripcion} ${badgeExtra} <small class='text-muted'>${it.tipo}</small></td>
+                    <td>${it.descripcion} ${badgeExtra} <small class='text-muted'>${it.tipo}</small> ${btnLoyalty}</td>
                 <td><input type="number" class="form-control form-control-sm text-center" value="${it.cantidad}" min="1" onchange="updateCant(${i}, this.value)"></td>
                 <td>
                     <div class="input-group input-group-sm">
@@ -601,13 +660,17 @@
                         <input type="number" class="form-control text-end" value="${it.precio.toFixed(2)}" step="0.50" min="0" onchange="updatePre(${i}, this.value)">
                     </div>
                 </td>
-                <td class="text-end">S/ ${total.toFixed(2)}</td>
+                <td class="text-end">
+                    ${it.loyalty_applied ? '<small class="text-decoration-line-through text-muted">S/ ' + total.toFixed(2) + '</small><br>' : ''}
+                    <span class="${it.loyalty_applied ? 'text-info fw-bold' : ''}">S/ ${rowTotal.toFixed(2)}</span>
+                </td>
                 <td><button class="btn btn-sm btn-danger" onclick="delItem(${i})">X</button></td>
             </tr>
         `;
         });
         calcularTotales();
     }
+
 
     function updatePre(i, val) {
         let p = parseFloat(val);
@@ -637,7 +700,14 @@
     function eliminarPago(btn) { btn.closest('.pago-row').remove(); calcularTotales(); }
 
     function calcularTotales() {
-        const sub = listaItems.reduce((acc, it) => acc + (it.cantidad * it.precio), 0);
+        const sub = listaItems.reduce((acc, it) => {
+            let rowT = it.cantidad * it.precio;
+            // Restar si tiene fidelidad aplicada
+            if (it.loyalty_applied) {
+                rowT = rowT * (1 - (it.loyalty_pct / 100));
+            }
+            return acc + rowT;
+        }, 0);
         const desc = parseFloat(document.getElementById('descuento_global').value) || 0;
         const total = Math.max(0, sub - desc);
 

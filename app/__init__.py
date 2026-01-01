@@ -129,6 +129,9 @@ def create_app():
     from .routes_inventario import inventario_bp
     app.register_blueprint(inventario_bp)
 
+    from .routes_marketing import marketing_bp
+    app.register_blueprint(marketing_bp)
+
     # 4. AUTO-MIGRACIÓN DE BASE DE DATOS (Producción Friendly)
     from .db import check_schema_updates
     check_schema_updates(app)

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}CRM & Recordatorios - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-bullhorn me-2"></i>Configuración CRM</h2>
+        <button class="btn btn-info fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#modalNuevoMensaje">
+            <i class="fas fa-plus me-1"></i> Nuevo Mensaje Automático
+        </button>
+    </div>
+
+    <div class="row">
+        {% for c in configs %}
+        <div class="col-md-4 mb-4">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 text-light">{{ c.tipo_evento }}</h5>
+                    {% if c.activo %}
+                    <span class="badge bg-success">Activo</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Inactivo</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-2">Se envía {{ c.dias_anticipacion }} días antes.</p>
+                    <div class="p-3 bg-secondary bg-opacity-10 rounded border border-secondary mb-3">
+                        <small class="text-light fst-italic">"{{ c.mensaje_plantilla }}"</small>
+                    </div>
+                    <button class="btn btn-sm btn-outline-warning w-100" disabled>Editar (Pronto)</button>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12 text-center text-muted">
+            <p>No hay mensajes automáticos configurados.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+
+<!-- Modal Nueva Config CRM -->
+<div class="modal fade" id="modalNuevoMensaje" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <form action="{{ url_for('marketing.guardar_crm_config') }}" method="POST">
+                <div class="modal-header bg-info">
+                    <h5 class="modal-title fw-bold text-dark"><i class="fas fa-robot me-2"></i>Automartización CRM</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="fw-bold">Tipo de Evento</label>
+                        <select name="tipo_evento" class="form-select" required>
+                            <option value="Cumpleaños">Cumpleaños 🎂</option>
+                            <option value="ProximaCita">Recordatorio de Cita 📅</option>
+                            <option value="Reacticacion">Reactivación (30 días sin venir) 🔄</option>
+                            <option value="DiaPadre">Día del Padre 👨</option>
+                            <option value="Navidad">Navidad 🎄</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="fw-bold">Plantilla de Mensaje</label>
+                        <textarea name="mensaje_plantilla" class="form-control" rows="4" required
+                            placeholder="Hola {nombre}! 🎉 Feliz cumpleaños te desea JV Studio..."></textarea>
+                        <small class="text-muted">Usa {nombre} para insertar el nombre del cliente.</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="fw-bold">Días de Anticipación</label>
+                        <input type="number" name="dias_anticipacion" class="form-control" value="0" min="0" required>
+                        <small class="text-muted">0 = El mismo día, 1 = Un día antes.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-dark w-100">Guardar Configuración</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
