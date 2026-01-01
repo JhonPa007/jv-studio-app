@@ -2192,55 +2192,19 @@ def render_agenda_diaria():
             res_suc = cursor.fetchone()
             session['sucursal_nombre'] = res_suc['nombre'] if res_suc else 'Desconocida'
 
-        # 3. Cargar Clientes (Mejorado para Búsqueda Avanzada)
-        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # Traemos TODOS (sin filtro de RUC) para que coincida con ventas y agenda
-            cursor.execute("""
-                SELECT id, razon_social_nombres, apellidos, telefono, numero_documento 
-                FROM clientes 
-                ORDER BY razon_social_nombres, apellidos
-            """)
-            clientes_todos = cursor.fetchall()
+        # 3. Datos Maestros Ligeros (Servicios)
+        # Clientes YA NO se cargan aquí para mejorar velocidad (se usa API Búsqueda)
+        clientes_todos = [] 
 
-            # Formatear Texto de Búsqueda (Igual que en Nueva Venta)
-            for c in clientes_todos:
-                nombre_full = f"{c['razon_social_nombres']} {c['apellidos'] or ''}".strip()
-                doc = c['numero_documento'] or 'S/D'
-                tel = c['telefono'] or ''
-                c['texto_busqueda'] = f"{nombre_full} | Doc: {doc} | Tel: {tel}"
-
-        # 4. Cargar Servicios (Igual que antes)
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre, precio, duracion_minutos FROM servicios WHERE activo = TRUE ORDER BY nombre")
             servicios_todos_activos = cursor.fetchall()
 
-        # 5. Cargar Colaboradores (FILTRADO POR SUCURSAL)
-        # Solo traemos empleados activos que pertenezcan a ESTA sucursal
+        # 4. Cargar Colaboradores (OPTIMIZADO - Solo datos base)
+        # Quitamos los counts y subqueries pesadas. El frontend las pedirá vía API si necesita.
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("""
-                SELECT e.id, e.nombres, e.apellidos, e.nombre_display,
-                       (SELECT COUNT(*) FROM reservas r 
-                        WHERE r.empleado_id = e.id 
-                          AND r.fecha_hora_inicio >= CURRENT_DATE 
-                          AND r.fecha_hora_inicio < CURRENT_DATE + INTERVAL '1 day'
-                          AND r.estado NOT IN ('Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio')
-                       ) as citas_hoy,
-                       
-                       -- SUBQUERY PARA SABER SI TIENE TURNO HOY (Día de la semana) O EXTRA
-                       (
-                            EXISTS (
-                                SELECT 1 FROM horarios_empleado he 
-                                WHERE he.empleado_id = e.id 
-                                AND he.dia_semana = EXTRACT(ISODOW FROM CURRENT_DATE)
-                            )
-                            OR
-                            EXISTS (
-                                SELECT 1 FROM horarios_extra hx 
-                                WHERE hx.empleado_id = e.id 
-                                AND hx.fecha = CURRENT_DATE
-                            )
-                       ) as tiene_turno
-                       
+                SELECT e.id, e.nombres, e.apellidos, e.nombre_display, NULL as foto
                 FROM empleados e
                 WHERE e.activo = TRUE 
                   AND e.realiza_servicios = TRUE  
@@ -2255,9 +2219,54 @@ def render_agenda_diaria():
         flash(f"Error fatal al cargar datos maestros para la agenda: {err_load}", "danger")
     
     return render_template('reservas/agenda_diaria.html', 
-                           clientes_todos=clientes_todos,
+                           clientes_todos=clientes_todos, # Enviamos lista vacía
                            servicios_todos_activos=servicios_todos_activos,
-                           empleados_para_selector=empleados_para_selector)   
+                           empleados_para_selector=empleados_para_selector)
+
+@main_bp.route('/api/clientes/buscar', methods=['GET'])
+@login_required
+def api_buscar_clientes():
+    """
+    API para búsqueda de clientes via AJAX (Select2).
+    Optimizado para devolver resultados rápidos.
+    """
+    search_term = request.args.get('q', '').strip()
+    if not search_term or len(search_term) < 2:
+        return jsonify({"results": []})
+        
+    try:
+        db = get_db()
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Búsqueda por Nombre o Documento o Teléfono
+            query = """
+                SELECT id, razon_social_nombres, apellidos, numero_documento, telefono
+                FROM clientes
+                WHERE 
+                    razon_social_nombres ILIKE %s OR
+                    apellidos ILIKE %s OR
+                    numero_documento ILIKE %s OR
+                    telefono ILIKE %s
+                ORDER BY razon_social_nombres
+                LIMIT 20
+            """
+            term = f"%{search_term}%"
+            cursor.execute(query, (term, term, term, term))
+            clientes = cursor.fetchall()
+            
+            results = []
+            for c in clientes:
+                nombre = f"{c['razon_social_nombres']} {c.get('apellidos') or ''}".strip()
+                doc = c.get('numero_documento') or 'S/D'
+                results.append({
+                    "id": c['id'],
+                    "text": f"{nombre} (Doc: {doc})"
+                })
+                
+            return jsonify({"results": results})
+            
+    except Exception as e:
+        current_app.logger.error(f"Error buscando clientes: {e}")
+        return jsonify({"results": []})   
     
 @main_bp.route('/api/reservas/<int:reserva_id>')
 @login_required

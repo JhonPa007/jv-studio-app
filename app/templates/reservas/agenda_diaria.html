@@ -468,16 +468,39 @@
 {{ super() }}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        // 🟢 INICIALIZAR SELECT2 PARA CLIENTES (Búsqueda Avanzada)
+        // 🟢 INICIALIZAR SELECT2 PARA CLIENTES (Búsqueda Avanzada AJAX)
         $('#modalClienteId').select2({
             theme: 'bootstrap-5',
             dropdownParent: $('#modalNuevaReserva'),
             placeholder: 'Buscar Cliente (Nombre, DNI, Tel)...',
             width: '100%',
             allowClear: true,
+            ajax: {
+                url: '/api/clientes/buscar', // 🟢 NUEVO ENDPOINT
+                dataType: 'json',
+                delay: 250, // Esperar a que deje de escribir
+                data: function (params) {
+                    return {
+                        q: params.term // search term
+                    };
+                },
+                processResults: function (data) {
+                    return {
+                        results: data.results
+                    };
+                },
+                cache: true
+            },
+            minimumInputLength: 2, // 🟢 Requiere 3 caracteres
             language: {
+                inputTooShort: function () {
+                    return "Por favor escriba 2 o más caracteres para buscar";
+                },
                 noResults: function () {
                     return "No encontrado. <a href='/clientes/nuevo' target='_blank'>Crear Nuevo</a>";
+                },
+                searching: function () {
+                    return "Buscando...";
                 }
             },
             escapeMarkup: function (markup) { return markup; }
@@ -505,7 +528,8 @@
         const formHabilitar = document.getElementById('formHabilitarExtra');
 
         // Datos Globales
-        const todosLosClientes = JSON.parse('{{ clientes_todos | tojson | safe }}');
+        // 🟢 OPTIMIZACIÓN: Ya no cargamos todosLosClientes
+        const todosLosClientes = []; // Vacío intencionalmente
         const todosLosServiciosActivos = JSON.parse('{{ servicios_todos_activos | tojson | safe }}');
         const todosLosEmpleadosParaSelector = JSON.parse('{{ empleados_para_selector | tojson | safe }}');
 
@@ -536,7 +560,7 @@
         if (!selectorFecha.value) setFechaLocal();
 
         // 3. Inicializar FullCalendar
-        let resetFilterOnNextLoad = false; // Bandera para saber si debemos resetear los checks al cambiar de fecha
+        let resetFilterOnNextLoad = true; // 🟢 FORCE TRUE: Para que la primera carga actualice los checks
         let calendar = null; // Variable global para instancia
 
         // 🟢 CONFIGURACIÓN & STORAGE (DB)
@@ -1281,7 +1305,42 @@
 
                     // 🟢 INIT SELECT2 EDITAR
                     if ($('#editClienteId').data('select2')) $('#editClienteId').select2('destroy');
-                    $('#editClienteId').select2({ theme: 'bootstrap-5', dropdownParent: $('#modalGestionarReserva'), width: '100%', placeholder: 'Buscar Cliente...' });
+
+                    // PRE-CARGA del Cliente Actual (AJAX Select2 lo requiere así)
+                    if (data.cliente_id && data.cliente_nombre_completo) {
+                        const option = new Option(data.cliente_nombre_completo, data.cliente_id, true, true);
+                        $('#editClienteId').append(option).trigger('change');
+                    }
+
+                    $('#editClienteId').select2({
+                        theme: 'bootstrap-5',
+                        dropdownParent: $('#modalGestionarReserva'),
+                        placeholder: 'Buscar Cliente...',
+                        width: '100%',
+                        allowClear: true,
+                        ajax: {
+                            url: '/api/clientes/buscar',
+                            dataType: 'json',
+                            delay: 250,
+                            data: function (params) {
+                                return {
+                                    q: params.term // search term
+                                };
+                            },
+                            processResults: function (data) {
+                                return {
+                                    results: data.results // {id: 1, text: 'Juan'}
+                                };
+                            },
+                            cache: true
+                        },
+                        minimumInputLength: 2,
+                        language: {
+                            inputTooShort: function () { return 'Escriba al menos 2 caracteres para buscar'; },
+                            noResults: function () { return 'No encontrado. <a href="/clientes/nuevo" target="_blank">Crear Nuevo</a>'; }
+                        },
+                        escapeMarkup: function (markup) { return markup; }
+                    });
 
                     poblar('editEmpleadoId', todosLosEmpleadosParaSelector, data.empleado_id);
                     poblar('editServicioId', todosLosServiciosActivos, data.servicio_id);
@@ -1297,14 +1356,12 @@
             fetch(`/api/reservas/${reservaId}`)
                 .then(r => r.json())
                 .then(data => {
-                    console.log("Datos Reserva:", data); // 🔍 DEBUG: Mira la consola del navegador
+                    console.log("Datos Reserva:", data); // 🔍 DEBUG
                     datosReservaActualParaModal = data;
 
                     if (modalTitle) modalTitle.innerHTML = `<i class="fas fa-calendar-check me-2"></i>Reserva #${data.id}`;
 
                     if (vistaDiv) {
-                        // 🟢 CORRECCIÓN DEL NOMBRE DEL STAFF
-                        // Intentamos leer 'staff', 'empleado_nombre' o 'empleado_nombre_completo' (para compatibilidad)
                         const staffName = data.staff || data.empleado_nombre || data.empleado_nombre_completo || '<span class="text-danger fw-bold">Sin asignar</span>';
 
                         vistaDiv.innerHTML = `
@@ -1320,7 +1377,6 @@
                     if (btnVenta) btnVenta.href = `{{ url_for('main.nueva_venta') }}?reserva_id=${reservaId}`;
 
                     // --- EVENTOS DE BOTONES ---
-
                     btnRecordarWs.onclick = () => {
                         const orig = btnRecordarWs.innerHTML;
                         btnRecordarWs.disabled = true; btnRecordarWs.innerHTML = '...';
@@ -1340,9 +1396,7 @@
                     }
 
                     btnAvisarStaff.onclick = () => {
-                        // 🟢 Validación Visual: Compatibilidad con versiones anteriores del backend
                         const staffCheck = data.staff || data.empleado_nombre || data.empleado_nombre_completo;
-
                         if (!staffCheck || staffCheck === 'Sin asignar') {
                             alert("⚠️ No puedes avisar porque esta reserva NO TIENE STAFF asignado.\n\n👉 Asigna un colaborador en 'Editar' primero.");
                             return;
