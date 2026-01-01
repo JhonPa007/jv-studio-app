@@ -7789,11 +7789,16 @@ def listar_historial_caja():
 
 @main_bp.route('/finanzas/caja/pagar-comision/<int:comision_id>', methods=['POST'])
 @login_required
-@admin_required
 def pagar_comision_caja(comision_id):
     """
     Registra el pago de una comisión específica usando dinero de la caja abierta.
     """
+    # VERIFICACIÓN DE PERMISOS: Admin, Cajera o Cajero
+    rol = getattr(current_user, 'rol_nombre', '')
+    if rol != 'Administrador' and rol not in ['Cajera', 'Cajero']:
+        flash("No tienes permiso para realizar esta acción.", "danger")
+        return redirect(url_for('main.gestionar_caja'))
+
     db_conn = get_db()
     try:
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
@@ -7844,6 +7849,12 @@ def pagar_comision_caja(comision_id):
 @main_bp.route('/finanzas/caja/pagar-extra/<int:item_id>', methods=['POST'])
 @login_required
 def pagar_extra_caja(item_id):
+    # VERIFICACIÓN DE PERMISOS: Admin, Cajera o Cajero
+    rol = getattr(current_user, 'rol_nombre', '')
+    if rol != 'Administrador' and rol not in ['Cajera', 'Cajero']:
+        flash("No tienes permiso para realizar esta acción.", "danger")
+        return redirect(url_for('main.gestionar_caja'))
+
     db_conn = get_db()
     try:
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
