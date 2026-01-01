@@ -412,11 +412,10 @@
                         {% else %}
                         {% for emp in empleados_para_selector %}
                         <div class="form-check p-1 ms-1">
-                            <!-- data-citas-hoy será 1 o 0 (true/false) desde backend -->
+                            <!-- data-citas-hoy se actualizará vía JS -->
                             <input class="form-check-input chk-colaborador" type="checkbox" value="{{ emp.id }}"
-                                id="chk_colab_{{ emp.id }}" data-citas-hoy="{{ emp.citas_hoy }}" {% if emp.tiene_turno
-                                %}checked{% endif %}>
-                            <!-- Por defecto checkeamos si tiene turno -->
+                                id="chk_colab_{{ emp.id }}" data-citas-hoy="0" checked>
+                            <!-- Por defecto mostramos checkeados temporalmente hasta que cargue la API -->
                             <label class="form-check-label d-flex align-items-center w-100"
                                 for="chk_colab_{{ emp.id }}">
                                 {% if emp.foto %}
@@ -428,10 +427,8 @@
                                 </div>
                                 {% endif %}
                                 <span>{{ emp.nombre_display }}</span>
-                                {% if emp.citas_hoy > 0 %}
-                                <span class="badge bg-success ms-auto rounded-pill" style="font-size: 0.7em;">With
-                                    Appts</span>
-                                {% endif %}
+                                <!-- Badge de citas se agregará vía JS -->
+                                <span class="badge bg-success ms-auto rounded-pill d-none badge-citas">With Appts</span>
                             </label>
                         </div>
                         {% endfor %}
@@ -807,6 +804,18 @@
                                         chk.checked = rec.tiene_turno;
                                         // Actualizamos el dato de citas para el filtro "Con Citas"
                                         chk.dataset.citasHoy = rec.citas_hoy;
+
+                                        // Actualizar Badge Visual
+                                        const label = chk.nextElementSibling;
+                                        const badge = label.querySelector('.badge-citas');
+                                        if (badge) {
+                                            if (rec.citas_hoy > 0) {
+                                                badge.classList.remove('d-none');
+                                                badge.innerText = rec.citas_hoy;
+                                            } else {
+                                                badge.classList.add('d-none');
+                                            }
+                                        }
                                     }
                                 });
                                 // Limpiamos la bandera
