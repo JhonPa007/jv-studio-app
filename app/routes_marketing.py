@@ -7,8 +7,42 @@ from .db import get_db
 marketing_bp = Blueprint('marketing', __name__, url_prefix='/marketing')
 
 # ==============================================================================
+# ==============================================================================
 # 1. FIDELIZACIÓN (LOYALTY) - CONFIGURACIÓN
 # ==============================================================================
+
+@marketing_bp.route('/setup-db')
+def setup_db():
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            # Table Loyalty
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS loyalty_rules (
+                    id SERIAL PRIMARY KEY,
+                    nombre VARCHAR(100) NOT NULL,
+                    servicio_id INTEGER REFERENCES servicios(id),
+                    cantidad_requerida INTEGER NOT NULL,
+                    periodo_meses INTEGER NOT NULL,
+                    descuento_porcentaje NUMERIC(5, 2) NOT NULL,
+                    activo BOOLEAN DEFAULT TRUE
+                );
+            """)
+            # Table CRM
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS crm_config (
+                    id SERIAL PRIMARY KEY,
+                    tipo_evento VARCHAR(50) NOT NULL,
+                    mensaje_plantilla TEXT,
+                    dias_anticipacion INTEGER DEFAULT 0,
+                    activo BOOLEAN DEFAULT TRUE
+                );
+            """)
+            db.commit()
+            return "✅ Tablas 'loyalty_rules' y 'crm_config' creadas/verificadas correctamente. <a href='/marketing/fidelidad'>Ir a Fidelidad</a>"
+    except Exception as e:
+        db.rollback()
+        return f"❌ Error creando tablas: {e}"
 
 @marketing_bp.route('/fidelidad', methods=['GET'])
 @login_required
