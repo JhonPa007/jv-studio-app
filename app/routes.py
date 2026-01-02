@@ -5244,6 +5244,8 @@ def nueva_venta():
             tipo_comprobante = request.form.get('tipo_comprobante')
 
             cliente_receptor_id = int(cliente_id_str) if cliente_id_str and cliente_id_str.strip() else None
+            empleado_id = int(empleado_id) if empleado_id and empleado_id.strip() else None
+
             
             items_json = request.form.get('items_lista')
             pagos_json = request.form.get('pagos_lista')
