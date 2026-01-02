@@ -356,14 +356,15 @@ def check_loyalty_status(cliente_id, servicio_id):
         cantidad_req = regla['cantidad_requerida']
         periodo_meses = regla['periodo_meses'] 
         
-        cursor.execute("SELECT CURRENT_DATE - INTERVAL '%s months'", (periodo_meses,))
-        fecha_limite = cursor.fetchone()[0]
+        cursor.execute("SELECT CURRENT_DATE - INTERVAL '%s months' AS fecha", (periodo_meses,))
+        row_fecha = cursor.fetchone()
+        fecha_limite = row_fecha['fecha']
         
         # Obtenemos TODOS los servicios que cuentan para esta regla
         cursor.execute("SELECT servicio_id FROM loyalty_rule_services WHERE loyalty_rule_id = %s", (rule_id,))
         rows = cursor.fetchall()
         
-        target_service_ids = [r[0] for r in rows] # Lista de IDs
+        target_service_ids = [r['servicio_id'] for r in rows] # Lista de IDs
         # Si esta vacio (legacy), usamos el propio del parametro
         if not target_service_ids and regla.get('servicio_id'):
             target_service_ids = [regla['servicio_id']]
@@ -442,3 +443,29 @@ def guardar_crm_config():
         flash(f"Error: {e}", "danger")
         
     return redirect(url_for('marketing.listar_crm_config'))
+
+@marketing_bp.route('/fix-db-schema')
+def fix_db_schema():
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            # 1. Add puntos_acumulados column
+            cursor.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS puntos_acumulados INTEGER DEFAULT 0")
+            
+            # 2. Create puntos_historial table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS puntos_historial (
+                    id SERIAL PRIMARY KEY,
+                    cliente_id INTEGER REFERENCES clientes(id) ON DELETE CASCADE,
+                    venta_id INTEGER REFERENCES ventas(id) ON DELETE SET NULL,
+                    monto_puntos INTEGER NOT NULL,
+                    tipo_transaccion VARCHAR(20) NOT NULL,
+                    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    descripcion TEXT
+                );
+            """)
+            db.commit()
+            return "Schema fixed successfully: puntos_acumulados added and puntos_historial created.", 200
+    except Exception as e:
+        db.rollback()
+        return f"Error: {e}", 500
