@@ -126,6 +126,15 @@ def check_schema_updates(app):
                     );
                 """)
                 
+                # Tabla Junction Loyalty Services (M:N)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS loyalty_rule_services (
+                        loyalty_rule_id INTEGER REFERENCES loyalty_rules(id) ON DELETE CASCADE,
+                        servicio_id INTEGER REFERENCES servicios(id) ON DELETE CASCADE,
+                        PRIMARY KEY (loyalty_rule_id, servicio_id)
+                    );
+                """)
+                
                 # Tabla CRM Config
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS crm_config (
