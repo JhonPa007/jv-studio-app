@@ -268,7 +268,7 @@ def get_client_status(cliente_id):
                     SELECT v.fecha_venta 
                     FROM venta_items vi 
                     JOIN ventas v ON vi.venta_id = v.id
-                    WHERE v.cliente_id = %s AND vi.servicio_id = ANY(%s) 
+                    WHERE v.cliente_receptor_id = %s AND vi.servicio_id = ANY(%s) 
                     AND v.fecha_venta >= %s
                     AND v.estado != 'Anulada'
                     AND (vi.loyalty_consumption_group_id IS NULL OR vi.loyalty_consumption_group_id = '')
@@ -379,7 +379,7 @@ def check_loyalty_status(cliente_id, servicio_id):
             SELECT v.fecha_venta 
             FROM venta_items vi
             JOIN ventas v ON vi.venta_id = v.id
-            WHERE v.cliente_id = %s 
+            WHERE v.cliente_receptor_id = %s 
               AND vi.servicio_id IN %s
               AND v.fecha_venta >= %s
               AND v.estado != 'Anulada'
