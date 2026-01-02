@@ -46,8 +46,15 @@ def setup_db():
                     activo BOOLEAN DEFAULT TRUE
                 );
             """)
+
+            # Columna Anti-Double-Dip
+            try:
+                cursor.execute("ALTER TABLE venta_items ADD COLUMN IF NOT EXISTS loyalty_consumption_group_id VARCHAR(50)")
+            except Exception:
+                pass # Already exists or generic error, safe to ignore for now
+
             db.commit()
-            return "✅ Esquema actualizado: 'loyalty_rule_services' creada. <a href='/marketing/fidelidad'>Volver</a>"
+            return "✅ Esquema actualizado: 'loyalty_rule_services' y columnas de consumo verificadas. <a href='/marketing/fidelidad'>Volver</a>"
     except Exception as e:
         db.rollback()
         return f"❌ Error creando tablas: {e}"
@@ -133,9 +140,69 @@ def eliminar_regla_fidelidad(id):
     return redirect(url_for('marketing.listar_reglas_fidelidad'))
 
 
+
 # ==============================================================================
-# 2. FIDELIZACIÓN - CHECK API (Para Punto de Venta)
+# Helper: Consumir Items (Anti-Double-Dip)
 # ==============================================================================
+def consumir_items_fidelidad(cliente_id, rule_id, group_id):
+    """
+    Marca los items más antiguos como consumidos para una regla específica.
+    group_id: Identificador unico de este canje (ej. "CANJE_VENTA_123")
+    """
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            # 1. Obtener datos de la regla
+            cursor.execute("SELECT * FROM loyalty_rules WHERE id = %s", (rule_id,))
+            regla = cursor.fetchone()
+            if not regla: return False
+
+            cantidad = regla['cantidad_requerida']
+            periodo = regla['periodo_meses']
+
+            # 2. Obtener servicios de la regla
+            cursor.execute("SELECT servicio_id FROM loyalty_rule_services WHERE loyalty_rule_id = %s", (rule_id,))
+            s_rows = cursor.fetchall()
+            target_ids = tuple([r[0] for r in s_rows])
+            
+            if not target_ids and regla.get('servicio_id'):
+                target_ids = (regla['servicio_id'],)
+
+            # 3. Buscar items elegibles (FIFO)
+            cursor.execute("SELECT CURRENT_DATE - INTERVAL '%s months'", (periodo,))
+            fecha_limite = cursor.fetchone()[0]
+
+            query = """
+                SELECT vi.id 
+                FROM venta_items vi
+                JOIN ventas v ON vi.venta_id = v.id
+                WHERE v.cliente_id = %s 
+                  AND vi.servicio_id IN %s
+                  AND v.fecha_venta >= %s
+                  AND (vi.loyalty_consumption_group_id IS NULL OR vi.loyalty_consumption_group_id = '')
+                  AND v.estado != 'Anulada'
+                ORDER BY v.fecha_venta ASC
+                LIMIT %s
+            """
+            cursor.execute(query, (cliente_id, target_ids, fecha_limite, cantidad))
+            items_to_update = cursor.fetchall()
+
+            # 4. Actualizar
+            ids_list = [i[0] for i in items_to_update]
+            if ids_list:
+                cursor.execute("""
+                    UPDATE venta_items 
+                    SET loyalty_consumption_group_id = %s 
+                    WHERE id = ANY(%s)
+                """, (str(group_id), ids_list))
+                db.commit()
+                return len(ids_list)
+            return 0
+    except Exception as e:
+        db.rollback()
+        print(f"Error consumiendo fidelidad: {e}")
+        return 0
+
 
 @marketing_bp.route('/api/check-loyalty/<int:cliente_id>/<int:servicio_id>', methods=['GET'])
 @login_required
@@ -196,6 +263,7 @@ def check_loyalty_status(cliente_id, servicio_id):
               AND vi.servicio_id IN %s
               AND v.fecha_venta >= %s
               AND v.estado != 'Anulada'
+              AND (vi.loyalty_consumption_group_id IS NULL OR vi.loyalty_consumption_group_id = '')
             ORDER BY v.fecha_venta DESC
             LIMIT %s
         """

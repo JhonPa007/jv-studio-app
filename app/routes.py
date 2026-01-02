@@ -5413,21 +5413,37 @@ def nueva_venta():
                         """, (monto_p_float, f"Propina Venta #{serie_comprobante}-{numero_comprobante_str}", metodo_propina, current_user.id))
                 except ValueError: pass
 
-            # 9. (NUEVO) REGISTRAR GASTO POR FIDELIDAD
+            # 9. (NUEVO) REGISTRAR GASTO POR FIDELIDAD Y CONSUMIR ITEMS
             if total_fidelidad > 0:
-                # Buscar/Crear Categoría
+                # A. Registrar Gasto
                 cursor.execute("SELECT id FROM categorias_gastos WHERE nombre = 'Descuento Fidelidad'")
                 cat = cursor.fetchone()
-                if not cat:
-                    cursor.execute("INSERT INTO categorias_gastos (nombre) VALUES ('Descuento Fidelidad') RETURNING id")
-                    cat_id = cursor.fetchone()['id']
-                else:
-                    cat_id = cat['id']
+                cat_id = cat['id'] if cat else None
                 
+                if not cat_id:
+                     cursor.execute("INSERT INTO categorias_gastos (nombre, descripcion) VALUES ('Descuento Fidelidad', 'Automático por sistema') RETURNING id")
+                     cat_id = cursor.fetchone()['id']
+
+                # Insertar Gasto (Usando esquema correcto)
                 cursor.execute("""
                     INSERT INTO gastos (sucursal_id, categoria_gasto_id, caja_sesion_id, fecha, descripcion, monto, metodo_pago, registrado_por_colaborador_id)
                     VALUES (%s, %s, %s, CURRENT_DATE, %s, %s, 'Interno', %s)
-                """, (sucursal_id, cat_id, caja_id, f"Cobertura Fidelidad Venta {serie_comprobante}-{numero_comprobante_str}", total_fidelidad, current_user.id))
+                """, (sucursal_id, cat_id, caja_id, f"Cobertura Fidelidad Venta #{serie_comprobante}-{numero_comprobante_str}", total_fidelidad, current_user.id))
+
+                # Movimiento de Caja (Reflejando la salida de dinero virtual para cuadrar)
+                cursor.execute("""
+                    INSERT INTO movimientos_caja (tipo, monto, concepto, metodo_pago, usuario_id, caja_sesion_id)
+                    VALUES ('EGRESO', %s, %s, 'SISTEMA', %s, %s)
+                """, (total_fidelidad, f"Cobertura Fidelidad #{serie_comprobante}-{numero_comprobante_str}", current_user.id, caja_id))
+
+                # B. Consumir Items (Anti-Double-Dip)
+                from .routes_marketing import consumir_items_fidelidad
+                
+                for idx, item in enumerate(items_data):
+                    if item.get('loyalty_applied') and item.get('loyalty_rule_id'):
+                        rule_id = item['loyalty_rule_id']
+                        group_id = f"SALE_{venta_id}_ITEM_{idx}"
+                        consumir_items_fidelidad(cliente_id, rule_id, group_id)
 
             db_conn.commit()
             flash(f'Venta registrada: {serie_comprobante}-{numero_comprobante_str}', 'success')
