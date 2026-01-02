@@ -134,163 +134,179 @@
                     </select>
                 </div>
             </div>
-        </div>
 
-        <div class="row">
-            <div class="col-lg-8">
-                <div class="venta-section">
-                    <h4 class="text-warning mb-3"><i class="fas fa-shopping-cart me-2"></i>Ítems</h4>
+            <!-- Panel Puntos -->
+            <div id="panel_puntos"
+                class="alert alert-info py-2 d-none d-flex justify-content-between align-items-center mb-3"
+                role="alert">
+                <div>
+                    <i class="fas fa-star text-warning me-2"></i>
+                    <strong>Puntos: <span id="lbl_puntos_cliente">0</span></strong>
+                    <small class="ms-2">(Valor: S/ <span id="lbl_valor_puntos">0.00</span>)</small>
+                </div>
+                <button type="button" class="btn btn-sm btn-light text-info fw-bold" onclick="canjearPuntos()">
+                    <i class="fas fa-gift me-1"></i> Usar Puntos
+                </button>
+            </div>
+            <input type="hidden" name="puntos_canjeados" id="input_puntos_canjeados" value="0">
 
-                    <div class="row mb-3 g-2">
-                        <div class="col-md-8">
-                            <select class="form-select" id="select_servicio">
-                                <option value="">-- Agregar Servicio --</option>
-                                {% for s in servicios %}
-                                <option value="{{ s.id }}" data-precio="{{ s.precio }}" data-nombre="{{ s.nombre }}">
-                                    {{ s.nombre }} - S/ {{ "%.2f"|format(s.precio) }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div
-                            class="col-md-2 d-flex align-items-center justify-content-center bg-dark rounded border border-secondary">
-                            <div class="d-flex flex-column align-items-center w-100">
-                                <div class="form-check form-switch pt-1">
-                                    <input class="form-check-input" type="checkbox" id="chk_es_extra"
-                                        onchange="togglePorcentajeExtra()">
-                                    <label class="form-check-label text-warning fw-bold small" for="chk_es_extra">Es
-                                        Extra</label>
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="venta-section">
+                        <h4 class="text-warning mb-3"><i class="fas fa-shopping-cart me-2"></i>Ítems</h4>
+
+                        <div class="row mb-3 g-2">
+                            <div class="col-md-8">
+                                <select class="form-select" id="select_servicio">
+                                    <option value="">-- Agregar Servicio --</option>
+                                    {% for s in servicios %}
+                                    <option value="{{ s.id }}" data-precio="{{ s.precio }}"
+                                        data-nombre="{{ s.nombre }}">
+                                        {{ s.nombre }} - S/ {{ "%.2f"|format(s.precio) }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div
+                                class="col-md-2 d-flex align-items-center justify-content-center bg-dark rounded border border-secondary">
+                                <div class="d-flex flex-column align-items-center w-100">
+                                    <div class="form-check form-switch pt-1">
+                                        <input class="form-check-input" type="checkbox" id="chk_es_extra"
+                                            onchange="togglePorcentajeExtra()">
+                                        <label class="form-check-label text-warning fw-bold small" for="chk_es_extra">Es
+                                            Extra</label>
+                                    </div>
+                                    <input type="number" id="txt_porcentaje_extra"
+                                        class="form-control form-control-sm text-center mt-1 bg-dark text-white border-warning"
+                                        placeholder="%" style="display:none; width: 60px;" min="0" max="100">
                                 </div>
-                                <input type="number" id="txt_porcentaje_extra"
-                                    class="form-control form-control-sm text-center mt-1 bg-dark text-white border-warning"
-                                    placeholder="%" style="display:none; width: 60px;" min="0" max="100">
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-primary w-100" onclick="agregarItem('servicio')">
+                                    <i class="fas fa-plus"></i>
+                                </button>
                             </div>
                         </div>
-                        <div class="col-md-2">
-                            <button type="button" class="btn btn-primary w-100" onclick="agregarItem('servicio')">
-                                <i class="fas fa-plus"></i>
-                            </button>
-                        </div>
-                    </div>
 
-                    <div class="row mb-3 g-2">
-                        <div class="col-md-10">
-                            <select class="form-select" id="select_producto">
-                                <option value="">-- Agregar Producto --</option>
-                                {% for p in productos %}
-                                <option value="{{ p.id }}" data-precio="{{ p.precio_venta }}"
-                                    data-nombre="{{ p.nombre }}" data-stock="{{ p.stock_actual }}">
-                                    {{ p.nombre }} (Stock: {{ p.stock_actual }}) - S/ {{ "%.2f"|format(p.precio_venta)
-                                    }}
-                                </option>
-                                {% endfor %}
-                            </select>
+                        <div class="row mb-3 g-2">
+                            <div class="col-md-10">
+                                <select class="form-select" id="select_producto">
+                                    <option value="">-- Agregar Producto --</option>
+                                    {% for p in productos %}
+                                    <option value="{{ p.id }}" data-precio="{{ p.precio_venta }}"
+                                        data-nombre="{{ p.nombre }}" data-stock="{{ p.stock_actual }}">
+                                        {{ p.nombre }} (Stock: {{ p.stock_actual }}) - S/ {{
+                                        "%.2f"|format(p.precio_venta)
+                                        }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-warning w-100" onclick="agregarItem('producto')">
+                                    <i class="fas fa-box"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div class="col-md-2">
-                            <button type="button" class="btn btn-warning w-100" onclick="agregarItem('producto')">
-                                <i class="fas fa-box"></i>
-                            </button>
-                        </div>
-                    </div>
 
-                    <div class="table-responsive mt-3">
-                        <table class="table table-dark table-striped table-hover align-middle">
-                            <thead>
-                                <tr>
-                                    <th>Descripción</th>
-                                    <th width="100" class="text-center">Cant.</th>
-                                    <th width="120" class="text-end">Precio</th>
-                                    <th width="120" class="text-end">Total</th>
-                                    <th width="50"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="tabla_items_body"></tbody>
-                        </table>
+                        <div class="table-responsive mt-3">
+                            <table class="table table-dark table-striped table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Descripción</th>
+                                        <th width="100" class="text-center">Cant.</th>
+                                        <th width="120" class="text-end">Precio</th>
+                                        <th width="120" class="text-end">Total</th>
+                                        <th width="50"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabla_items_body"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Block Removed -->
+                <!-- Block Removed -->
 
-            <div class="col-lg-4">
-                <div class="venta-section">
-                    <h4 class="text-warning mb-3"><i class="fas fa-coins me-2"></i>Pago</h4>
+                <div class="col-lg-4">
+                    <div class="venta-section">
+                        <h4 class="text-warning mb-3"><i class="fas fa-coins me-2"></i>Pago</h4>
 
-                    <div class="d-flex justify-content-between mb-2 text-white">
-                        <span>Subtotal:</span>
-                        <span id="lbl_subtotal">S/ 0.00</span>
-                    </div>
-                    <div class="d-flex justify-content-between mb-2 align-items-center text-white">
-                        <span>Descuento:</span>
-                        <input type="number" class="form-control form-control-sm w-50 text-end" id="descuento_global"
-                            value="0" min="0" step="0.10" oninput="calcularTotales()">
-                    </div>
-                    <hr class="text-white">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="h4 text-white">TOTAL:</span>
-                        <span class="total-display" id="lbl_total_pagar">S/ 0.00</span>
-                    </div>
-
-                    <div class="d-flex justify-content-between align-items-center mt-3">
-                        <span class="text-info">Pagado:</span>
-                        <span class="text-info fw-bold" id="lbl_total_pagado">S/ 0.00</span>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span class="text-white">Faltante:</span>
-                        <span class="text-white fw-bold" id="lbl_faltante">S/ 0.00</span>
-                    </div>
-
-                    <div id="pagos_container"></div>
-
-                    <button type="button" class="btn btn-outline-info btn-sm w-100 mt-2" onclick="agregarPago()">
-                        <i class="fas fa-plus me-1"></i> Añadir Pago
-                    </button>
-
-                    <div class="card bg-warning bg-opacity-10 border-warning mt-4 mb-2">
-                        <div class="card-body py-2 px-2">
-                            <h6 class="card-title text-warning mb-2 small fw-bold"><i
-                                    class="fas fa-heart me-1"></i>Propina Voluntaria</h6>
-                            <div class="row g-1">
-                                <div class="col-4">
-                                    <input type="number" step="0.50" name="monto_propina" id="input_monto_propina"
-                                        class="form-control form-control-sm bg-dark text-warning border-secondary fw-bold"
-                                        placeholder="S/ 0.00">
-                                </div>
-                                <div class="col-4">
-                                    <select name="empleado_propina_id" id="empleado_propina_id"
-                                        class="form-select form-select-sm bg-dark text-white border-secondary"
-                                        style="font-size: 0.8rem;">
-                                        <option value="">¿A quién?</option>
-                                        {% for e in empleados %}
-                                        <option value="{{ e.id }}">{{ e.nombre_display }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-4">
-                                    <select name="metodo_propina"
-                                        class="form-select form-select-sm bg-dark text-white border-secondary"
-                                        style="font-size: 0.8rem;">
-                                        <option value="Efectivo">Efectivo</option>
-                                        <option value="Yape">Yape</option>
-                                        <option value="Plin">Plin</option>
-                                    </select>
-                                </div>
-                            </div>
+                        <div class="d-flex justify-content-between mb-2 text-white">
+                            <span>Subtotal:</span>
+                            <span id="lbl_subtotal">S/ 0.00</span>
                         </div>
-                    </div>
+                        <div class="d-flex justify-content-between mb-2 align-items-center text-white">
+                            <span>Descuento:</span>
+                            <input type="number" class="form-control form-control-sm w-50 text-end"
+                                id="descuento_global" value="0" min="0" step="0.10" oninput="calcularTotales()">
+                        </div>
+                        <hr class="text-white">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="h4 text-white">TOTAL:</span>
+                            <span class="total-display" id="lbl_total_pagar">S/ 0.00</span>
+                        </div>
 
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <span class="text-info">Pagado:</span>
+                            <span class="text-info fw-bold" id="lbl_total_pagado">S/ 0.00</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="text-white">Faltante:</span>
+                            <span class="text-white fw-bold" id="lbl_faltante">S/ 0.00</span>
+                        </div>
 
-                    <div class="d-grid gap-2 mt-4">
-                        <button type="button" class="btn btn-success btn-lg fw-bold" onclick="registrarVenta()">
-                            <i class="fas fa-check-circle me-2"></i> CONFIRMAR VENTA
+                        <div id="pagos_container"></div>
+
+                        <button type="button" class="btn btn-outline-info btn-sm w-100 mt-2" onclick="agregarPago()">
+                            <i class="fas fa-plus me-1"></i> Añadir Pago
                         </button>
+
+                        <div class="card bg-warning bg-opacity-10 border-warning mt-4 mb-2">
+                            <div class="card-body py-2 px-2">
+                                <h6 class="card-title text-warning mb-2 small fw-bold"><i
+                                        class="fas fa-heart me-1"></i>Propina Voluntaria</h6>
+                                <div class="row g-1">
+                                    <div class="col-4">
+                                        <input type="number" step="0.50" name="monto_propina" id="input_monto_propina"
+                                            class="form-control form-control-sm bg-dark text-warning border-secondary fw-bold"
+                                            placeholder="S/ 0.00">
+                                    </div>
+                                    <div class="col-4">
+                                        <select name="empleado_propina_id" id="empleado_propina_id"
+                                            class="form-select form-select-sm bg-dark text-white border-secondary"
+                                            style="font-size: 0.8rem;">
+                                            <option value="">¿A quién?</option>
+                                            {% for e in empleados %}
+                                            <option value="{{ e.id }}">{{ e.nombre_display }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-4">
+                                        <select name="metodo_propina"
+                                            class="form-select form-select-sm bg-dark text-white border-secondary"
+                                            style="font-size: 0.8rem;">
+                                            <option value="Efectivo">Efectivo</option>
+                                            <option value="Yape">Yape</option>
+                                            <option value="Plin">Plin</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="button" class="btn btn-success btn-lg fw-bold" onclick="registrarVenta()">
+                                <i class="fas fa-check-circle me-2"></i> CONFIRMAR VENTA
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <input type="hidden" name="items_lista" id="items_lista_json">
-        <input type="hidden" name="pagos_lista" id="pagos_lista_json">
+            <input type="hidden" name="items_lista" id="items_lista_json">
+            <input type="hidden" name="pagos_lista" id="pagos_lista_json">
     </form>
 </div>
 
@@ -455,10 +471,11 @@
             const modal = new bootstrap.Modal(document.getElementById('modalCampanaDatos'));
             modal.show();
 
-            // 🟢 Al seleccionar cliente, re-verificar fidelidad de todos los servicios en lista
+            // 🟢 Al seleccionar cliente, re-verificar fidelidad
             listaItems.forEach((it, idx) => {
                 if (it.tipo === 'servicio') verificarFidelidadItem(idx);
             });
+            checkClientPoints(clienteIdCampana);
         });
 
         // VERIFICAR SI VENIMOS DE UNA VENTA EXITOSA
@@ -709,7 +726,18 @@
             return acc + rowT;
         }, 0);
         const desc = parseFloat(document.getElementById('descuento_global').value) || 0;
-        const total = Math.max(0, sub - desc);
+
+        // Descuento por Puntos (25 pts = S/ 1.00)
+        let ptsCanje = parseInt(document.getElementById('input_puntos_canjeados').value) || 0;
+        let descPuntos = ptsCanje / 25;
+
+        // Visualización valor puntos
+        if (ptsCanje > 0) {
+            document.getElementById('lbl_valor_puntos').innerText = descPuntos.toFixed(2) + " (Canje)";
+            document.getElementById('lbl_valor_puntos').className = "text-success fw-bold";
+        }
+
+        const total = Math.max(0, sub - desc - descPuntos);
 
         document.getElementById('lbl_subtotal').innerText = 'S/ ' + sub.toFixed(2);
         document.getElementById('lbl_total_pagar').innerText = 'S/ ' + total.toFixed(2);
@@ -787,6 +815,69 @@
         document.getElementById('items_lista_json').value = JSON.stringify(listaItems);
         document.getElementById('pagos_lista_json').value = JSON.stringify(pagos);
         document.getElementById('formVenta').submit();
+    }
+
+    // --- FUNCIONES SISTEMA DE PUNTOS ---
+    let puntosDisponibles = 0;
+
+    async function checkClientPoints(id) {
+        if (!id) {
+            document.getElementById('panel_puntos').classList.remove('d-flex');
+            document.getElementById('panel_puntos').classList.add('d-none');
+            puntosDisponibles = 0;
+            return;
+        }
+        try {
+            const res = await fetch(`/marketing/api/client-status/${id}`);
+            const data = await res.json();
+            puntosDisponibles = data.puntos || 0;
+
+            document.getElementById('lbl_puntos_cliente').innerText = puntosDisponibles;
+            const valorSoles = (puntosDisponibles / 25).toFixed(2);
+            document.getElementById('lbl_valor_puntos').innerText = valorSoles;
+
+            const panel = document.getElementById('panel_puntos');
+            panel.classList.remove('d-none');
+            panel.classList.add('d-flex');
+
+            // Si cambio de cliente, reseteo el canje previo
+            document.getElementById('input_puntos_canjeados').value = 0;
+            // Reset visual style
+            document.getElementById('lbl_valor_puntos').className = "";
+            calcularTotales();
+
+        } catch (e) { console.error("Error fetching points", e); }
+    }
+
+    function canjearPuntos() {
+        if (puntosDisponibles < 25) {
+            alert("Mínimo 25 puntos para canjear (S/ 1.00).");
+            return;
+        }
+
+        const valorActual = parseInt(document.getElementById('input_puntos_canjeados').value) || 0;
+
+        // Calcular Máximo Canjeable (Total Venta vs Puntos Disponibles)
+        let totalVentaFull = parseFloat(document.getElementById('lbl_subtotal').innerText.replace('S/ ', '')) || 0;
+        let descGlobal = parseFloat(document.getElementById('descuento_global').value) || 0;
+        let saldoPagar = Math.max(0, totalVentaFull - descGlobal);
+        let maxPuntosPorSaldo = Math.floor(saldoPagar * 25);
+
+        let maxCanje = Math.min(puntosDisponibles, maxPuntosPorSaldo);
+
+        let nuevoCanje = prompt(`¿Cuántos PUNTOS desea canjear?\nDisponible: ${puntosDisponibles}\nMax para esta venta: ${maxCanje}\n(25 Puntos = S/ 1.00)`, valorActual || 25);
+        if (nuevoCanje === null) return;
+
+        nuevoCanje = parseInt(nuevoCanje);
+        if (isNaN(nuevoCanje) || nuevoCanje < 0) nuevoCanje = 0;
+
+        if (nuevoCanje > puntosDisponibles) {
+            alert(`Solo tiene ${puntosDisponibles} puntos.`);
+            nuevoCanje = puntosDisponibles;
+        }
+
+        document.getElementById('input_puntos_canjeados').value = nuevoCanje;
+        calcularTotales();
     }
 </script>
 {% endblock %}

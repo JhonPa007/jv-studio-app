@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="fas fa-search me-2"></i>Consultar Cliente</h2>
+        <p class="text-muted">Revise los puntos acumulados y el progreso de fidelización.</p>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <label for="cliente_id" class="form-label fw-bold">Buscar Cliente:</label>
+        <select id="cliente_id" class="form-select select2-cliente" style="width: 100%;"></select>
+    </div>
+</div>
+
+<div id="resultado_panel" style="display: none;">
+
+    <!-- Puntos Highlight -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-primary text-white text-center shadow">
+                <div class="card-body py-4">
+                    <h5 class="card-title text-white-50">CANJEABLE</h5>
+                    <h1 class="display-3 fw-bold" id="lbl_puntos">0</h1>
+                    <p class="mb-0">Puntos Acumulados</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card shadow h-100">
+                <div class="card-header bg-light fw-bold">Historial Reciente</div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Tipo</th>
+                                <th>Monto</th>
+                                <th>Detalle</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbl_historial"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reglas Activas -->
+    <h4 class="mb-3"><i class="fas fa-gift me-2 text-warning"></i>Campañas Activas</h4>
+    <div class="row" id="container_reglas">
+        <!-- Cards inyectadas via JS -->
+    </div>
+
+</div>
+
+<!-- Select2 & Logic -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+
+        // Init Select2
+        $('.select2-cliente').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Escriba nombre o documento...',
+            allowClear: true,
+            ajax: {
+                url: '/api/clientes/buscar',
+                dataType: 'json',
+                delay: 250,
+                data: function (params) { return { q: params.term }; },
+                processResults: function (data) {
+                    return {
+                        results: data.map(c => ({
+                            id: c.id,
+                            text: `${c.nombre} (${c.documento || 'S/D'})`
+                        }))
+                    };
+                }
+            }
+        });
+
+        // On Change -> Fetch Data
+        $('.select2-cliente').on('select2:select', function (e) {
+            const id = e.params.data.id;
+            cargarDatos(id);
+        });
+
+        $('.select2-cliente').on('select2:unselect', function (e) {
+            document.getElementById('resultado_panel').style.display = 'none';
+        });
+
+        async function cargarDatos(id) {
+            try {
+                const res = await fetch(`/marketing/api/client-status/${id}`);
+                const data = await res.json();
+
+                // Puntos
+                document.getElementById('lbl_puntos').innerText = data.puntos;
+
+                // Historial
+                const tbl = document.getElementById('tbl_historial');
+                tbl.innerHTML = '';
+                data.historial_puntos.forEach(h => {
+                    let colorClass = h.tipo === 'ACUMULA' ? 'text-success' : 'text-danger';
+                    let signo = h.tipo === 'ACUMULA' ? '+' : '-';
+
+                    tbl.innerHTML += `
+                    <tr>
+                        <td>${h.fecha}</td>
+                        <td><span class="badge ${colorClass === 'text-success' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'}">${h.tipo}</span></td>
+                        <td class="${colorClass} fw-bold">${signo}${h.monto}</td>
+                        <td class="small text-muted">${h.desc}</td>
+                    </tr>
+                `;
+                });
+
+                // Reglas
+                const cont = document.getElementById('container_reglas');
+                cont.innerHTML = '';
+                if (data.reglas.length === 0) {
+                    cont.innerHTML = '<div class="alert alert-secondary">El cliente no participa en ninguna campaña activa actualmente.</div>';
+                } else {
+                    data.reglas.forEach(r => {
+                        const pct = (r.progreso / r.meta) * 100;
+                        const esCompleto = r.progreso >= r.meta;
+
+                        cont.innerHTML += `
+                        <div class="col-md-6 mb-3">
+                            <div class="card border-${esCompleto ? 'success' : 'secondary'} h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title d-flex justify-content-between">
+                                        ${r.nombre}
+                                        <span class="badge ${esCompleto ? 'bg-success' : 'bg-secondary'}">${esCompleto ? '¡LISTO!' : 'En Progreso'}</span>
+                                    </h5>
+                                    
+                                    <div class="d-flex align-items-center mt-3 mb-2">
+                                        <div class="flex-grow-1 me-3">
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar ${esCompleto ? 'bg-success' : 'bg-info'}" role="progressbar" 
+                                                     style="width: ${Math.min(pct, 100)}%">
+                                                    ${r.progreso} / ${r.meta}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="fw-bold">${Math.round(pct)}%</div>
+                                    </div>
+                                    
+                                    <p class="card-text small text-muted mb-1">
+                                        <i class="fas fa-clock me-1"></i> Vence: <strong>${r.vence}</strong>
+                                    </p>
+                                    <p class="card-text small text-muted">
+                                        <i class="fas fa-tag me-1"></i> Premio: <strong>${r.descuento}% Descuento</strong>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    });
+                }
+
+                document.getElementById('resultado_panel').style.display = 'block';
+
+            } catch (e) {
+                console.error(e);
+                alert('Error cargando datos del cliente');
+            }
+        }
+    });
+</script>
+{% endblock %}

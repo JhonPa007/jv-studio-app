@@ -5445,6 +5445,61 @@ def nueva_venta():
                         group_id = f"SALE_{venta_id}_ITEM_{idx}"
                         consumir_items_fidelidad(cliente_id, rule_id, group_id)
 
+            # 9.5 (NUEVO) CANJE DE PUNTOS
+            puntos_canjeados = int(request.form.get('puntos_canjeados') or 0)
+            if puntos_canjeados > 0 and cliente_id:
+                # 1. Validar Saldo (Doble chequeo)
+                cursor.execute("SELECT puntos_acumulados FROM clientes WHERE id = %s", (cliente_id,))
+                row_pts = cursor.fetchone()
+                saldo_actual = row_pts['puntos_acumulados'] if row_pts else 0
+                
+                if saldo_actual >= puntos_canjeados:
+                    # 2. Calcular descuento (25 pts = 1 sol)
+                    monto_desc_puntos = puntos_canjeados / 25.0
+                    
+                    # 3. Registrar Gasto Interno (Para cuadrar caja)
+                    cursor.execute("SELECT id FROM categorias_gastos WHERE nombre = 'Canje Puntos'")
+                    cat_pts = cursor.fetchone()
+                    cat_pts_id = cat_pts['id'] if cat_pts else None
+                    if not cat_pts_id:
+                        cursor.execute("INSERT INTO categorias_gastos (nombre, descripcion) VALUES ('Canje Puntos', 'Redención de Puntos') RETURNING id")
+                        cat_pts_id = cursor.fetchone()['id']
+                    
+                    cursor.execute("""
+                        INSERT INTO gastos (sucursal_id, categoria_gasto_id, caja_sesion_id, fecha, descripcion, monto, metodo_pago, registrado_por_colaborador_id)
+                        VALUES (%s, %s, %s, CURRENT_DATE, %s, %s, 'Interno', %s)
+                    """, (sucursal_id, cat_pts_id, caja_id, f"Canje Puntos Venta #{serie_comprobante}-{numero_comprobante_str}", monto_desc_puntos, current_user.id))
+
+                    # 4. Registrar Movimiento Egreso (Virtual)
+                    cursor.execute("""
+                        INSERT INTO movimientos_caja (tipo, monto, concepto, metodo_pago, usuario_id, caja_sesion_id)
+                        VALUES ('EGRESO', %s, %s, 'SISTEMA', %s, %s)
+                    """, (monto_desc_puntos, f"Canje Puntos #{serie_comprobante}-{numero_comprobante_str}", current_user.id, caja_id))
+                    
+                    # 5. Descontar Puntos del Cliente
+                    cursor.execute("UPDATE clientes SET puntos_acumulados = puntos_acumulados - %s WHERE id = %s", (puntos_canjeados, cliente_id))
+                    
+                    # 6. Historial
+                    cursor.execute("""
+                        INSERT INTO puntos_historial (cliente_id, venta_id, monto_puntos, tipo_transaccion, descripcion)
+                        VALUES (%s, %s, %s, 'CANJE', %s)
+                    """, (cliente_id, venta_id, puntos_canjeados, f"Canje por S/ {monto_desc_puntos:.2f} en Venta #{serie_comprobante}-{numero_comprobante_str}"))
+
+            # 10. (NUEVO) ACUMULAR PUNTOS (1 Sol = 1 Punto)
+            if cliente_id:
+                try:
+                    puntos_ganados = int(monto_final) # Redondeo hacia abajo
+                    if puntos_ganados > 0:
+                        # Actualizar saldo cliente
+                        cursor.execute("UPDATE clientes SET puntos_acumulados = COALESCE(puntos_acumulados, 0) + %s WHERE id = %s", (puntos_ganados, cliente_id))
+                        # Registrar historial
+                        cursor.execute("""
+                            INSERT INTO puntos_historial (cliente_id, venta_id, monto_puntos, tipo_transaccion, descripcion)
+                            VALUES (%s, %s, %s, 'ACUMULA', %s)
+                        """, (cliente_id, venta_id, puntos_ganados, f"Puntos por Venta #{serie_comprobante}-{numero_comprobante_str}"))
+                except Exception as e:
+                    print(f"Error acumulando puntos: {e}") 
+
             db_conn.commit()
             flash(f'Venta registrada: {serie_comprobante}-{numero_comprobante_str}', 'success')
             return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))

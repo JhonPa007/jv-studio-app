@@ -51,10 +51,29 @@ def setup_db():
             try:
                 cursor.execute("ALTER TABLE venta_items ADD COLUMN IF NOT EXISTS loyalty_consumption_group_id VARCHAR(50)")
             except Exception:
-                pass # Already exists or generic error, safe to ignore for now
+                pass 
+
+            # Columna Puntos en Clientes
+            try:
+                cursor.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS puntos_acumulados INTEGER DEFAULT 0")
+            except Exception:
+                pass
+
+            # Tabla Historial Puntos
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS puntos_historial (
+                    id SERIAL PRIMARY KEY,
+                    cliente_id INTEGER REFERENCES clientes(id) ON DELETE CASCADE,
+                    venta_id INTEGER REFERENCES ventas(id) ON DELETE SET NULL,
+                    monto_puntos INTEGER NOT NULL,
+                    tipo_transaccion VARCHAR(20) NOT NULL, -- 'ACUMULA', 'CANJE', 'AJUSTE'
+                    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    descripcion TEXT
+                );
+            """)
 
             db.commit()
-            return "✅ Esquema actualizado: 'loyalty_rule_services' y columnas de consumo verificadas. <a href='/marketing/fidelidad'>Volver</a>"
+            return "✅ Esquema Actualizado: Puntos, Historial y Consumo. <a href='/marketing/fidelidad'>Volver</a>"
     except Exception as e:
         db.rollback()
         return f"❌ Error creando tablas: {e}"
@@ -202,6 +221,106 @@ def consumir_items_fidelidad(cliente_id, rule_id, group_id):
         db.rollback()
         print(f"Error consumiendo fidelidad: {e}")
         return 0
+
+
+# ==============================================================================
+# 3. MÓDULO DE CONSULTA Y PUNTOS
+# ==============================================================================
+@marketing_bp.route('/consultar-cliente')
+@login_required
+def consultar_cliente():
+    return render_template('marketing/consultar_cliente.html')
+
+@marketing_bp.route('/api/client-status/<int:cliente_id>')
+@login_required
+def get_client_status(cliente_id):
+    db = get_db()
+    try:
+        data = {
+            'puntos': 0,
+            'reglas': [],
+            'historial_puntos': []
+        }
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Puntos
+            cursor.execute("SELECT puntos_acumulados FROM clientes WHERE id = %s", (cliente_id,))
+            row = cursor.fetchone()
+            if row:
+                data['puntos'] = row['puntos_acumulados'] or 0
+
+            # 2. Reglas Activas
+            cursor.execute("SELECT * FROM loyalty_rules WHERE activo = TRUE")
+            rules = cursor.fetchall()
+            
+            for r in rules:
+                # Calcular progreso para cada regla
+                cursor.execute("SELECT CURRENT_DATE - INTERVAL '%s months'", (r['periodo_meses'],))
+                fecha_limite = cursor.fetchone()['?column?'] # Result of expression
+                
+                # Servicios de la regla
+                cursor.execute("SELECT servicio_id FROM loyalty_rule_services WHERE loyalty_rule_id = %s", (r['id'],))
+                sids = [x['servicio_id'] for x in cursor.fetchall()]
+                if not sids and r['servicio_id']: sids = [r['servicio_id']]
+                
+                if not sids: continue
+                
+                cursor.execute("""
+                    SELECT v.fecha_venta 
+                    FROM venta_items vi 
+                    JOIN ventas v ON vi.venta_id = v.id
+                    WHERE v.cliente_id = %s AND vi.servicio_id = ANY(%s) 
+                    AND v.fecha_venta >= %s
+                    AND v.estado != 'Anulada'
+                    AND (vi.loyalty_consumption_group_id IS NULL OR vi.loyalty_consumption_group_id = '')
+                    ORDER BY v.fecha_venta DESC
+                """, (cliente_id, sids, fecha_limite))
+                
+                visitas = cursor.fetchall()
+                count = len(visitas)
+                
+                # Calcular Limite exacto (Fecha del primer item + Periodo)
+                fecha_vencimiento = None
+                if visitas:
+                     # El mas antiguo es el ultimo de la lista por DESC order, PERO
+                     # para saber cuando vence el bloque actual, tomamos el mas antiguo valido.
+                     # "Tienes hasta X fecha para completar"
+                     oldest_visit = visitas[-1]['fecha_venta'] # Actually datetime
+                     
+                     # Sumar meses (aproximado)
+                     try:
+                        from dateutil.relativedelta import relativedelta
+                        deadline = oldest_visit + relativedelta(months=r['periodo_meses'])
+                        fecha_vencimiento = deadline.strftime('%d/%m/%Y')
+                     except:
+                        pass 
+
+                data['reglas'].append({
+                    'nombre': r['nombre'],
+                    'progreso': count,
+                    'meta': r['cantidad_requerida'],
+                    'descuento': float(r['descuento_porcentaje']),
+                    'vence': fecha_vencimiento if count > 0 else '-'
+                })
+
+            # 3. Historial (Ultimos 5)
+            cursor.execute("""
+                SELECT * FROM puntos_historial 
+                WHERE cliente_id = %s 
+                ORDER BY fecha_registro DESC LIMIT 5
+            """, (cliente_id,))
+            hist = cursor.fetchall()
+            for h in hist:
+                data['historial_puntos'].append({
+                    'fecha': h['fecha_registro'].strftime('%d/%m %H:%M'),
+                    'tipo': h['tipo_transaccion'],
+                    'monto': h['monto_puntos'],
+                    'desc': h['descripcion']
+                })
+
+        return jsonify(data)
+    except Exception as e:
+        print(e)
+        return jsonify({'error': str(e)}), 500
 
 
 @marketing_bp.route('/api/check-loyalty/<int:cliente_id>/<int:servicio_id>', methods=['GET'])
