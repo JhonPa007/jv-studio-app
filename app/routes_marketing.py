@@ -21,11 +21,19 @@ def setup_db():
                 CREATE TABLE IF NOT EXISTS loyalty_rules (
                     id SERIAL PRIMARY KEY,
                     nombre VARCHAR(100) NOT NULL,
-                    servicio_id INTEGER REFERENCES servicios(id),
+                    servicio_id INTEGER REFERENCES servicios(id), -- Deprecated but kept for compatibility
                     cantidad_requerida INTEGER NOT NULL,
                     periodo_meses INTEGER NOT NULL,
                     descuento_porcentaje NUMERIC(5, 2) NOT NULL,
                     activo BOOLEAN DEFAULT TRUE
+                );
+            """)
+            # Junction Table: Loyalty Rule <-> Services (M:N)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS loyalty_rule_services (
+                    loyalty_rule_id INTEGER REFERENCES loyalty_rules(id) ON DELETE CASCADE,
+                    servicio_id INTEGER REFERENCES servicios(id) ON DELETE CASCADE,
+                    PRIMARY KEY (loyalty_rule_id, servicio_id)
                 );
             """)
             # Table CRM
@@ -39,7 +47,7 @@ def setup_db():
                 );
             """)
             db.commit()
-            return "✅ Tablas 'loyalty_rules' y 'crm_config' creadas/verificadas correctamente. <a href='/marketing/fidelidad'>Ir a Fidelidad</a>"
+            return "✅ Esquema actualizado: 'loyalty_rule_services' creada. <a href='/marketing/fidelidad'>Volver</a>"
     except Exception as e:
         db.rollback()
         return f"❌ Error creando tablas: {e}"
@@ -49,14 +57,29 @@ def setup_db():
 def listar_reglas_fidelidad():
     db = get_db()
     with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-        cursor.execute("""
-            SELECT l.*, s.nombre as servicio_nombre 
-            FROM loyalty_rules l
-            JOIN servicios s ON l.servicio_id = s.id
-            ORDER BY l.nombre
-        """)
+        cursor.execute("SELECT * FROM loyalty_rules ORDER BY nombre")
         reglas = cursor.fetchall()
         
+        # Hydrate services for each rule
+        for r in reglas:
+            cursor.execute("""
+                SELECT s.nombre 
+                FROM loyalty_rule_services lrs
+                JOIN servicios s ON lrs.servicio_id = s.id
+                WHERE lrs.loyalty_rule_id = %s
+            """, (r['id'],))
+            s_rows = cursor.fetchall()
+            if s_rows:
+                r['servicios_nombres'] = ", ".join([x['nombre'] for x in s_rows])
+            else:
+                # Fallback for old rules
+                if r.get('servicio_id'):
+                    cursor.execute("SELECT nombre FROM servicios WHERE id = %s", (r['servicio_id'],))
+                    s_old = cursor.fetchone()
+                    r['servicios_nombres'] = s_old['nombre'] if s_old else "Sin servicio"
+                else:
+                    r['servicios_nombres'] = "Todos / Ninguno"
+
         # Cargar servicios para el modal de nueva regla
         cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY nombre")
         servicios = cursor.fetchall()
@@ -67,7 +90,7 @@ def listar_reglas_fidelidad():
 @login_required
 def guardar_regla_fidelidad():
     nombre = request.form.get('nombre')
-    servicio_id = request.form.get('servicio_id')
+    servicios_ids = request.form.getlist('servicios_ids[]') # Recibimos lista
     cantidad = request.form.get('cantidad_requerida')
     periodo = request.form.get('periodo_meses')
     descuento = request.form.get('descuento_porcentaje')
@@ -75,12 +98,20 @@ def guardar_regla_fidelidad():
     db = get_db()
     try:
         with db.cursor() as cursor:
+            # 1. Insertar Regla Maestra (sin servicio_id unico)
             cursor.execute("""
-                INSERT INTO loyalty_rules (nombre, servicio_id, cantidad_requerida, periodo_meses, descuento_porcentaje, activo)
-                VALUES (%s, %s, %s, %s, %s, TRUE)
-            """, (nombre, servicio_id, cantidad, periodo, descuento))
+                INSERT INTO loyalty_rules (nombre, cantidad_requerida, periodo_meses, descuento_porcentaje, activo)
+                VALUES (%s, %s, %s, %s, TRUE) RETURNING id
+            """, (nombre, cantidad, periodo, descuento))
+            new_id = cursor.fetchone()[0]
+            
+            # 2. Insertar Relaciones M:N
+            if servicios_ids:
+                for sid in servicios_ids:
+                    cursor.execute("INSERT INTO loyalty_rule_services (loyalty_rule_id, servicio_id) VALUES (%s, %s)", (new_id, sid))
+            
             db.commit()
-            flash("Regla de fidelización creada.", "success")
+            flash("Regla de fidelización creada correctamente.", "success")
     except Exception as e:
         db.rollback()
         flash(f"Error: {e}", "danger")
@@ -111,68 +142,83 @@ def eliminar_regla_fidelidad(id):
 def check_loyalty_status(cliente_id, servicio_id):
     """
     Verifica si el cliente cumple la regla para este servicio.
-    Retorna: { 'eligible': Bool, 'discount_pct': Float, 'reason': Str }
+    Ahora verifica si el servicio pertenece a algun grupo de regla.
     """
     db = get_db()
     with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-        # 1. Buscar regla activa para este servicio
+        # 1. Buscar si hay una regla que incluya este servicio
         cursor.execute("""
-            SELECT * FROM loyalty_rules 
-            WHERE servicio_id = %s AND activo = TRUE
+            SELECT r.* 
+            FROM loyalty_rules r
+            JOIN loyalty_rule_services lrs ON r.id = lrs.loyalty_rule_id
+            WHERE lrs.servicio_id = %s AND r.activo = TRUE
             LIMIT 1
         """, (servicio_id,))
         regla = cursor.fetchone()
         
+        # Fallback: Revisar si hay regla legacy (columna servicio_id)
+        if not regla:
+            cursor.execute("SELECT * FROM loyalty_rules WHERE servicio_id = %s AND activo = TRUE LIMIT 1", (servicio_id,))
+            regla = cursor.fetchone()
+
         if not regla:
             return jsonify({'eligible': False, 'message': 'No hay regla loyalty para este servicio'})
 
-        # 2. Analizar historial del cliente
-        cantidad_req = regla['cantidad_requerida'] # Ej: 5
-        periodo_meses = regla['periodo_meses']     # Ej: 3
+        # 2. Analizar historial (Multi-Servicio)
+        # Contamos cuántos servicios DE LOS QUE ESTÁN EN LA REGLA se ha hecho el cliente.
+        rule_id = regla['id']
+        cantidad_req = regla['cantidad_requerida']
+        periodo_meses = regla['periodo_meses'] 
         
-        # Buscamos los ULTIMOS (cantidad_req) servicios de ese tipo que se haya hecho el cliente
-        # dentro del periodo de tiempo.
-        
-        # Fecha límite hacia atrás
         cursor.execute("SELECT CURRENT_DATE - INTERVAL '%s months'", (periodo_meses,))
         fecha_limite = cursor.fetchone()[0]
         
-        cursor.execute("""
+        # Obtenemos TODOS los servicios que cuentan para esta regla
+        cursor.execute("SELECT servicio_id FROM loyalty_rule_services WHERE loyalty_rule_id = %s", (rule_id,))
+        rows = cursor.fetchall()
+        
+        target_service_ids = [r[0] for r in rows] # Lista de IDs
+        # Si esta vacio (legacy), usamos el propio del parametro
+        if not target_service_ids and regla.get('servicio_id'):
+            target_service_ids = [regla['servicio_id']]
+            
+        if not target_service_ids:
+             return jsonify({'eligible': False, 'message': 'Regla sin servicios config.'})
+
+        # Convert list to tuple for SQL IN clause
+        target_service_ids_tuple = tuple(target_service_ids)
+        
+        query = """
             SELECT v.fecha_venta 
             FROM venta_items vi
             JOIN ventas v ON vi.venta_id = v.id
             WHERE v.cliente_id = %s 
-              AND vi.servicio_id = %s
+              AND vi.servicio_id IN %s
               AND v.fecha_venta >= %s
               AND v.estado != 'Anulada'
             ORDER BY v.fecha_venta DESC
             LIMIT %s
-        """, (cliente_id, servicio_id, fecha_limite, cantidad_req + 2)) # Traemos un poco mas para verificar
+        """
+        # Fix for tuple with 1 element needing trailing comma which python generic tuple does, 
+        # but execute handles tuple gracefully if param is %s? No, for IN we usually need tuple 
+        # logic. Psycopg2 handles tuple adaptation automatically for IN.
+        
+        cursor.execute(query, (cliente_id, target_service_ids_tuple, fecha_limite, cantidad_req + 2))
         
         historial = cursor.fetchall()
         count = len(historial)
         
-        # LÓGICA:
-        # Si la regla dice "Despues de 5 cortes, el 6to es gratis/descuento".
-        # Significa que debe tener YA 5 cortes pagados en el historial reciente.
-        # Y este sería el 6to.
-        
         if count >= cantidad_req:
-            # ¡Cumple!
-            # Verificamos si el último corte NO fue ya bonificado (para no dar doble premio?)
-            # Sería complejo verificar uso. Asumiremos por cantidad pura en ventana de tiempo.
-            # Una mejora sería marcar los cortes "usados" para loyalty. Por ahora, conteo simple.
-            
             return jsonify({
                 'eligible': True, 
                 'discount_pct': float(regla['descuento_porcentaje']),
-                'message': f"¡Cliente fiel! Tiene {count} servicios recientes. Aplica {regla['descuento_porcentaje']}% de dcto.",
+                'message': f"¡Felicidades! Tiene {count} visitas acumuladas (Regla: {regla['nombre']}).",
                 'rule_id': regla['id']
             })
         else:
             return jsonify({
                 'eligible': False, 
-                'message': f"Lleva {count}/{cantidad_req} servicios en los últimos {periodo_meses} meses."
+                'message': f"Lleva {count}/{cantidad_req} visitas en los últimos {periodo_meses} meses."
             })
 
 # ==============================================================================

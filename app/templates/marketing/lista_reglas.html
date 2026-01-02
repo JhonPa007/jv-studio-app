@@ -76,13 +76,14 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="fw-bold">Servicio a Contabilizar</label>
-                        <select name="servicio_id" class="form-select" required>
+                        <label class="fw-bold">Servicios a Contabilizar</label>
+                        <select name="servicios_ids[]" id="selectServicios" class="form-select" multiple="multiple"
+                            style="width: 100%" required>
                             {% for s in servicios %}
                             <option value="{{ s.id }}">{{ s.nombre }} (S/ {{ s.precio }})</option>
                             {% endfor %}
                         </select>
-                        <small class="text-muted">El descuento se aplicará a este mismo servicio.</small>
+                        <small class="text-muted">Seleccione uno o varios servicios.</small>
                     </div>
 
                     <div class="row">
@@ -112,4 +113,28 @@
         </div>
     </div>
 </div>
+
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css"
+    rel="stylesheet" />
+
+<!-- Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Init Select2 on Modal Open
+        const modal = document.getElementById('modalNuevaRegla');
+        modal.addEventListener('shown.bs.modal', function () {
+            $('#selectServicios').select2({
+                theme: 'bootstrap-5',
+                width: '100%',
+                dropdownParent: $('#modalNuevaRegla'),
+                placeholder: 'Seleccione servicios...',
+                allowClear: true
+            });
+        });
+    });
+</script>
 {% endblock %}
