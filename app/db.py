@@ -155,7 +155,7 @@ def check_schema_updates(app):
                     ("configuracion_sucursal", "agenda_hora_fin", "TIME DEFAULT '22:00:00'"),
                     # Agregamos las de empleados también por seguridad
                     ("empleados", "tipo_contrato", "VARCHAR(20) DEFAULT 'FIJO'"),
-                    ("empleados", "puede_realizar_servicios", "BOOLEAN DEFAULT TRUE"),
+                    # ("empleados", "puede_realizar_servicios", "BOOLEAN DEFAULT TRUE"), # DEPRECATED
                     ("empleados", "porcentaje_comision_productos", "DECIMAL(5,2) DEFAULT 0.00"),
                     ("empleados", "configuracion_comision", "JSONB DEFAULT '{}'"),
                     # VENTAS
