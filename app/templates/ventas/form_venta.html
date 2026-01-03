@@ -774,6 +774,12 @@
     function registrarVenta() {
         if (listaItems.length === 0) { alert('Agregue ítems'); return; }
 
+        const empleadoId = document.getElementById('empleado_id').value;
+        if (!empleadoId) {
+            alert('Por favor seleccione un Colaborador.');
+            return;
+        }
+
         // Validaciones RUC/DNI
         const tipo = document.getElementById('tipo_comprobante').value;
 

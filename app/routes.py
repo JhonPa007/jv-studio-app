@@ -5257,6 +5257,9 @@ def nueva_venta():
             if not items: 
                 raise ValueError("No se puede registrar una venta sin productos o servicios.")
 
+            if not empleado_id:
+                raise ValueError("Debe seleccionar un Colaborador responsable de la venta.")
+
             descuento_global = float(request.form.get('descuento_global', 0) or 0)
             campana_id = request.form.get('campana_id') or None
             
