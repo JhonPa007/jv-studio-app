@@ -1,48 +1,40 @@
-
-from app import create_app
-from app.db import get_db
+import psycopg2
+import os
 
 def run_migration():
-    app = create_app()
-    with app.app_context():
-        try:
-            db = get_db()
-            cur = db.cursor()
-            
-            print("Checking/Creating loyalty_rules table...")
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS loyalty_rules (
-                    id SERIAL PRIMARY KEY,
-                    nombre VARCHAR(100) NOT NULL,
-                    servicio_id INTEGER REFERENCES servicios(id),
-                    cantidad_requerida INTEGER NOT NULL,
-                    periodo_meses INTEGER NOT NULL,
-                    descuento_porcentaje NUMERIC(5, 2) NOT NULL,
-                    activo BOOLEAN DEFAULT TRUE
-                );
-            """)
-            
-            print("Checking/Creating crm_config table...")
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS crm_config (
-                    id SERIAL PRIMARY KEY,
-                    tipo_evento VARCHAR(50) NOT NULL,
-                    mensaje_plantilla TEXT,
-                    dias_anticipacion INTEGER DEFAULT 0,
-                    activo BOOLEAN DEFAULT TRUE
-                );
-            """)
-            
-            db.commit()
-            print("Migration completed successfully.")
-            
-        except Exception as e:
-            print(f"Original Error: {repr(e)}")
-            print(f"DB Object Type: {type(db)}")
-            if hasattr(db, 'rollback'):
-                db.rollback()
-            else:
-                print("DB object has no rollback method.")
+    conn = None
+    try:
+        url = os.environ.get('DATABASE_URL')
+        if url:
+             conn = psycopg2.connect(url)
+             print(f"Conectado a NUBE/URL: {url.split('@')[1] if '@' in url else '...'}")
+        else:
+             print("Usando credenciales locales (localhost)...")
+             conn = psycopg2.connect(host="localhost", user="postgres", password="jv123", database="jv_studio_pg_db")
+
+        cur = conn.cursor()
+        print("Iniciando migración...")
+
+        # 1. Sumar
+        cur.execute("""
+            UPDATE clientes 
+            SET puntos_fidelidad = COALESCE(puntos_fidelidad, 0) + COALESCE(puntos_acumulados, 0)
+            WHERE puntos_acumulados > 0;
+        """)
+        print(f"Filas actualizadas (Suma): {cur.rowcount}")
+
+        # 2. Resetear
+        cur.execute("UPDATE clientes SET puntos_acumulados = 0 WHERE puntos_acumulados > 0;")
+        print(f"Filas actualizadas (Reset): {cur.rowcount}")
+        
+        conn.commit()
+        print("Migración Éxitosa.")
+        
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Error: {repr(e)}")
+    finally:
+        if conn: conn.close()
 
 if __name__ == "__main__":
     run_migration()

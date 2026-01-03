@@ -5455,9 +5455,9 @@ def nueva_venta():
             puntos_canjeados = int(request.form.get('puntos_canjeados') or 0)
             if puntos_canjeados > 0 and cliente_id:
                 # 1. Validar Saldo (Doble chequeo)
-                cursor.execute("SELECT puntos_acumulados FROM clientes WHERE id = %s", (cliente_id,))
+                cursor.execute("SELECT puntos_fidelidad FROM clientes WHERE id = %s", (cliente_id,))
                 row_pts = cursor.fetchone()
-                saldo_actual = row_pts['puntos_acumulados'] if row_pts else 0
+                saldo_actual = row_pts['puntos_fidelidad'] if row_pts else 0
                 
                 if saldo_actual >= puntos_canjeados:
                     # 2. Calcular descuento (25 pts = 1 sol)
@@ -5483,7 +5483,7 @@ def nueva_venta():
                     """, (monto_desc_puntos, f"Canje Puntos #{serie_comprobante}-{numero_comprobante_str}", current_user.id, caja_id))
                     
                     # 5. Descontar Puntos del Cliente
-                    cursor.execute("UPDATE clientes SET puntos_acumulados = puntos_acumulados - %s WHERE id = %s", (puntos_canjeados, cliente_id))
+                    cursor.execute("UPDATE clientes SET puntos_fidelidad = puntos_fidelidad - %s WHERE id = %s", (puntos_canjeados, cliente_id))
                     
                     # 6. Historial
                     cursor.execute("""
@@ -5497,7 +5497,7 @@ def nueva_venta():
                     puntos_ganados = int(monto_final) # Redondeo hacia abajo
                     if puntos_ganados > 0:
                         # Actualizar saldo cliente
-                        cursor.execute("UPDATE clientes SET puntos_acumulados = COALESCE(puntos_acumulados, 0) + %s WHERE id = %s", (puntos_ganados, cliente_id))
+                        cursor.execute("UPDATE clientes SET puntos_fidelidad = COALESCE(puntos_fidelidad, 0) + %s WHERE id = %s", (puntos_ganados, cliente_id))
                         # Registrar historial
                         cursor.execute("""
                             INSERT INTO puntos_historial (cliente_id, venta_id, monto_puntos, tipo_transaccion, descripcion)

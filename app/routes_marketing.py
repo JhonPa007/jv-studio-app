@@ -246,10 +246,10 @@ def get_client_status(cliente_id):
         }
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # 1. Datos Cliente & Puntos
-            cursor.execute("SELECT razon_social_nombres, telefono, puntos_acumulados FROM clientes WHERE id = %s", (cliente_id,))
+            cursor.execute("SELECT razon_social_nombres, telefono, puntos_fidelidad FROM clientes WHERE id = %s", (cliente_id,))
             row = cursor.fetchone()
             if row:
-                data['puntos'] = row['puntos_acumulados'] or 0
+                data['puntos'] = row['puntos_fidelidad'] or 0
                 data['cliente_nombre'] = row['razon_social_nombres'] or ''
                 data['cliente_telefono'] = row['telefono'] or ''
 
