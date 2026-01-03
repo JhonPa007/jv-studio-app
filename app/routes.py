@@ -5244,6 +5244,7 @@ def nueva_venta():
             tipo_comprobante = request.form.get('tipo_comprobante')
 
             cliente_receptor_id = int(cliente_id_str) if cliente_id_str and cliente_id_str.strip() else None
+            cliente_id = cliente_receptor_id  # Alias para compatibilidad con bloques inferiores
             empleado_id = int(empleado_id) if empleado_id and empleado_id.strip() else None
 
             
@@ -5441,7 +5442,7 @@ def nueva_venta():
                 # B. Consumir Items (Anti-Double-Dip)
                 from .routes_marketing import consumir_items_fidelidad
                 
-                for idx, item in enumerate(items_data):
+                for idx, item in enumerate(items):
                     if item.get('loyalty_applied') and item.get('loyalty_rule_id'):
                         rule_id = item['loyalty_rule_id']
                         group_id = f"SALE_{venta_id}_ITEM_{idx}"
