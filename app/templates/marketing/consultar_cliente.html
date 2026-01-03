@@ -23,8 +23,14 @@
             <div class="card bg-primary text-white text-center shadow">
                 <div class="card-body py-4">
                     <h5 class="card-title text-white-50">CANJEABLE</h5>
-                    <h1 class="display-3 fw-bold" id="lbl_puntos">0</h1>
-                    <p class="mb-0">Puntos Acumulados</p>
+                    <h1 class="display-3 fw-bold my-2" id="lbl_puntos">0</h1>
+                    <p class="mb-2">Puntos Acumulados</p>
+                    <h4 class="text-warning fw-bold mb-3" id="lbl_valor_puntos">S/ 0.00</h4>
+
+                    <a href="#" target="_blank" id="btn_wa_puntos"
+                        class="btn btn-outline-light btn-sm rounded-pill px-4 disabled">
+                        <i class="fab fa-whatsapp me-2"></i> Invitar a Canjear
+                    </a>
                 </div>
             </div>
         </div>
@@ -96,15 +102,43 @@
             document.getElementById('resultado_panel').style.display = 'none';
         });
 
+        function buildWaLink(phone, msg) {
+            if (!phone) return '#';
+            // Limpieza básica teléfono
+            let p = phone.replace(/\D/g, '');
+            if (p.length === 9) p = '51' + p; // Asumir Perú
+            return `https://wa.me/${p}?text=${encodeURIComponent(msg)}`;
+        }
+
         async function cargarDatos(id) {
             try {
                 const res = await fetch(`/marketing/api/client-status/${id}`);
                 const data = await res.json();
 
-                // Puntos
+                const nombreCliente = data.cliente_nombre.split(' ')[0] || 'Cliente';
+                const telefono = data.cliente_telefono;
+
+                // --- PUNTOS ---
                 document.getElementById('lbl_puntos').innerText = data.puntos;
 
-                // Historial
+                // Valorizar Puntos (25 pts = S/ 1.00)
+                const valorDinero = (data.puntos / 25).toFixed(2);
+                document.getElementById('lbl_valor_puntos').innerText = `S/ ${valorDinero}`;
+
+                // Botón WhatsApp Puntos
+                const btnWaPuntos = document.getElementById('btn_wa_puntos');
+                if (telefono && data.puntos >= 25) {
+                    const msgPuntos = `Hola ${nombreCliente}, te recordamos que tienes *${data.puntos} Puntos* acumulados en JV Studio (equivale a S/ ${valorDinero} de dscto). ¡Ven a canjearlos!`;
+                    btnWaPuntos.href = buildWaLink(telefono, msgPuntos);
+                    btnWaPuntos.classList.remove('disabled');
+                    btnWaPuntos.title = "Enviar recordatorio por WhatsApp";
+                } else {
+                    btnWaPuntos.href = '#';
+                    btnWaPuntos.classList.add('disabled');
+                    btnWaPuntos.title = "No disponible (Sin teléfono o sin puntos suficientes)";
+                }
+
+                // --- HISTORIAL ---
                 const tbl = document.getElementById('tbl_historial');
                 tbl.innerHTML = '';
                 data.historial_puntos.forEach(h => {
@@ -121,7 +155,7 @@
                 `;
                 });
 
-                // Reglas
+                // --- REGLAS ---
                 const cont = document.getElementById('container_reglas');
                 cont.innerHTML = '';
                 if (data.reglas.length === 0) {
@@ -131,13 +165,33 @@
                         const pct = (r.progreso / r.meta) * 100;
                         const esCompleto = r.progreso >= r.meta;
 
+                        let msgRegla = '';
+                        let textBtn = '';
+                        let colorBtn = '';
+
+                        if (esCompleto) {
+                            msgRegla = `¡Felicidades ${nombreCliente}! 🎉 Completaste tu meta de *${r.nombre}*. Tienes un *${r.descuento}% de descuento* esperando por ti. ¡Te esperamos!`;
+                            textBtn = 'Avisar Premio';
+                            colorBtn = 'success';
+                        } else {
+                            const faltan = r.meta - r.progreso;
+                            msgRegla = `Hola ${nombreCliente}, llevas ${r.progreso} visitas en tu tarjeta *${r.nombre}*. ¡Ya solo te faltan ${faltan} para tu premio! Te esperamos pronto.`;
+                            textBtn = 'Invitar';
+                            colorBtn = 'primary';
+                        }
+
+                        const linkWaRegla = buildWaLink(telefono, msgRegla);
+                        const disabledAttr = !telefono ? 'disabled' : '';
+
                         cont.innerHTML += `
                         <div class="col-md-6 mb-3">
                             <div class="card border-${esCompleto ? 'success' : 'secondary'} h-100">
                                 <div class="card-body">
-                                    <h5 class="card-title d-flex justify-content-between">
+                                    <h5 class="card-title d-flex justify-content-between align-items-center">
                                         ${r.nombre}
-                                        <span class="badge ${esCompleto ? 'bg-success' : 'bg-secondary'}">${esCompleto ? '¡LISTO!' : 'En Progreso'}</span>
+                                        <div class="text-end">
+                                            <span class="badge ${esCompleto ? 'bg-success' : 'bg-secondary'} mb-1 d-block">${esCompleto ? '¡LISTO!' : 'En Progreso'}</span>
+                                        </div>
                                     </h5>
                                     
                                     <div class="d-flex align-items-center mt-3 mb-2">
@@ -155,9 +209,16 @@
                                     <p class="card-text small text-muted mb-1">
                                         <i class="fas fa-clock me-1"></i> Vence: <strong>${r.vence}</strong>
                                     </p>
-                                    <p class="card-text small text-muted">
+                                    <p class="card-text small text-muted mb-3">
                                         <i class="fas fa-tag me-1"></i> Premio: <strong>${r.descuento}% Descuento</strong>
                                     </p>
+                                    
+                                    <div class="d-grid">
+                                        <a href="${linkWaRegla}" target="_blank" class="btn btn-outline-${colorBtn} btn-sm ${disabledAttr}">
+                                            <i class="fab fa-whatsapp me-2"></i> ${textBtn}
+                                        </a>
+                                    </div>
+
                                 </div>
                             </div>
                         </div>
