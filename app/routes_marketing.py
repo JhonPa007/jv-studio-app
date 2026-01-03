@@ -231,6 +231,51 @@ def consumir_items_fidelidad(cliente_id, rule_id, group_id):
 def consultar_cliente():
     return render_template('marketing/consultar_cliente.html')
 
+@marketing_bp.route('/api/clientes/buscar', methods=['GET'])
+@login_required
+def api_buscar_clientes_marketing():
+    """
+    API para buscar clientes por nombre o DNI.
+    Retorna JSON compatible con Consultar Cliente.
+    """
+    q = request.args.get('q', '').strip()
+    if not q:
+        return jsonify([])
+    
+    db = get_db()
+    try:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Búsqueda insensible a mayúsculas
+            search_pattern = f"%{q}%"
+            cursor.execute("""
+                SELECT id, razon_social_nombres, apellidos, numero_documento, telefono 
+                FROM clientes 
+                WHERE 
+                    razon_social_nombres ILIKE %s OR 
+                    apellidos ILIKE %s OR 
+                    numero_documento ILIKE %s
+                ORDER BY razon_social_nombres LIMIT 10
+            """, (search_pattern, search_pattern, search_pattern))
+            
+            resultados = cursor.fetchall()
+            
+            # Formatear respuesta
+            data = []
+            for r in resultados:
+                full_name = f"{r['razon_social_nombres']} {r['apellidos'] or ''}".strip()
+                data.append({
+                    'id': r['id'],
+                    'nombre': full_name,
+                    'documento': r['numero_documento'],
+                    'telefono': r['telefono']
+                })
+            
+            return jsonify(data)
+    except Exception as e:
+        print(f"Error buscando clientes API: {e}")
+        return jsonify([]), 500
+
+
 @marketing_bp.route('/api/client-status/<int:cliente_id>')
 @login_required
 def get_client_status(cliente_id):
