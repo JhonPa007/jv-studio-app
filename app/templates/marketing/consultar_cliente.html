@@ -96,7 +96,7 @@
         document.getElementById('txt_busqueda').focus();
     });
 
-    });
+
     // END DOMContentLoaded
 
     async function buscarCliente(e) {
@@ -116,7 +116,7 @@
 
         try {
             // Usa la misma API que usaba Select2
-            const res = await fetch(`/api/clientes/buscar?q=${encodeURIComponent(q)}`);
+            const res = await fetch(`/marketing/api/clientes/buscar?q=${encodeURIComponent(q)}`);
             const data = await res.json();
 
             if (data.length === 0) {
