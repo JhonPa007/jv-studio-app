@@ -1,11 +1,25 @@
 /* JV Studio - Global Styles & Components */
 
 /* FONT IMPORTS */
+@font-face {
+    font-family: 'Agency FB';
+    src: url('../fonts/AGENCYR.TTF') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Agency FB';
+    src: url('../fonts/AGENCYB.TTF') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+}
+
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
 
 :root {
     /* Fallback / Default Font */
-    --font-primary: 'Outfit', sans-serif;
+    --font-primary: 'Agency FB', 'Outfit', sans-serif;
 
     /* These variables should be provided by themes.css classes on body. 
        We define fallbacks here just in case. */
@@ -62,6 +76,11 @@ div {
 .text-muted {
     color: var(--color-text-secondary) !important;
     opacity: 0.8;
+}
+
+.text-light-green {
+    color: #90ee90 !important;
+    /* Light Green */
 }
 
 /* --- COMPONENTS --- */
