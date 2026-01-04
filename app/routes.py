@@ -637,8 +637,19 @@ def api_crear_cliente_rapido():
     """
     data = request.get_json()
     nombre = data.get('razon_social_nombres', '').strip()
+    apellido_paterno = data.get('apellido_paterno', '').strip() or None
+    apellido_materno = data.get('apellido_materno', '').strip() or None
     telefono = data.get('telefono', '').strip()
     documento = data.get('numero_documento', '').strip() or None
+
+    parts = []
+    if apellido_paterno: parts.append(apellido_paterno)
+    if apellido_materno: parts.append(apellido_materno)
+    apellidos = " ".join(parts) if parts else None
+
+    # Si hay apellidos, el nombre de visualización podría incluir el apellido para mayor claridad
+    # Pero el select2 muestra "{razon_social_nombres} ({telefono})"
+    # Quizás queramos actualizar lo que devuelve la API también.
 
     if not nombre or not telefono:
         return jsonify({'success': False, 'message': 'Nombre y Teléfono son obligatorios.'}), 400
@@ -654,20 +665,26 @@ def api_crear_cliente_rapido():
 
         # 2. Insertar
         sql = """
-            INSERT INTO clientes (razon_social_nombres, telefono, numero_documento, fecha_registro)
-            VALUES (%s, %s, %s, CURRENT_DATE)
-            RETURNING id, razon_social_nombres
+            INSERT INTO clientes (razon_social_nombres, apellidos, apellido_paterno, apellido_materno, telefono, numero_documento, fecha_registro)
+            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_DATE)
+            RETURNING id, razon_social_nombres, apellidos
         """
-        cursor.execute(sql, (nombre, telefono, documento))
+        cursor.execute(sql, (nombre, apellidos, apellido_paterno, apellido_materno, telefono, documento))
         nuevo_cliente = cursor.fetchone()
         db.commit()
         cursor.close()
+
+        # Construir texto para el select2
+        display_text = f"{nuevo_cliente['razon_social_nombres']}"
+        if nuevo_cliente['apellidos']:
+            display_text += f" {nuevo_cliente['apellidos']}"
+        display_text += f" ({telefono})"
 
         return jsonify({
             'success': True, 
             'cliente': {
                 'id': nuevo_cliente['id'],
-                'text': f"{nuevo_cliente['razon_social_nombres']} ({telefono})"
+                'text': display_text
             }
         })
 

@@ -10,10 +10,22 @@
             <div class="modal-body p-3">
                 <form id="formQuickCreateCliente">
                     <div class="mb-2">
-                        <label class="form-label small fw-bold mb-1">Nombre Completo <span
-                                class="text-danger">*</span></label>
+                        <label class="form-label small fw-bold mb-1">Nombres <span class="text-danger">*</span></label>
                         <input type="text" class="form-control form-control-sm" name="razon_social_nombres" required
-                            placeholder="Ej. Juan Pérez">
+                            placeholder="Ej. Juan">
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-2">
+                            <label class="form-label small fw-bold mb-1">Apellido Paterno <span
+                                    class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" name="apellido_paterno" required
+                                placeholder="Ej. Pérez">
+                        </div>
+                        <div class="col-6 mb-2">
+                            <label class="form-label small fw-bold mb-1">Apellido Materno</label>
+                            <input type="text" class="form-control form-control-sm" name="apellido_materno"
+                                placeholder="Ej. Gómez">
+                        </div>
                     </div>
                     <div class="mb-2">
                         <label class="form-label small fw-bold mb-1">Teléfono (Celular) <span
