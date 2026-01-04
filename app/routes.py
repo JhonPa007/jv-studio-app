@@ -499,7 +499,16 @@ def nuevo_cliente():
         tipo_documento = request.form.get('tipo_documento')
         numero_documento = request.form.get('numero_documento', '').strip() or None
         nombres = request.form.get('razon_social_nombres', '').strip()
-        apellidos = request.form.get('apellidos', '').strip() or None
+        
+        # Nuevos campos de apellidos
+        apellido_paterno = request.form.get('apellido_paterno', '').strip() or None
+        apellido_materno = request.form.get('apellido_materno', '').strip() or None
+        
+        # Construir apellidos concatenados para mantener compatibilidad
+        parts = []
+        if apellido_paterno: parts.append(apellido_paterno)
+        if apellido_materno: parts.append(apellido_materno)
+        apellidos = " ".join(parts) if parts else None
         direccion = request.form.get('direccion', '').strip() or None
         email = request.form.get('email', '').strip() or None
         telefono = request.form.get('telefono', '').strip() or None
@@ -559,10 +568,12 @@ def nuevo_cliente():
             cursor_insert = db_conn.cursor()
             sql = """INSERT INTO clientes 
                         (tipo_documento, numero_documento, razon_social_nombres, apellidos, 
+                         apellido_paterno, apellido_materno,
                          direccion, email, telefono, fecha_nacimiento, puntos_fidelidad, apoderado_id, genero, preferencia_servicio) 
-                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
             
             cursor_insert.execute(sql, (tipo_documento, numero_documento, nombres, apellidos, 
+                                        apellido_paterno, apellido_materno,
                                         direccion, email, telefono, fecha_nacimiento, puntos, apoderado_id, genero, preferencia_servicio))
             db_conn.commit()
             
@@ -713,7 +724,15 @@ def editar_cliente(cliente_id):
         tipo_documento = request.form.get('tipo_documento')
         numero_documento = request.form.get('numero_documento', '').strip() or None
         razon_social_nombres = request.form.get('razon_social_nombres', '').strip()
-        apellidos = request.form.get('apellidos', '').strip() or None
+        
+        # Nuevos apellidos
+        apellido_paterno = request.form.get('apellido_paterno', '').strip() or None
+        apellido_materno = request.form.get('apellido_materno', '').strip() or None
+        
+        parts = []
+        if apellido_paterno: parts.append(apellido_paterno)
+        if apellido_materno: parts.append(apellido_materno)
+        apellidos = " ".join(parts) if parts else None
         direccion = request.form.get('direccion', '').strip() or None
         email = request.form.get('email', '').strip() or None
         telefono = request.form.get('telefono', '').strip() or None
@@ -785,12 +804,14 @@ def editar_cliente(cliente_id):
             cursor_update = db_conn.cursor()
             sql_update = """UPDATE clientes SET 
                                 tipo_documento=%s, numero_documento=%s, razon_social_nombres=%s, 
-                                apellidos=%s, direccion=%s, email=%s, telefono=%s, 
+                                apellidos=%s, apellido_paterno=%s, apellido_materno=%s,
+                                direccion=%s, email=%s, telefono=%s, 
                                 fecha_nacimiento=%s, puntos_fidelidad=%s, apoderado_id=%s,
                                 genero=%s, preferencia_servicio=%s
                             WHERE id=%s"""
-            val_update = (tipo_documento, numero_documento, razon_social_nombres, apellidos, direccion,
-                          email, telefono, fecha_nacimiento, puntos_fidelidad, apoderado_id, 
+            val_update = (tipo_documento, numero_documento, razon_social_nombres, apellidos, 
+                          apellido_paterno, apellido_materno,
+                          direccion, email, telefono, fecha_nacimiento, puntos_fidelidad, apoderado_id, 
                           genero, preferencia_servicio, cliente_id)
             
             cursor_update.execute(sql_update, val_update)

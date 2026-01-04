@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}
-    {{ "Editar Cliente" if cliente else "Agregar Nuevo Cliente" }}
+{{ "Editar Cliente" if cliente else "Agregar Nuevo Cliente" }}
 {% endblock %}
 
 {% block content %}
@@ -27,54 +27,74 @@
                                     <legend class="fs-6 fw-bold text-info px-2 w-auto">Identificación</legend>
 
                                     <div class="mb-3">
-                                        <label for="tipo_documento" class="form-label text-light small">Tipo de Documento</label>
-                                        <select class="form-select bg-dark text-light border-secondary" id="tipo_documento" name="tipo_documento" required onchange="toggleCampos()">
-                                            <option value="DNI" {% if data.tipo_documento == 'DNI' %}selected{% endif %}>DNI</option>
-                                            <option value="RUC" {% if data.tipo_documento == 'RUC' %}selected{% endif %}>RUC</option>
-                                            <option value="CE" {% if data.tipo_documento == 'CE' %}selected{% endif %}>Carnet Ext.</option>
-                                            <option value="Pasaporte" {% if data.tipo_documento == 'Pasaporte' %}selected{% endif %}>Pasaporte</option>
+                                        <label for="tipo_documento" class="form-label text-light small">Tipo de
+                                            Documento</label>
+                                        <select class="form-select bg-dark text-light border-secondary"
+                                            id="tipo_documento" name="tipo_documento" required
+                                            onchange="toggleCampos()">
+                                            <option value="DNI" {% if data.tipo_documento=='DNI' %}selected{% endif %}>
+                                                DNI</option>
+                                            <option value="RUC" {% if data.tipo_documento=='RUC' %}selected{% endif %}>
+                                                RUC</option>
+                                            <option value="CE" {% if data.tipo_documento=='CE' %}selected{% endif %}>
+                                                Carnet Ext.</option>
+                                            <option value="Pasaporte" {% if data.tipo_documento=='Pasaporte'
+                                                %}selected{% endif %}>Pasaporte</option>
                                         </select>
                                     </div>
 
                                     <div class="mb-3">
-                                        <label for="numero_documento" class="form-label text-light small">Número de Documento</label>
+                                        <label for="numero_documento" class="form-label text-light small">Número de
+                                            Documento</label>
                                         <div class="input-group">
-                                            <input type="text" class="form-control bg-dark text-light border-secondary" 
-                                                   id="numero_documento" name="numero_documento" 
-                                                   value="{{ data.numero_documento or '' }}" required placeholder="Ingrese número">
-                                            <button class="btn btn-warning fw-bold" type="button" id="btn-buscar-documento">
+                                            <input type="text" class="form-control bg-dark text-light border-secondary"
+                                                id="numero_documento" name="numero_documento"
+                                                value="{{ data.numero_documento or '' }}" required
+                                                placeholder="Ingrese número">
+                                            <button class="btn btn-warning fw-bold" type="button"
+                                                id="btn-buscar-documento">
                                                 <i class="fas fa-search"></i> Buscar
                                             </button>
                                         </div>
                                     </div>
 
                                     <div class="mb-3">
-                                        <label for="razon_social_nombres" class="form-label text-light small" id="lbl-nombres">Nombres</label>
-                                        <input type="text" class="form-control bg-dark text-light border-secondary" 
-                                               id="razon_social_nombres" name="razon_social_nombres" 
-                                               value="{{ data.razon_social_nombres or '' }}" required>
+                                        <label for="razon_social_nombres" class="form-label text-light small"
+                                            id="lbl-nombres">Nombres</label>
+                                        <input type="text" class="form-control bg-dark text-light border-secondary"
+                                            id="razon_social_nombres" name="razon_social_nombres"
+                                            value="{{ data.razon_social_nombres or '' }}" required>
                                     </div>
-                                    
+
                                     <div id="bloque-apellidos">
                                         <div class="row g-2 mb-3">
                                             <div class="col-6">
-                                                <label class="form-label text-light small">Apellido Paterno</label>
-                                                <input type="text" class="form-control bg-dark text-light border-secondary inputs-apellido" id="ape_paterno">
+                                                <label for="apellido_paterno"
+                                                    class="form-label text-light small">Apellido Paterno</label>
+                                                <input type="text"
+                                                    class="form-control bg-dark text-light border-secondary"
+                                                    id="apellido_paterno" name="apellido_paterno"
+                                                    value="{{ data.apellido_paterno or '' }}">
                                             </div>
                                             <div class="col-6">
-                                                <label class="form-label text-light small">Apellido Materno</label>
-                                                <input type="text" class="form-control bg-dark text-light border-secondary inputs-apellido" id="ape_materno">
+                                                <label for="apellido_materno"
+                                                    class="form-label text-light small">Apellido Materno</label>
+                                                <input type="text"
+                                                    class="form-control bg-dark text-light border-secondary"
+                                                    id="apellido_materno" name="apellido_materno"
+                                                    value="{{ data.apellido_materno or '' }}">
                                             </div>
                                         </div>
                                     </div>
 
-                                    <input type="hidden" id="apellidos" name="apellidos" value="{{ data.apellidos or '' }}">
+
 
                                     <div class="mb-3">
-                                        <label for="fecha_nacimiento" class="form-label text-light small">Fecha de Nacimiento</label>
-                                        <input type="date" class="form-control bg-dark text-light border-secondary" 
-                                               id="fecha_nacimiento" name="fecha_nacimiento" 
-                                               value="{{ data.fecha_nacimiento or '' }}">
+                                        <label for="fecha_nacimiento" class="form-label text-light small">Fecha de
+                                            Nacimiento</label>
+                                        <input type="date" class="form-control bg-dark text-light border-secondary"
+                                            id="fecha_nacimiento" name="fecha_nacimiento"
+                                            value="{{ data.fecha_nacimiento or '' }}">
                                     </div>
 
                                 </fieldset>
@@ -83,32 +103,32 @@
                             <div class="col-md-6">
                                 <fieldset class="border border-secondary p-3 rounded mb-4 h-100">
                                     <legend class="fs-6 fw-bold text-info px-2 w-auto">Contacto</legend>
-                                    
+
                                     <div class="mb-3">
                                         <label for="direccion" class="form-label text-light small">Dirección</label>
-                                        <input type="text" class="form-control bg-dark text-light border-secondary" 
-                                               id="direccion" name="direccion" 
-                                               value="{{ data.direccion or '' }}">
+                                        <input type="text" class="form-control bg-dark text-light border-secondary"
+                                            id="direccion" name="direccion" value="{{ data.direccion or '' }}">
                                     </div>
 
                                     <div class="mb-3">
-                                        <label for="email" class="form-label text-light small">Correo Electrónico</label>
-                                        <input type="email" class="form-control bg-dark text-light border-secondary" 
-                                               id="email" name="email" 
-                                               value="{{ data.email or '' }}">
+                                        <label for="email" class="form-label text-light small">Correo
+                                            Electrónico</label>
+                                        <input type="email" class="form-control bg-dark text-light border-secondary"
+                                            id="email" name="email" value="{{ data.email or '' }}">
                                     </div>
 
                                     <div class="mb-3">
-                                        <label for="telefono" class="form-label text-light small">Teléfono / Celular</label>
-                                        <input type="tel" class="form-control bg-dark text-light border-secondary" 
-                                               id="telefono" name="telefono" 
-                                               value="{{ data.telefono or '' }}">
+                                        <label for="telefono" class="form-label text-light small">Teléfono /
+                                            Celular</label>
+                                        <input type="tel" class="form-control bg-dark text-light border-secondary"
+                                            id="telefono" name="telefono" value="{{ data.telefono or '' }}">
                                     </div>
-                                    
+
                                     <div class="mb-3">
                                         <label class="form-label text-light small">Ocupación / Notas</label>
-                                        <textarea class="form-control bg-dark text-light border-secondary" 
-                                                  id="ocupacion" name="ocupacion" rows="2">{{ data.ocupacion or '' }}</textarea>
+                                        <textarea class="form-control bg-dark text-light border-secondary"
+                                            id="ocupacion" name="ocupacion"
+                                            rows="2">{{ data.ocupacion or '' }}</textarea>
                                     </div>
                                 </fieldset>
                             </div>
@@ -131,87 +151,73 @@
 {% block scripts %}
 {{ super() }}
 <script>
-// Función para mostrar u ocultar apellidos según el tipo
-function toggleCampos() {
-    const tipo = document.getElementById('tipo_documento').value;
-    const bloqueApellidos = document.getElementById('bloque-apellidos');
-    const lblNombres = document.getElementById('lbl-nombres');
-    
-    if (tipo === 'RUC') {
-        bloqueApellidos.style.display = 'none';
-        lblNombres.innerText = 'Razón Social';
-        // Limpiar apellidos visuales
-        document.getElementById('ape_paterno').value = '';
-        document.getElementById('ape_materno').value = '';
-    } else {
-        bloqueApellidos.style.display = 'block';
-        lblNombres.innerText = 'Nombres';
-    }
-}
-
-// Sincronizar inputs separados con el campo oculto "apellidos" para la BD
-function syncApellidos() {
-    const pat = document.getElementById('ape_paterno').value.trim();
-    const mat = document.getElementById('ape_materno').value.trim();
-    document.getElementById('apellidos').value = `${pat} ${mat}`.trim();
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    // Inicializar estado visual
-    toggleCampos();
-    
-    // Escuchar cambios manuales en apellidos para actualizar el oculto
-    document.querySelectorAll('.inputs-apellido').forEach(input => {
-        input.addEventListener('input', syncApellidos);
-    });
-
-    const btnBuscar = document.getElementById('btn-buscar-documento');
-    const searchIcon = btnBuscar.querySelector('i');
-
-    btnBuscar.addEventListener('click', async () => {
+    // Función para mostrar u ocultar apellidos según el tipo
+    function toggleCampos() {
         const tipo = document.getElementById('tipo_documento').value;
-        const numero = document.getElementById('numero_documento').value.trim();
+        const bloqueApellidos = document.getElementById('bloque-apellidos');
+        const lblNombres = document.getElementById('lbl-nombres');
 
-        if (!numero) { alert('Ingrese número'); return; }
-
-        btnBuscar.disabled = true;
-        searchIcon.className = 'fas fa-spinner fa-spin';
-
-        try {
-            const res = await fetch(`/api/consultar-documento/${tipo}/${numero}`);
-            const data = await res.json();
-
-            if (data.success) {
-                // RUC
-                if (data.tipo === 'RUC') {
-                    document.getElementById('razon_social_nombres').value = data.razon_social;
-                    document.getElementById('direccion').value = data.direccion || '';
-                    // Vaciar apellidos por si acaso
-                    document.getElementById('ape_paterno').value = '';
-                    document.getElementById('ape_materno').value = '';
-                    syncApellidos();
-                } 
-                // DNI
-                else {
-                    document.getElementById('razon_social_nombres').value = data.nombres;
-                    document.getElementById('ape_paterno').value = data.apellido_paterno;
-                    document.getElementById('ape_materno').value = data.apellido_materno;
-                    syncApellidos(); // Actualiza el hidden
-                    
-                    if (data.direccion) document.getElementById('direccion').value = data.direccion;
-                    if (data.fecha_nacimiento) document.getElementById('fecha_nacimiento').value = data.fecha_nacimiento;
-                }
-            } else {
-                alert(data.message || 'No encontrado');
-            }
-        } catch (e) {
-            console.error(e);
-            alert('Error de conexión');
-        } finally {
-            btnBuscar.disabled = false;
-            searchIcon.className = 'fas fa-search';
+        if (tipo === 'RUC') {
+            bloqueApellidos.style.display = 'none';
+            lblNombres.innerText = 'Razón Social';
+            // Limpiar apellidos visuales
+            document.getElementById('apellido_paterno').value = '';
+            document.getElementById('apellido_materno').value = '';
+        } else {
+            bloqueApellidos.style.display = 'block';
+            lblNombres.innerText = 'Nombres';
         }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Inicializar estado visual
+        toggleCampos();
+
+
+        const btnBuscar = document.getElementById('btn-buscar-documento');
+        const searchIcon = btnBuscar.querySelector('i');
+
+        btnBuscar.addEventListener('click', async () => {
+            const tipo = document.getElementById('tipo_documento').value;
+            const numero = document.getElementById('numero_documento').value.trim();
+
+            if (!numero) { alert('Ingrese número'); return; }
+
+            btnBuscar.disabled = true;
+            searchIcon.className = 'fas fa-spinner fa-spin';
+
+            try {
+                const res = await fetch(`/api/consultar-documento/${tipo}/${numero}`);
+                const data = await res.json();
+
+                if (data.success) {
+                    // RUC
+                    if (data.tipo === 'RUC') {
+                        document.getElementById('razon_social_nombres').value = data.razon_social;
+                        document.getElementById('direccion').value = data.direccion || '';
+                        document.getElementById('apellido_paterno').value = '';
+                        document.getElementById('apellido_materno').value = '';
+                    }
+                    // DNI
+                    else {
+                        document.getElementById('razon_social_nombres').value = data.nombres;
+                        document.getElementById('apellido_paterno').value = data.apellido_paterno;
+                        document.getElementById('apellido_materno').value = data.apellido_materno;
+
+                        if (data.direccion) document.getElementById('direccion').value = data.direccion;
+                        if (data.fecha_nacimiento) document.getElementById('fecha_nacimiento').value = data.fecha_nacimiento;
+                    }
+                } else {
+                    alert(data.message || 'No encontrado');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Error de conexión');
+            } finally {
+                btnBuscar.disabled = false;
+                searchIcon.className = 'fas fa-search';
+            }
+        });
     });
-});
 </script>
 {% endblock %}
