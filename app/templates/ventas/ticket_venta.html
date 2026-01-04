@@ -1,88 +1,120 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <title>Ticket de Venta #{{ venta.id }}</title>
     <style>
         /* Estilos optimizados para una impresora de tickets (80mm o 58mm) o una impresión simple */
         body {
-            font-family: 'Courier New', Courier, monospace; /* Fuente de ancho fijo, típica de tickets */
-            font-size: 10pt;
+            font-family: 'Courier New', Courier, monospace;
+            /* Fuente de ancho fijo, típica de tickets */
+            font-size: 12pt;
+            /* Aumentado de 10pt a 12pt */
             color: #000;
             margin: 0;
             padding: 5px;
-            width: 300px; /* Ancho típico para tickets de 80mm */
+            width: 320px;
+            /* Aumentado de 300px a 320px */
         }
+
         .ticket {
             width: 100%;
         }
-        .header, .footer {
+
+        .header,
+        .footer {
             text-align: center;
         }
+
         .header h2 {
             margin: 0;
             font-size: 14pt;
         }
+
         .header p {
             margin: 2px 0;
             font-size: 9pt;
         }
+
         .info dl {
             margin: 5px 0;
         }
-        .info dt, .info dd {
+
+        .info dt,
+        .info dd {
             display: inline-block;
             margin: 0;
         }
+
         .info dt {
             width: 100px;
             font-weight: bold;
         }
+
         .items-table {
             width: 100%;
             border-collapse: collapse;
             margin: 10px 0;
         }
-        .items-table th, .items-table td {
+
+        .items-table th,
+        .items-table td {
             font-size: 9pt;
             padding: 3px 0;
         }
+
         .items-table thead {
             border-top: 1px dashed #000;
             border-bottom: 1px dashed #000;
         }
-        .items-table .col-qty { text-align: center; }
-        .items-table .col-price, .items-table .col-subtotal { text-align: right; }
+
+        .items-table .col-qty {
+            text-align: center;
+        }
+
+        .items-table .col-price,
+        .items-table .col-subtotal {
+            text-align: right;
+        }
+
         .totals {
             margin-top: 10px;
             border-top: 1px solid #000;
         }
+
         .totals .row {
             display: flex;
             justify-content: space-between;
             margin: 3px 0;
         }
+
         .totals .row.grand-total {
             font-weight: bold;
             font-size: 12pt;
             margin-top: 5px;
         }
+
         .footer {
             margin-top: 15px;
             border-top: 1px dashed #000;
             padding-top: 5px;
         }
+
         @media print {
+
             /* Ocultar márgenes y cabeceras/pies de página del navegador al imprimir */
             @page {
                 margin: 5mm;
             }
+
             body {
                 margin: 0;
             }
         }
     </style>
 </head>
+
 <body>
     <div class="ticket">
         <header class="header">
@@ -94,22 +126,22 @@
 
         <section class="info">
             <p>
-                <dl>
-                    <dt>Comprobante:</dt>
-                    <dd>{{ venta.tipo_comprobante or 'Nota de Venta' }}</dd>
-                    <br>
-                    <dt>Número:</dt>
-                    <dd>{{ venta.serie_comprobante or 'S-01' }}-{{ venta.numero_comprobante or venta.id }}</dd>
-                    <br>
-                    <dt>Fecha:</dt>
-                    <dd>{{ venta.fecha_venta.strftime('%d/%m/%Y %H:%M') }}</dd>
-                    <br>
-                    <dt>Colaborador:</dt>
-                    <dd>{{ venta.colaborador_nombre_display or 'N/A' }}</dd>
-                    <br>
-                    <dt>Cliente:</dt>
-                    <dd>{{ venta.cliente_nombre_completo or 'Cliente Varios' }}</dd>
-                </dl>
+            <dl>
+                <dt>Comprobante:</dt>
+                <dd>{{ venta.tipo_comprobante or 'Nota de Venta' }}</dd>
+                <br>
+                <dt>Número:</dt>
+                <dd>{{ venta.serie_comprobante or 'S-01' }}-{{ venta.numero_comprobante or venta.id }}</dd>
+                <br>
+                <dt>Fecha:</dt>
+                <dd>{{ venta.fecha_venta.strftime('%d/%m/%Y %H:%M') }}</dd>
+                <br>
+                <dt>Colaborador:</dt>
+                <dd>{{ venta.colaborador_nombre_display or 'N/A' }}</dd>
+                <br>
+                <dt>Cliente:</dt>
+                <dd>{{ venta.cliente_nombre_completo or 'Cliente Varios' }}</dd>
+            </dl>
             </p>
         </section>
 
@@ -170,9 +202,10 @@
 
     <script>
         // Este script activará el diálogo de impresión automáticamente al cargar la página
-        window.onload = function() {
+        window.onload = function () {
             window.print();
         };
     </script>
 </body>
+
 </html>

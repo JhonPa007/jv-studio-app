@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <title>Ticket #{{ venta.numero_comprobante }}</title>
@@ -7,56 +8,122 @@
         /* Estilos para Impresora Térmica (80mm) */
         body {
             font-family: 'Courier New', Courier, monospace;
-            width: 76mm; /* Ajustado un poco menos de 80mm para márgenes físicos */
+            width: 78mm;
+            /* Ajustado para maximizar el ancho disponible */
             margin: 0 auto;
             padding: 2px;
             color: #000;
             background-color: #fff;
-            font-size: 12px;
-            line-height: 1.2;
+            font-size: 15px;
+            /* Aumentado de 12px a 15px */
+            line-height: 1.1;
+            /* Reducido un poco para compensar el tamaño */
         }
-        .header, .footer { text-align: center; margin-bottom: 10px; }
-        .header h2 { margin: 5px 0; font-size: 16px; font-weight: bold; text-transform: uppercase; }
-        .info { margin-bottom: 10px; border-bottom: 1px dashed #000; padding-bottom: 5px; }
-        .info p { margin: 2px 0; }
-        
-        table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-        th { text-align: left; border-bottom: 1px solid #000; font-size: 11px; }
-        td { padding: 4px 0; vertical-align: top; }
-        
-        .text-right { text-align: right; }
-        .text-center { text-align: center; }
-        .fw-bold { font-weight: bold; }
-        
-        .totales { border-top: 1px dashed #000; padding-top: 5px; }
-        .totales p { margin: 3px 0; text-align: right; }
-        
-        .pagos { margin-top: 10px; font-size: 11px; border-top: 1px dashed #000; padding-top: 5px; }
-        
+
+        .header,
+        .footer {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .header h2 {
+            margin: 5px 0;
+            font-size: 16px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .info {
+            margin-bottom: 10px;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 5px;
+        }
+
+        .info p {
+            margin: 2px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+
+        th {
+            text-align: left;
+            border-bottom: 1px solid #000;
+            font-size: 11px;
+        }
+
+        td {
+            padding: 4px 0;
+            vertical-align: top;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .fw-bold {
+            font-weight: bold;
+        }
+
+        .totales {
+            border-top: 1px dashed #000;
+            padding-top: 5px;
+        }
+
+        .totales p {
+            margin: 3px 0;
+            text-align: right;
+        }
+
+        .pagos {
+            margin-top: 10px;
+            font-size: 11px;
+            border-top: 1px dashed #000;
+            padding-top: 5px;
+        }
+
         /* Botones de control */
-        .no-print { 
-            margin-bottom: 20px; 
-            text-align: center; 
-            background: #eee; 
-            padding: 10px; 
-            border-bottom: 1px solid #ccc; 
+        .no-print {
+            margin-bottom: 20px;
+            text-align: center;
+            background: #eee;
+            padding: 10px;
+            border-bottom: 1px solid #ccc;
         }
+
         button {
-            padding: 8px 16px; 
-            cursor: pointer; 
-            font-size: 14px; 
-            border: 1px solid #999; 
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            border: 1px solid #999;
             border-radius: 4px;
             background: #fff;
         }
-        button:hover { background: #ddd; }
+
+        button:hover {
+            background: #ddd;
+        }
 
         @media print {
-            .no-print { display: none; }
-            body { margin: 0; padding: 0; }
+            .no-print {
+                display: none;
+            }
+
+            body {
+                margin: 0;
+                padding: 0;
+            }
         }
     </style>
 </head>
+
 <body onload="window.print()">
 
     <div class="no-print">
@@ -67,19 +134,19 @@
     <div class="header">
         <h2>{{ venta.sucursal_nombre }}</h2>
         <p>{{ venta.sucursal_direccion }}</p>
-        </div>
+    </div>
 
     <div class="info">
         <div class="text-center fw-bold mb-2">
             {{ venta.tipo_comprobante }}<br>
             {{ venta.serie_comprobante }}-{{ venta.numero_comprobante }}
         </div>
-        
+
         <p>Fecha: {{ venta.fecha_venta.strftime('%d/%m/%Y %H:%M') }}</p>
-        
+
         <p>Atendido por: {{ venta.empleado_nombre }}</p>
         <p>Cliente: {{ venta.cliente_nombre }}</p>
-        
+
         {% if venta.cliente_doc %}
         <p>Doc: {{ venta.cliente_doc }}</p>
         {% endif %}
@@ -128,4 +195,5 @@
     </div>
 
 </body>
+
 </html>
