@@ -5463,7 +5463,14 @@ def nueva_venta():
                     # 2. Calcular descuento (25 pts = 1 sol)
                     monto_desc_puntos = puntos_canjeados / 25.0
                     
-                    # 3. Registrar Gasto Interno (Para cuadrar caja)
+                    # 3. Determinar el Método de Gasto según el pago de la venta
+                    # Si al menos un pago es Efectivo, el canje se considera salida de Efectivo para cuadre
+                    # Si todo es digital, el canje es Interno.
+                    es_pago_efectivo = any(p.get('metodo') == 'Efectivo' for p in pagos)
+                    metodo_gasto = 'Efectivo' if es_pago_efectivo else 'Interno'
+                    metodo_movimiento = 'Efectivo' if es_pago_efectivo else 'SISTEMA'
+
+                    # 4. Registrar Gasto Interno (Para cuadrar caja)
                     cursor.execute("SELECT id FROM categorias_gastos WHERE nombre = 'Canje Puntos'")
                     cat_pts = cursor.fetchone()
                     cat_pts_id = cat_pts['id'] if cat_pts else None
@@ -5473,14 +5480,14 @@ def nueva_venta():
                     
                     cursor.execute("""
                         INSERT INTO gastos (sucursal_id, categoria_gasto_id, caja_sesion_id, fecha, descripcion, monto, metodo_pago, registrado_por_colaborador_id)
-                        VALUES (%s, %s, %s, CURRENT_DATE, %s, %s, 'Interno', %s)
-                    """, (sucursal_id, cat_pts_id, caja_id, f"Canje Puntos Venta #{serie_comprobante}-{numero_comprobante_str}", monto_desc_puntos, current_user.id))
+                        VALUES (%s, %s, %s, CURRENT_DATE, %s, %s, %s, %s)
+                    """, (sucursal_id, cat_pts_id, caja_id, f"Canje Puntos Venta #{serie_comprobante}-{numero_comprobante_str}", monto_desc_puntos, metodo_gasto, current_user.id))
 
-                    # 4. Registrar Movimiento Egreso (Virtual)
+                    # 5. Registrar Movimiento Egreso
                     cursor.execute("""
                         INSERT INTO movimientos_caja (tipo, monto, concepto, metodo_pago, usuario_id, caja_sesion_id)
-                        VALUES ('EGRESO', %s, %s, 'SISTEMA', %s, %s)
-                    """, (monto_desc_puntos, f"Canje Puntos #{serie_comprobante}-{numero_comprobante_str}", current_user.id, caja_id))
+                        VALUES ('EGRESO', %s, %s, %s, %s, %s)
+                    """, (monto_desc_puntos, f"Canje Puntos #{serie_comprobante}-{numero_comprobante_str}", metodo_movimiento, current_user.id, caja_id))
                     
                     # 5. Descontar Puntos del Cliente
                     cursor.execute("UPDATE clientes SET puntos_fidelidad = puntos_fidelidad - %s WHERE id = %s", (puntos_canjeados, cliente_id))
