@@ -5498,10 +5498,17 @@ def nueva_venta():
                         VALUES (%s, %s, %s, 'CANJE', %s)
                     """, (cliente_id, venta_id, puntos_canjeados, f"Canje por S/ {monto_desc_puntos:.2f} en Venta #{serie_comprobante}-{numero_comprobante_str}"))
 
-            # 10. (NUEVO) ACUMULAR PUNTOS (1 Sol = 1 Punto)
+            # 10. (NUEVO) ACUMULAR PUNTOS (Solo Servicios - 1 Sol = 1 Punto)
             if cliente_id:
                 try:
-                    puntos_ganados = int(monto_final) # Redondeo hacia abajo
+                    # Calcular Puntos solo sobre SERVICIOS (aplicando descuento proporcional)
+                    monto_servicios_neto = 0
+                    if monto_total_bruto > 0:
+                        factor_neto = monto_final / monto_total_bruto
+                        monto_servicios_neto = subtotal_servicios * factor_neto
+                    
+                    puntos_ganados = int(monto_servicios_neto) 
+
                     if puntos_ganados > 0:
                         # Actualizar saldo cliente
                         cursor.execute("UPDATE clientes SET puntos_fidelidad = COALESCE(puntos_fidelidad, 0) + %s WHERE id = %s", (puntos_ganados, cliente_id))
