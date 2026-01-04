@@ -1,0 +1,38 @@
+<div class="modal fade text-dark" id="modalQuickCreateCliente" tabindex="-1"
+    style="background-color: rgba(0,0,0,0.5); z-index: 10600;" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-success text-white py-2">
+                <h6 class="modal-title fw-bold"><i class="fas fa-user-plus me-2"></i>Nuevo Cliente Rápido</h6>
+                <button type="button" class="btn-close btn-close-white"
+                    onclick="$('#modalQuickCreateCliente').modal('hide')"></button>
+            </div>
+            <div class="modal-body p-3">
+                <form id="formQuickCreateCliente">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold mb-1">Nombre Completo <span
+                                class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm" name="razon_social_nombres" required
+                            placeholder="Ej. Juan Pérez">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold mb-1">Teléfono (Celular) <span
+                                class="text-danger">*</span></label>
+                        <input type="tel" class="form-control form-control-sm" name="telefono" required
+                            placeholder="Ej. 999888777">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold mb-1">DNI (Opcional)</label>
+                        <input type="text" class="form-control form-control-sm" name="numero_documento"
+                            placeholder="8 dígitos">
+                    </div>
+                    <div class="d-grid mt-3">
+                        <button type="submit" class="btn btn-success btn-sm fw-bold">
+                            <i class="fas fa-save me-1"></i> Guardar y Seleccionar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

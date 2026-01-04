@@ -26,8 +26,14 @@
                     <input type="hidden" id="modalFechaHoraInicioFull" name="fecha_hora_inicio">
 
                     <div class="mb-3">
-                        <label for="modalClienteId" class="form-label">Cliente <span
-                                class="text-danger">*</span></label>
+                        <label for="modalClienteId"
+                            class="form-label d-flex justify-content-between align-items-center">
+                            <span>Cliente <span class="text-danger">*</span></span>
+                            <button type="button" class="btn btn-outline-success btn-sm py-0 px-2"
+                                style="font-size: 0.8rem;" onclick="$('#modalQuickCreateCliente').modal('show')">
+                                <i class="fas fa-plus"></i> Nuevo
+                            </button>
+                        </label>
                         <select class="form-select" id="modalClienteId" name="cliente_id" required>
                             <option value="">Seleccione...</option>
                             {% for cli in clientes_todos %}

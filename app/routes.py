@@ -618,6 +618,54 @@ def nuevo_cliente():
                            action_url=url_for('main.nuevo_cliente'),
                            posibles_apoderados=posibles_apoderados)
 
+@main_bp.route('/api/clientes/crear', methods=['POST'])
+@login_required
+def api_crear_cliente_rapido():
+    """
+    API para crear un cliente rápidamente desde el modal de reservas.
+    """
+    data = request.get_json()
+    nombre = data.get('razon_social_nombres', '').strip()
+    telefono = data.get('telefono', '').strip()
+    documento = data.get('numero_documento', '').strip() or None
+
+    if not nombre or not telefono:
+        return jsonify({'success': False, 'message': 'Nombre y Teléfono son obligatorios.'}), 400
+
+    try:
+        db = get_db()
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # 1. Verificar duplicados por teléfono
+        cursor.execute("SELECT id FROM clientes WHERE telefono = %s", (telefono,))
+        if cursor.fetchone():
+            return jsonify({'success': False, 'message': 'Ya existe un cliente con ese teléfono.'}), 400
+
+        # 2. Insertar
+        sql = """
+            INSERT INTO clientes (razon_social_nombres, telefono, numero_documento, fecha_registro)
+            VALUES (%s, %s, %s, CURRENT_DATE)
+            RETURNING id, razon_social_nombres
+        """
+        cursor.execute(sql, (nombre, telefono, documento))
+        nuevo_cliente = cursor.fetchone()
+        db.commit()
+        cursor.close()
+
+        return jsonify({
+            'success': True, 
+            'cliente': {
+                'id': nuevo_cliente['id'],
+                'text': f"{nuevo_cliente['razon_social_nombres']} ({telefono})"
+            }
+        })
+
+    except Exception as e:
+        if db: db.rollback()
+        current_app.logger.error(f"Error api_crear_cliente_rapido: {e}")
+        return jsonify({'success': False, 'message': f'Error interno: {str(e)}'}), 500
+
+
 @main_bp.route('/clientes/ver/<int:cliente_id>')
 @login_required
 def ver_cliente(cliente_id):

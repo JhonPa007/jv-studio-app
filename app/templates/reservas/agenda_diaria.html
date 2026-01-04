@@ -458,12 +458,57 @@
     {% include 'reservas/_modal_bloqueo_agenda.html' %}
     {% include 'reservas/_modal_habilitar_extra.html' %}
     {% include 'reservas/_modal_configuracion_agenda.html' %}
+    {% include 'clientes/_modal_quick_create.html' %} <!-- Quick Create Modal -->
 </div>
 {% endblock content %}
 
 {% block scripts %}
 {{ super() }}
 <script>
+    // LÓGICA QUICK CREATE CLIENTE
+    document.getElementById('formQuickCreateCliente')?.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const btn = this.querySelector('button[type="submit"]');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+        const formData = {
+            razon_social_nombres: this.razon_social_nombres.value,
+            telefono: this.telefono.value,
+            numero_documento: this.numero_documento.value
+        };
+
+        fetch('/api/clientes/crear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // 1. Cerrar Modal
+                    $('#modalQuickCreateCliente').modal('hide');
+                    this.reset();
+
+                    // 2. Agregar al Select2
+                    const newOption = new Option(data.cliente.text, data.cliente.id, true, true);
+                    $('#modalClienteId').append(newOption).trigger('change');
+
+                    // 3. Notificar
+                    // alert('Cliente creado y seleccionado exitosamente.'); 
+                    // (Opcional, mejor sin alert intrusivo)
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(err => alert('Error de conexión.'))
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            });
+    });
+
     document.addEventListener('DOMContentLoaded', function () {
         // 🟢 INICIALIZAR SELECT2 PARA CLIENTES (Búsqueda Avanzada AJAX)
         $('#modalClienteId').select2({
