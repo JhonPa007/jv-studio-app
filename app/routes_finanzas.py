@@ -787,8 +787,11 @@ def ver_fondo_admin():
              e_dict['cumple_meta'] = (progreso >= meta)
              
              empleados_procesados.append(e_dict)
-             
-    return render_template('finanzas/fondo_admin.html', empleados=empleados_procesados)
+        
+        # Obtener el porcentaje GLOBAL actual para mostrar en el modal (Sincronía UI-Backend)
+        pct_global_actual = _get_porcentaje_fondo(cursor, cur_year, cur_month, None)
+
+    return render_template('finanzas/fondo_admin.html', empleados=empleados_procesados, pct_global_actual=pct_global_actual)
 
 # --- AGREGAR ESTO EN routes_finanzas.py ---
 

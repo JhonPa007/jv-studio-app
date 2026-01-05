@@ -203,7 +203,8 @@
                         <div class="col-md-4">
                             <label class="form-label fw-bold">Porcentaje Global (%)</label>
                             <input type="number" step="0.01" id="confPctGlobal"
-                                class="form-control text-primary font-weight-bold" value="2.00">
+                                class="form-control text-primary font-weight-bold"
+                                value="{{ '%.2f'|format(pct_global_actual) }}">
                         </div>
                     </div>
 
