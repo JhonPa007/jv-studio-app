@@ -737,10 +737,11 @@ def ver_fondo_admin():
     """ Carga el Panel Administrativo del Fondo de Lealtad """
     db = get_db()
     with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-        # 1. Obtener Configuración Global
-        cursor.execute("SELECT porcentaje_fondo_global FROM configuracion_sistema LIMIT 1")
-        conf = cursor.fetchone()
-        porcentaje_global = float(conf['porcentaje_fondo_global']) if conf else 2.00
+        # Determine Current Month/Year for Projection
+        from datetime import date
+        today = date.today()
+        cur_year = today.year
+        cur_month = today.month
 
         # Obtenemos lista de empleados con sus saldos actuales Y DATOS PARA CALCULO
         cursor.execute("""
@@ -755,11 +756,13 @@ def ver_fondo_admin():
         
         empleados_procesados = []
         for emp in empleados_db:
-             # Convertir a dict mutable si es necesario (RealDictRow suele ser dict-like, pero por seguridad)
+             # Convertir a dict mutable
              e_dict = dict(emp)
              
-             # Datos para cálculo
-             pct_aplicar = float(e_dict['porcentaje_fondo']) if e_dict['porcentaje_fondo'] else porcentaje_global
+             # 1. Obtener Porcentaje CORRECTO para este mes (Usando el helper existente)
+             # Esto prioriza: Config Mensual Específica > Config Mensual Global > Config Sistema > Default
+             pct_aplicar = _get_porcentaje_fondo(cursor, cur_year, cur_month, e_dict['id'])
+             
              meta = float(e_dict['meta_activacion_mensual'] or 0)
              
              # Calcular Proyección Mes Actual
@@ -776,6 +779,8 @@ def ver_fondo_admin():
              # Agregamos datos calculados al objeto
              e_dict['proyeccion_actual'] = proyeccion
              e_dict['progreso_meta'] = progreso
+             # Para debug visual si se requiere:
+             e_dict['pct_usado'] = pct_aplicar 
              e_dict['cumple_meta'] = (progreso >= meta)
              
              empleados_procesados.append(e_dict)
