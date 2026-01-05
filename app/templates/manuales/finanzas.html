@@ -1,0 +1,74 @@
+<div class="manual-content">
+    <h4 class="text-warning"><i class="fas fa-chart-line"></i> Manual - Finanzas y RR.HH.</h4>
+
+    <div class="accordion" id="accordionFinanzas">
+
+        <!-- ITEM 1: Fondo de Lealtad -->
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#collapseFondo">
+                    🐷 Fondo de Lealtad
+                </button>
+            </h2>
+            <div id="collapseFondo" class="accordion-collapse collapse show" data-bs-parent="#accordionFinanzas">
+                <div class="accordion-body">
+                    <p>El fondo de lealtad acumula un porcentaje de la producción de cada colaborador.</p>
+                    <ul class="small">
+                        <li><strong>Configuración:</strong> Use el botón "Configurar % Mensual" para establecer el
+                            porcentaje (ej. 2%).</li>
+                        <li><strong>Proyección:</strong> "Proyección Mes Actual" muestra cuánto ganarían si el mes
+                            cerrara hoy.</li>
+                        <li><strong>Cierre Manual:</strong> Use "Cierre de Mes" para finalizar el cálculo y pasar el
+                            saldo a "Acumulado".</li>
+                        <li><strong>Penalidades:</strong> Puede registrar descuentos por infracciones (tardanzas,
+                            uniforme, etc.), lo que reducirá el saldo (incluso a negativo).</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- ITEM 2: Gastos -->
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#collapseGastos">
+                    💸 Gestión de Gastos
+                </button>
+            </h2>
+            <div id="collapseGastos" class="accordion-collapse collapse" data-bs-parent="#accordionFinanzas">
+                <div class="accordion-body">
+                    <p>Registre todos los egresos del negocio aquí.</p>
+                    <ul class="small">
+                        <li><strong>Adelantos de Sueldo:</strong> Seleccione el tipo "Adelanto de Sueldo" y asigne al
+                            colaborador. Esto se descontará automáticamente en la planilla.</li>
+                        <li><strong>Caja Chica:</strong> Gastos menores del día a día.</li>
+                        <li><strong>Gastos Fijos:</strong> Alquiler, luz, agua, internet.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- ITEM 3: Planillas -->
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#collapsePlanilla">
+                    📄 Planilla y Pagos
+                </button>
+            </h2>
+            <div id="collapsePlanilla" class="accordion-collapse collapse" data-bs-parent="#accordionFinanzas">
+                <div class="accordion-body">
+                    <p>Generación automática de pagos para colaboradores.</p>
+                    <ul class="small">
+                        <li>El sistema calcula comisiones según la configuración de cada empleado (Fijo, Mixto,
+                            Escalonado).</li>
+                        <li>Automáticamente deduce adelantos registrados en Gastos.</li>
+                        <li>Calcula reintegros si no se llega al Sueldo Mínimo (en modalidad escalonada).</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>

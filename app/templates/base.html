@@ -495,6 +495,60 @@
         }
     </script>
 
+    <!-- MODAL AYUDA GLOBAL (F1) -->
+    <div class="modal fade" id="modalAyudaSistema" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title"><i class="fas fa-question-circle text-warning"></i> Ayuda del Sistema</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="contenidoAyuda">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar (Esc)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT GESTOR DE AYUDA (F1) -->
+    <script>
+        document.addEventListener('keydown', function (event) {
+            // Detectar tecla F1 (Código 112)
+            if (event.key === 'F1' || event.keyCode === 112) {
+                event.preventDefault(); // Evitar ayuda del navegador
+                abrirAyudaContextual();
+            }
+        });
+
+        function abrirAyudaContextual() {
+            var myModal = new bootstrap.Modal(document.getElementById('modalAyudaSistema'));
+            myModal.show();
+
+            const contenidoDiv = document.getElementById('contenidoAyuda');
+            contenidoDiv.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p>Cargando manual...</p></div>';
+
+            // Enviar la ruta actual para obtener ayuda relevante
+            const currentPath = window.location.pathname;
+
+            fetch(`/ayuda/contenido?path=${encodeURIComponent(currentPath)}`)
+                .then(response => response.text())
+                .then(html => {
+                    contenidoDiv.innerHTML = html;
+                })
+                .catch(err => {
+                    contenidoDiv.innerHTML = `<div class="alert alert-danger">No se pudo cargar la ayuda. <br>${err}</div>`;
+                });
+        }
+    </script>
+
     {% block scripts %}
     <script>
         document.addEventListener('DOMContentLoaded', function () {

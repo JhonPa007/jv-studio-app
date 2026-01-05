@@ -93,6 +93,30 @@ def teardown_db(exception):
         db.close()
 
 
+@main_bp.route('/ayuda/contenido')
+@login_required
+def obtener_ayuda_contenido():
+    path = request.args.get('path', '')
+    
+    # Lógica de mapeo simple (URL -> Template)
+    template_name = 'manuales/general.html'
+    
+    if 'finanzas' in path:
+        template_name = 'manuales/finanzas.html'
+    elif 'reservas' in path or 'agenda' in path:
+        template_name = 'manuales/reservas.html'
+    elif 'ventas' in path or 'caja' in path or 'comanda' in path:
+        template_name = 'manuales/ventas.html'
+    elif 'inventario' in path or 'productos' in path or 'compras' in path:
+        template_name = 'manuales/inventario.html'
+    elif 'clientes' in path:
+        template_name = 'manuales/clientes.html'
+        
+    try:
+        return render_template(template_name)
+    except Exception as e:
+        return f"<div class='alert alert-danger'>Error cargando ayuda: {str(e)}</div>"
+
 @main_bp.route('/')
 @login_required
 def index():
