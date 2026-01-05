@@ -737,6 +737,9 @@ def ver_fondo_admin():
     """ Carga el Panel Administrativo del Fondo de Lealtad """
     db = get_db()
     with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+        # Asegurar que la tabla existe (Lazy Init)
+        _ensure_fondo_table_exists(cursor)
+
         # Determine Current Month/Year for Projection
         from datetime import date
         today = date.today()
