@@ -51,6 +51,22 @@
             font-family: var(--font-primary);
         }
     </style>
+    <style>
+        /* Force Black Text for Help Modal */
+        #modalAyudaSistema .modal-body,
+        #modalAyudaSistema .modal-body p,
+        #modalAyudaSistema .modal-body li,
+        #modalAyudaSistema .modal-body h1,
+        #modalAyudaSistema .modal-body h2,
+        #modalAyudaSistema .modal-body h3,
+        #modalAyudaSistema .modal-body h4,
+        #modalAyudaSistema .modal-body h5,
+        #modalAyudaSistema .modal-body h6,
+        #modalAyudaSistema .modal-body span,
+        #modalAyudaSistema .modal-body div {
+            color: #000000 !important;
+        }
+    </style>
     {% block head_extra %}{% endblock %}
 </head>
 
