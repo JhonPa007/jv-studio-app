@@ -35,6 +35,26 @@
                                 class="fw-bold mb-0 {% if emp.saldo_fondo_acumulado > 0 %}text-success{% else %}text-muted{% endif %}">
                                 S/ {{ "%.2f"|format(emp.saldo_fondo_acumulado) }}
                             </h3>
+
+                            <!-- NUEVO: Proyección Mes Actual -->
+                            <div class="mt-2 pt-2 border-top">
+                                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Proyección
+                                    Mes Actual</small>
+                                <div class="d-flex align-items-center">
+                                    <h5
+                                        class="fw-bold mb-0 me-2 {% if emp.cumple_meta %}text-success{% else %}text-warning{% endif %}">
+                                        S/ {{ "%.2f"|format(emp.proyeccion_actual) }}
+                                    </h5>
+                                    {% if emp.cumple_meta %}
+                                    <i class="fas fa-check-circle text-success" title="Meta Alcanzada"></i>
+                                    {% else %}
+                                    <i class="fas fa-clock text-warning" title="En Progreso"></i>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted" style="font-size: 0.7rem;">
+                                    Progreso: S/ {{ "%.2f"|format(emp.progreso_meta) }}
+                                </small>
+                            </div>
                         </div>
 
                         <div class="text-end">

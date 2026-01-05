@@ -737,17 +737,50 @@ def ver_fondo_admin():
     """ Carga el Panel Administrativo del Fondo de Lealtad """
     db = get_db()
     with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-        # Obtenemos lista de empleados con sus saldos actuales
+        # 1. Obtener Configuración Global
+        cursor.execute("SELECT porcentaje_fondo_global FROM configuracion_sistema LIMIT 1")
+        conf = cursor.fetchone()
+        porcentaje_global = float(conf['porcentaje_fondo_global']) if conf else 2.00
+
+        # Obtenemos lista de empleados con sus saldos actuales Y DATOS PARA CALCULO
         cursor.execute("""
             SELECT id, nombres, apellidos, saldo_fondo_acumulado, 
-                   meta_activacion_mensual, estado_fondo
+                   meta_activacion_mensual, estado_fondo,
+                   tipo_salario, sueldo_fijo_mensual, porcentaje_productos, porcentaje_fondo
             FROM empleados 
             WHERE activo = TRUE 
             ORDER BY saldo_fondo_acumulado DESC
         """)
-        empleados = cursor.fetchall()
+        empleados_db = cursor.fetchall()
         
-    return render_template('finanzas/fondo_admin.html', empleados=empleados)
+        empleados_procesados = []
+        for emp in empleados_db:
+             # Convertir a dict mutable si es necesario (RealDictRow suele ser dict-like, pero por seguridad)
+             e_dict = dict(emp)
+             
+             # Datos para cálculo
+             pct_aplicar = float(e_dict['porcentaje_fondo']) if e_dict['porcentaje_fondo'] else porcentaje_global
+             meta = float(e_dict['meta_activacion_mensual'] or 0)
+             
+             # Calcular Proyección Mes Actual
+             progreso, base = _calcular_metricas_fondo(
+                cursor, 
+                e_dict['id'], 
+                e_dict['tipo_salario'], 
+                e_dict['sueldo_fijo_mensual'] or 0, 
+                e_dict['porcentaje_productos'] or 0
+             )
+             
+             proyeccion = base * (pct_aplicar / 100)
+             
+             # Agregamos datos calculados al objeto
+             e_dict['proyeccion_actual'] = proyeccion
+             e_dict['progreso_meta'] = progreso
+             e_dict['cumple_meta'] = (progreso >= meta)
+             
+             empleados_procesados.append(e_dict)
+             
+    return render_template('finanzas/fondo_admin.html', empleados=empleados_procesados)
 
 # --- AGREGAR ESTO EN routes_finanzas.py ---
 
