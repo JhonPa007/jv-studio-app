@@ -816,13 +816,9 @@ def aplicar_penalidad_fondo():
             saldo_actual = float(res[0] or 0)
             nuevo_saldo = saldo_actual - monto
             
-            # 2. Evitar saldos negativos (Opcional, según tu regla de negocio)
-            if nuevo_saldo < 0:
-                # Si quieres permitir deuda, borra este if. 
-                # Si quieres dejarlo en 0:
-                monto = saldo_actual 
-                nuevo_saldo = 0
-                flash(f"El saldo era insuficiente. Se descontó el máximo posible (S/ {monto:.2f}).", "warning")
+            # 2. Permitir saldos negativos (Deuda)
+            # if nuevo_saldo < 0:
+            #    ... (Logic removed to allow negative balance)
 
             if monto > 0:
                 # 3. Actualizar Empleado
