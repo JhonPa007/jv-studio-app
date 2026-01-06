@@ -523,11 +523,11 @@ def nuevo_cliente():
         # Datos básicos
         tipo_documento = request.form.get('tipo_documento')
         numero_documento = request.form.get('numero_documento', '').strip() or None
-        nombres = request.form.get('razon_social_nombres', '').strip()
+        nombres = request.form.get('razon_social_nombres', '').strip().title()
         
         # Nuevos campos de apellidos
-        apellido_paterno = request.form.get('apellido_paterno', '').strip() or None
-        apellido_materno = request.form.get('apellido_materno', '').strip() or None
+        apellido_paterno = request.form.get('apellido_paterno', '').strip().title() or None
+        apellido_materno = request.form.get('apellido_materno', '').strip().title() or None
         
         # Construir apellidos concatenados para mantener compatibilidad
         parts = []
@@ -661,9 +661,9 @@ def api_crear_cliente_rapido():
     API para crear un cliente rápidamente desde el modal de reservas.
     """
     data = request.get_json()
-    nombre = data.get('razon_social_nombres', '').strip()
-    apellido_paterno = data.get('apellido_paterno', '').strip() or None
-    apellido_materno = data.get('apellido_materno', '').strip() or None
+    nombre = data.get('razon_social_nombres', '').strip().title()
+    apellido_paterno = data.get('apellido_paterno', '').strip().title() or None
+    apellido_materno = data.get('apellido_materno', '').strip().title() or None
     telefono = data.get('telefono', '').strip()
     documento = data.get('numero_documento', '').strip() or None
 
@@ -765,11 +765,11 @@ def editar_cliente(cliente_id):
         # Recoger datos
         tipo_documento = request.form.get('tipo_documento')
         numero_documento = request.form.get('numero_documento', '').strip() or None
-        razon_social_nombres = request.form.get('razon_social_nombres', '').strip()
+        razon_social_nombres = request.form.get('razon_social_nombres', '').strip().title()
         
         # Nuevos apellidos
-        apellido_paterno = request.form.get('apellido_paterno', '').strip() or None
-        apellido_materno = request.form.get('apellido_materno', '').strip() or None
+        apellido_paterno = request.form.get('apellido_paterno', '').strip().title() or None
+        apellido_materno = request.form.get('apellido_materno', '').strip().title() or None
         
         parts = []
         if apellido_paterno: parts.append(apellido_paterno)
@@ -5744,7 +5744,7 @@ def editar_venta(venta_id):
             # Gestión del Cliente (Igual que antes para permitir corregir el cliente)
             cliente_id = request.form.get('cliente_id')
             nuevo_doc = request.form.get('nuevo_cliente_doc')
-            nuevo_nombre = request.form.get('nuevo_cliente_nombre')
+            nuevo_nombre = request.form.get('nuevo_cliente_nombre').strip().title() if request.form.get('nuevo_cliente_nombre') else None
             nuevo_dir = request.form.get('nuevo_cliente_dir')
             
             with db_conn.cursor() as cursor:
