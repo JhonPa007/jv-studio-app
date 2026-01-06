@@ -7,12 +7,17 @@
     .table-actions a {
         margin-right: 5px;
     }
+
     .table-actions .btn-sm {
-        padding: 0.25rem 0.5rem; /* Ajustar padding para botones pequeños */
-        font-size: 0.875rem; /* Ajustar tamaño de fuente */
+        padding: 0.25rem 0.5rem;
+        /* Ajustar padding para botones pequeños */
+        font-size: 0.875rem;
+        /* Ajustar tamaño de fuente */
     }
+
     .table-actions i {
-        font-size: 0.9em; /* Ajustar tamaño de iconos en botones */
+        font-size: 0.9em;
+        /* Ajustar tamaño de iconos en botones */
     }
 </style>
 {% endblock %}
@@ -22,18 +27,22 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-users me-2"></i>Lista de Clientes</h2>
         <div>
-            <a href="{{ url_for('main.importar_clientes') }}" class="btn btn-outline-info"><i class="fas fa-file-import me-1"></i> Importar</a>
-            <a href="{{ url_for('main.nuevo_cliente') }}" class="btn btn-primary ms-2"><i class="fas fa-user-plus me-1"></i> Nuevo Cliente</a>
+            <a href="{{ url_for('main.importar_clientes') }}" class="btn btn-outline-info"><i
+                    class="fas fa-file-import me-1"></i> Importar</a>
+            <a href="{{ url_for('main.nuevo_cliente') }}" class="btn btn-primary ms-2"><i
+                    class="fas fa-user-plus me-1"></i> Nuevo Cliente</a>
         </div>
     </div>
 
-    
+
     <div class="card bg-dark text-light mb-4">
         <div class="card-body">
             <form method="GET" action="{{ url_for('main.listar_clientes') }}" class="row g-2 align-items-center">
                 <div class="col-auto flex-grow-1">
                     <label for="q" class="visually-hidden">Buscar</label>
-                    <input type="search" class="form-control form-control-sm" id="q" name="q" placeholder="Buscar por nombre, apellido o DNI..." value="{{ termino_busqueda or '' }}">
+                    <input type="search" class="form-control form-control-sm" id="q" name="q"
+                        placeholder="Buscar por nombre, apellido, DNI o teléfono..."
+                        value="{{ termino_busqueda or '' }}">
                 </div>
                 <div class="col-auto">
                     <button type="submit" class="btn btn-sm btn-light"><i class="fas fa-search"></i> Buscar</button>
@@ -58,24 +67,28 @@
                 <tr>
                     <td>
                         {# CORRECCIÓN: Clase 'text-white' para que el enlace sea legible #}
-                        <a href="{{ url_for('main.detalle_cliente', cliente_id=cliente.id) }}" class="text-black text-decoration-underline">
+                        <a href="{{ url_for('main.detalle_cliente', cliente_id=cliente.id) }}"
+                            class="text-black text-decoration-underline">
                             <strong>{{ cliente.razon_social_nombres }} {{ cliente.apellidos or '' }}</strong>
                         </a>
                     </td>
-                    <td class="text-center">{{ cliente.tipo_documento or 'S/D' }}: {{ cliente.numero_documento or 'No reg.' }}</td>
+                    <td class="text-center">{{ cliente.tipo_documento or 'S/D' }}: {{ cliente.numero_documento or 'No
+                        reg.' }}</td>
                     <td>{{ cliente.telefono or '-' }}</td>
-                    <td class="text-center">{{ cliente.puntos_fidelidad if cliente.puntos_fidelidad is not none else 0 }}</td>
+                    <td class="text-center">{{ cliente.puntos_fidelidad if cliente.puntos_fidelidad is not none else 0
+                        }}</td>
                     <td class="text-center">
-                        <a href="{{ url_for('main.editar_cliente', cliente_id=cliente.id) }}" class="btn btn-xs btn-warning" title="Editar Cliente"><i class="fas fa-edit"></i></a>
+                        <a href="{{ url_for('main.editar_cliente', cliente_id=cliente.id) }}"
+                            class="btn btn-xs btn-warning" title="Editar Cliente"><i class="fas fa-edit"></i></a>
                     </td>
                 </tr>
                 {% else %}
                 <tr>
                     <td colspan="5" class="text-center text-muted fst-italic p-4">
                         {% if termino_busqueda %}
-                            No se encontraron clientes que coincidan con "<strong>{{ termino_busqueda }}</strong>".
+                        No se encontraron clientes que coincidan con "<strong>{{ termino_busqueda }}</strong>".
                         {% else %}
-                            No hay clientes registrados.
+                        No hay clientes registrados.
                         {% endif %}
                     </td>
                 </tr>

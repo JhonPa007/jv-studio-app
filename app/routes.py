@@ -476,11 +476,12 @@ def listar_clientes():
                     WHERE 
                         razon_social_nombres ILIKE %s OR 
                         apellidos ILIKE %s OR 
-                        numero_documento ILIKE %s
+                        numero_documento ILIKE %s OR
+                        telefono ILIKE %s
                     ORDER BY razon_social_nombres ASC
                 """
                 termino = f"%{q}%"
-                cursor.execute(sql, (termino, termino, termino))
+                cursor.execute(sql, (termino, termino, termino, termino))
             else:
                 # LISTADO COMPLETO (Limitado a 50 para no saturar si hay muchos)
                 sql = """
