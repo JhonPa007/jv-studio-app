@@ -5,6 +5,7 @@ load_dotenv()
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'miclave_super_secreta_jvstudio_2025'
+    TIMEZONE = 'America/Lima'
     
     # --- LÓGICA DE CONEXIÓN A BASE DE DATOS ---
     # 1. Primero intentamos leer la URL completa (Así funciona Railway)

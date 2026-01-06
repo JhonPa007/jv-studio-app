@@ -23,6 +23,12 @@ def get_db():
                     database="jv_studio_pg_db"
                 )
                 print("✅ Conectado a base de datos LOCAL")
+            
+            # --- CONFIGURAR ZONA HORARIA PARA LA SESIÓN ---
+            with g.db.cursor() as cursor:
+                cursor.execute("SET TIME ZONE 'America/Lima';")
+                g.db.commit()
+                # print("🕒 Zona Horaria establecida a: America/Lima")
         except Exception as e:
             print(f"❌ Error crítico conectando a PostgreSQL: {e}")
             g.db = None # Importante para evitar el error 'NoneType' posterior
