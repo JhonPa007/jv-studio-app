@@ -159,13 +159,23 @@
 
             <div class="row mb-3">
                 <div class="col-md-6">
-                    <div class="form-check form-switch custom-switch-lg">
+                    <div class="form-check form-switch custom-switch-lg mb-2">
                         <input class="form-check-input" type="checkbox" id="realiza_servicios" name="realiza_servicios"
                             {% if data_source.get('realiza_servicios') %}checked{% endif %}>
                         <label class="form-check-label" for="realiza_servicios">
                             <strong>¿Puede realizar servicios?</strong>
                             <small class="d-block text-muted">Habilita a este colaborador para ser agendado en
                                 citas.</small>
+                        </label>
+                    </div>
+
+                    <div class="form-check form-switch custom-switch-lg">
+                        <input class="form-check-input" type="checkbox" id="realiza_ventas" name="realiza_ventas" {% if
+                            data_source.get('realiza_ventas', True) %}checked{% endif %}>
+                        <label class="form-check-label" for="realiza_ventas">
+                            <strong>¿Puede realizar ventas?</strong>
+                            <small class="d-block text-muted">Habilita a este colaborador para aparecer en el módulo de
+                                ventas.</small>
                         </label>
                     </div>
                 </div>
