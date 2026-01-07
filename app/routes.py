@@ -6110,6 +6110,44 @@ def listar_ventas():
     return render_template('ventas/lista_ventas.html', 
                            ventas=lista_de_ventas,
                            titulo_pagina="Historial de Ventas")
+
+@main_bp.route('/ventas/eliminar/<int:venta_id>', methods=['POST'])
+@login_required
+@admin_required
+def eliminar_venta_nota_credito(venta_id):
+    """
+    Permite eliminar una venta SOLO si es una Nota de Crédito.
+    Elimina en cascada (items y pagos) y luego la venta.
+    """
+    db_conn = get_db()
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Verificar que sea Nota de Crédito
+            cursor.execute("SELECT tipo_comprobante FROM ventas WHERE id = %s", (venta_id,))
+            venta = cursor.fetchone()
+            
+            if not venta:
+                flash("Venta no encontrada.", "warning")
+                return redirect(url_for('main.listar_ventas'))
+            
+            if venta['tipo_comprobante'] != 'Nota de Crédito':
+                flash("Solo se pueden eliminar Notas de Crédito.", "danger")
+                return redirect(url_for('main.listar_ventas'))
+
+            # 2. Eliminar items y pagos (si no hay cascade en BD)
+            cursor.execute("DELETE FROM venta_items WHERE venta_id = %s", (venta_id,))
+            cursor.execute("DELETE FROM venta_pagos WHERE venta_id = %s", (venta_id,))
+            cursor.execute("DELETE FROM ventas WHERE id = %s", (venta_id,))
+            
+            db_conn.commit()
+            flash("Nota de Crédito eliminada exitosamente.", "success")
+            
+    except Exception as e:
+        db_conn.rollback()
+        current_app.logger.error(f"Error eliminando venta {venta_id}: {e}")
+        flash(f"Error al eliminar la venta: {e}", "danger")
+
+    return redirect(url_for('main.listar_ventas'))
     
     
 @main_bp.route('/configuracion/sucursales')

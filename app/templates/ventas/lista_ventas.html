@@ -4,13 +4,34 @@
 
 {% block head_extra %}
 <style>
-    .estado-pagado { color: var(--bs-success-text-emphasis, #0f5132); background-color: var(--bs-success-bg-subtle, #d1e7dd); }
-    .estado-pendiente { color: var(--bs-warning-text-emphasis, #664d03); background-color: var(--bs-warning-bg-subtle, #fff3cd); }
-    .estado-anulado { color: var(--bs-danger-text-emphasis, #58151c); background-color: var(--bs-danger-bg-subtle, #f8d7da); text-decoration: line-through; }
-    .estado-parcial { color: var(--bs-info-text-emphasis, #055160); background-color: var(--bs-info-bg-subtle, #cff4fc); }
-    
+    .estado-pagado {
+        color: var(--bs-success-text-emphasis, #0f5132);
+        background-color: var(--bs-success-bg-subtle, #d1e7dd);
+    }
+
+    .estado-pendiente {
+        color: var(--bs-warning-text-emphasis, #664d03);
+        background-color: var(--bs-warning-bg-subtle, #fff3cd);
+    }
+
+    .estado-anulado {
+        color: var(--bs-danger-text-emphasis, #58151c);
+        background-color: var(--bs-danger-bg-subtle, #f8d7da);
+        text-decoration: line-through;
+    }
+
+    .estado-parcial {
+        color: var(--bs-info-text-emphasis, #055160);
+        background-color: var(--bs-info-bg-subtle, #cff4fc);
+    }
+
     /* Botones pequeños en la tabla */
-    .btn-xs { padding: 0.1rem 0.4rem; font-size: 0.8rem; line-height: 1.5; border-radius: 0.2rem; }
+    .btn-xs {
+        padding: 0.1rem 0.4rem;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        border-radius: 0.2rem;
+    }
 </style>
 {% endblock %}
 
@@ -50,45 +71,62 @@
                         {{ venta.serie_comprobante }}-{{ venta.numero_comprobante }}
                     </td>
                     <td class="text-end fw-bold">S/ {{ "%.2f"|format(venta.monto_final_venta) }}</td>
-                    
+
                     <td class="text-center">
-                        <span class="badge p-2 {% if venta.estado_pago == 'Pagado' %}bg-success{% elif venta.estado_pago == 'Anulado' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                        <span
+                            class="badge p-2 {% if venta.estado_pago == 'Pagado' %}bg-success{% elif venta.estado_pago == 'Anulado' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
                             {{ venta.estado_pago }}
                         </span>
                     </td>
-                    
+
                     <td class="text-center">
                         {% if venta.tipo_comprobante == 'Nota de Venta' %}
-                            <span class="badge bg-secondary">Interno</span>
+                        <span class="badge bg-secondary">Interno</span>
                         {% else %}
-                            {% if venta.estado_sunat == 'Aceptada' %}
-                                <span class="badge bg-success" title="Aceptada por SUNAT"><i class="fas fa-check"></i> OK</span>
-                            {% elif 'Rechazada' in (venta.estado_sunat or '') %}
-                                <span class="badge bg-danger" title="{{ venta.mensaje_sunat }}"><i class="fas fa-times"></i> Error</span>
-                            {% else %}
-                                <span class="badge bg-warning text-dark">Pendiente</span>
-                            {% endif %}
+                        {% if venta.estado_sunat == 'Aceptada' %}
+                        <span class="badge bg-success" title="Aceptada por SUNAT"><i class="fas fa-check"></i> OK</span>
+                        {% elif 'Rechazada' in (venta.estado_sunat or '') %}
+                        <span class="badge bg-danger" title="{{ venta.mensaje_sunat }}"><i class="fas fa-times"></i>
+                            Error</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">Pendiente</span>
+                        {% endif %}
                         {% endif %}
                     </td>
-                    
+
                     <td class="text-center">
                         <div class="btn-group" role="group">
-                            <a href="{{ url_for('main.ver_detalle_venta', venta_id=venta.venta_id) }}" class="btn btn-xs btn-info text-white" title="Ver Detalle">
+                            <a href="{{ url_for('main.ver_detalle_venta', venta_id=venta.venta_id) }}"
+                                class="btn btn-xs btn-info text-white" title="Ver Detalle">
                                 <i class="fas fa-eye"></i>
                             </a>
 
                             {% if venta.tipo_comprobante == 'Nota de Venta' and venta.estado_pago != 'Anulado' %}
-                                <a href="{{ url_for('main.vista_convertir_venta', venta_id=venta.venta_id) }}" class="btn btn-xs btn-warning text-dark fw-bold" title="Canjear por Boleta/Factura">
-                                    <i class="fas fa-exchange-alt"></i>
-                                </a>
+                            <a href="{{ url_for('main.vista_convertir_venta', venta_id=venta.venta_id) }}"
+                                class="btn btn-xs btn-warning text-dark fw-bold" title="Canjear por Boleta/Factura">
+                                <i class="fas fa-exchange-alt"></i>
+                            </a>
                             {% endif %}
 
-                            {% if venta.tipo_comprobante != 'Nota de Venta' and (not venta.estado_sunat or venta.estado_sunat == 'Pendiente') %}
-                                <form action="{{ url_for('main.enviar_sunat', venta_id=venta.venta_id) }}" method="POST" class="d-inline" onsubmit="return confirm('¿Enviar a SUNAT?');">
-                                    <button type="submit" class="btn btn-xs btn-primary ms-1" title="Enviar ahora">
-                                        <i class="fas fa-paper-plane"></i>
-                                    </button>
-                                </form>
+                            {% if venta.tipo_comprobante != 'Nota de Venta' and (not venta.estado_sunat or
+                            venta.estado_sunat == 'Pendiente') %}
+                            <form action="{{ url_for('main.enviar_sunat', venta_id=venta.venta_id) }}" method="POST"
+                                class="d-inline" onsubmit="return confirm('¿Enviar a SUNAT?');">
+                                <button type="submit" class="btn btn-xs btn-primary ms-1" title="Enviar ahora">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+
+                            {% if venta.tipo_comprobante == 'Nota de Crédito' %}
+                            <form action="{{ url_for('main.eliminar_venta_nota_credito', venta_id=venta.venta_id) }}"
+                                method="POST" class="d-inline"
+                                onsubmit="return confirm('¿Está seguro de eliminar esta Nota de Crédito? Esta acción no se puede deshacer.');">
+                                <button type="submit" class="btn btn-xs btn-danger ms-1"
+                                    title="Eliminar Nota de Crédito">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
                             {% endif %}
                         </div>
                     </td>
