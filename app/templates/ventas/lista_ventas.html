@@ -118,12 +118,11 @@
                             </form>
                             {% endif %}
 
-                            {% if venta.tipo_comprobante == 'Nota de Crédito' %}
-                            <form action="{{ url_for('main.eliminar_venta_nota_credito', venta_id=venta.venta_id) }}"
+                            {% if venta.tipo_comprobante == 'Nota de Venta' %}
+                            <form action="{{ url_for('main.eliminar_venta_nota_venta', venta_id=venta.venta_id) }}"
                                 method="POST" class="d-inline"
-                                onsubmit="return confirm('¿Está seguro de eliminar esta Nota de Crédito? Esta acción no se puede deshacer.');">
-                                <button type="submit" class="btn btn-xs btn-danger ms-1"
-                                    title="Eliminar Nota de Crédito">
+                                onsubmit="return confirm('¿Está seguro de eliminar esta Nota de Venta? Esta acción no se puede deshacer.');">
+                                <button type="submit" class="btn btn-xs btn-danger ms-1" title="Eliminar Nota de Venta">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </form>

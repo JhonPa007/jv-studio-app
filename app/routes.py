@@ -6114,15 +6114,15 @@ def listar_ventas():
 @main_bp.route('/ventas/eliminar/<int:venta_id>', methods=['POST'])
 @login_required
 @admin_required
-def eliminar_venta_nota_credito(venta_id):
+def eliminar_venta_nota_venta(venta_id):
     """
-    Permite eliminar una venta SOLO si es una Nota de Crédito.
+    Permite eliminar una venta SOLO si es una Nota de Venta.
     Elimina en cascada (items y pagos) y luego la venta.
     """
     db_conn = get_db()
     try:
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # 1. Verificar que sea Nota de Crédito
+            # 1. Verificar que sea Nota de Venta
             cursor.execute("SELECT tipo_comprobante FROM ventas WHERE id = %s", (venta_id,))
             venta = cursor.fetchone()
             
@@ -6130,8 +6130,8 @@ def eliminar_venta_nota_credito(venta_id):
                 flash("Venta no encontrada.", "warning")
                 return redirect(url_for('main.listar_ventas'))
             
-            if venta['tipo_comprobante'] != 'Nota de Crédito':
-                flash("Solo se pueden eliminar Notas de Crédito.", "danger")
+            if venta['tipo_comprobante'] != 'Nota de Venta':
+                flash("Solo se pueden eliminar Notas de Venta.", "danger")
                 return redirect(url_for('main.listar_ventas'))
 
             # 2. Eliminar items y pagos (si no hay cascade en BD)
@@ -6140,7 +6140,7 @@ def eliminar_venta_nota_credito(venta_id):
             cursor.execute("DELETE FROM ventas WHERE id = %s", (venta_id,))
             
             db_conn.commit()
-            flash("Nota de Crédito eliminada exitosamente.", "success")
+            flash("Nota de Venta eliminada exitosamente.", "success")
             
     except Exception as e:
         db_conn.rollback()
