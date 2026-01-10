@@ -1040,7 +1040,7 @@ def listar_categorias_servicios():
     try:
         db = get_db()
         cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cursor.execute("SELECT id, nombre, descripcion FROM categorias_servicios ORDER BY nombre")
+        cursor.execute("SELECT id, nombre, descripcion, activo FROM categorias_servicios ORDER BY nombre")
         lista_de_categorias = cursor.fetchall()
         cursor.close()
     except Exception as err:
@@ -1088,6 +1088,32 @@ def nueva_categoria_servicio():
 
     # Método GET: muestra el formulario vacío para una nueva categoría
     return render_template('servicios/form_categoria.html', es_nueva=True, titulo_form="Registrar Nueva Categoría de Servicio")
+
+@main_bp.route('/servicios/categorias/toggle/<int:categoria_id>', methods=['POST'])
+@login_required
+def toggle_categoria_servicio(categoria_id):
+    """
+    Alterna el estado activo/inactivo de una categoría.
+    """
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        # Usamos NOT activo para invertir el valor actual
+        cursor.execute("UPDATE categorias_servicios SET activo = NOT activo WHERE id = %s RETURNING activo", (categoria_id,))
+        resultado = cursor.fetchone()
+        
+        if resultado is None:
+             return jsonify({'success': False, 'message': 'Categoría no encontrada'}), 404
+             
+        nuevo_estado = resultado[0]
+        db.commit()
+        cursor.close()
+        
+        return jsonify({'success': True, 'nuevo_estado': nuevo_estado})
+    except Exception as e:
+        if db: db.rollback()
+        current_app.logger.error(f"Error al cambiar estado de categoría {categoria_id}: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @main_bp.route('/servicios/categorias/editar/<int:categoria_id>', methods=['GET', 'POST'])
 @login_required

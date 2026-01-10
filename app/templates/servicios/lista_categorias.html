@@ -12,14 +12,14 @@
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
     {% endwith %}
 
     {% if categorias %}
@@ -30,6 +30,7 @@
                     <th>ID</th>
                     <th>Nombre</th>
                     <th>Descripción</th>
+                    <th>Estado</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -39,9 +40,22 @@
                     <td>{{ cat.id }}</td>
                     <td>{{ cat.nombre }}</td>
                     <td>{{ cat.descripcion if cat.descripcion else '-' }}</td>
+                    <td>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input toggle-categoria" type="checkbox" role="switch"
+                                id="cat_{{ cat.id }}" data-id="{{ cat.id }}" {% if cat.activo %}checked{% endif %}>
+                            <label class="form-check-label" for="cat_{{ cat.id }}">
+                                {{ 'Activo' if cat.activo else 'Inactivo' }}
+                            </label>
+                        </div>
+                    </td>
                     <td class="table-actions">
-                        <a href="{{ url_for('main.editar_categoria_servicio', categoria_id=cat.id) }}" class="btn btn-sm btn-warning" title="Editar"><i class="fas fa-edit"></i></a>
-                        <a href="{{ url_for('main.eliminar_categoria_servicio', categoria_id=cat.id) }}" class="btn btn-sm btn-danger" title="Eliminar" onclick="return confirm('¿Estás seguro de que deseas eliminar la categoría \'{{ cat.nombre }}\'?\nEsto podría afectar a los servicios asociados.');"><i class="fas fa-trash"></i></a>
+                        <a href="{{ url_for('main.editar_categoria_servicio', categoria_id=cat.id) }}"
+                            class="btn btn-sm btn-warning" title="Editar"><i class="fas fa-edit"></i></a>
+                        <a href="{{ url_for('main.eliminar_categoria_servicio', categoria_id=cat.id) }}"
+                            class="btn btn-sm btn-danger" title="Eliminar"
+                            onclick="return confirm('¿Estás seguro de que deseas eliminar la categoría \'{{ cat.nombre }}\'?\nEsto podría afectar a los servicios asociados.');"><i
+                                class="fas fa-trash"></i></a>
                         {# Estos href para editar y eliminar apuntarán a rutas que crearemos después #}
                     </td>
                 </tr>
@@ -50,9 +64,53 @@
         </table>
     </div>
     {% else %}
-    <div class="alert alert-info" style="background-color: #3a3a3a; color: var(--color-secundario-gris); border-color: var(--color-acento-dorado);">
+    <div class="alert alert-info"
+        style="background-color: #3a3a3a; color: var(--color-secundario-gris); border-color: var(--color-acento-dorado);">
         <i class="fas fa-info-circle me-2"></i>No hay categorías de servicios registradas todavía.
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const toggles = document.querySelectorAll('.toggle-categoria');
+
+        toggles.forEach(toggle => {
+            toggle.addEventListener('change', function () {
+                const catId = this.dataset.id;
+                const label = this.nextElementSibling;
+                const wasChecked = !this.checked; // Estado anterior para revertir si falla
+
+                // Deshabilitar momentáneamente
+                this.disabled = true;
+
+                fetch(`/servicios/categorias/toggle/${catId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        this.disabled = false;
+                        if (data.success) {
+                            label.textContent = data.nuevo_estado ? 'Activo' : 'Inactivo';
+                        } else {
+                            alert('Error: ' + (data.message || 'No se pudo cambiar el estado.'));
+                            this.checked = wasChecked; // Revertir visualmente
+                        }
+                    })
+                    .catch(err => {
+                        this.disabled = false;
+                        this.checked = wasChecked;
+                        console.error(err);
+                        alert('Error de conexión.');
+                    });
+            });
+        });
+    });
+</script>
 {% endblock %}
