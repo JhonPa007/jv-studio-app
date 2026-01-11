@@ -31,7 +31,7 @@
 
         {% set data_source = form_data if form_data else (empleado if empleado else {}) %}
 
-        <form method="POST" action="{{ action_url }}">
+        <form method="POST" action="{{ action_url }}" enctype="multipart/form-data">
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="nombres" class="form-label">Nombres Completos <span class="text-danger">*</span></label>
@@ -58,6 +58,23 @@
                     <label for="dni" class="form-label">DNI (Opcional)</label>
                     <input type="text" class="form-control" id="dni" name="dni" value="{{ data_source.get('dni', '') }}"
                         maxlength="15">
+                </div>
+            </div>
+
+            <!-- FOTO DEL COLABORADOR -->
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label for="foto" class="form-label">Foto de Perfil</label>
+
+                    {% if data_source.get('foto_url') %}
+                    <div class="mb-2">
+                        <img src="{{ data_source.get('foto_url') }}" alt="Foto Colaborador" class="img-thumbnail"
+                            style="max-height: 150px; border-radius: 8px;">
+                    </div>
+                    {% endif %}
+
+                    <input type="file" class="form-control" id="foto" name="foto" accept="image/*">
+                    <small class="form-text text-muted">Sube una imagen para mostrar en la agenda y perfil.</small>
                 </div>
             </div>
 

@@ -13,6 +13,7 @@ from urllib.parse import quote, quote_plus
 import requests 
 import pytz
 from app.services.whatsapp_service import enviar_alerta_reserva
+from app.services.image_service import subir_imagen, configurar_cloudinary # Importamos el servicio de imágenes
 import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_values
@@ -1712,7 +1713,18 @@ def nuevo_empleado():
                 cursor.execute(sql_empleado, val_empleado)
                 nuevo_empleado_id = cursor.fetchone()[0] # Obtenemos el ID retornado
 
-                # 2. Insertar las asignaciones en 'empleado_sucursales'
+                # 2. SUBIR FOTO (Si se envió)
+                archivo_foto = request.files.get('foto')
+                if archivo_foto and archivo_foto.filename:
+                    # Usamos el servicio de Cloudinary
+                    # Prefijo 'emp' + ID para identificar
+                    url_foto = subir_imagen(archivo_foto, carpeta="jv_studio_empleados", public_id_prefix=f"emp_{nuevo_empleado_id}")
+                    
+                    if url_foto:
+                        # Actualizamos el empleado con la URL
+                        cursor.execute("UPDATE empleados SET foto_url = %s WHERE id = %s", (url_foto, nuevo_empleado_id))
+
+                # 3. Insertar las asignaciones en 'empleado_sucursales'
                 if sucursales_ids_seleccionadas:
                     sql_asignacion = "INSERT INTO empleado_sucursales (empleado_id, sucursal_id) VALUES (%s, %s)"
                     valores_asignacion = [(nuevo_empleado_id, suc_id) for suc_id in sucursales_ids_seleccionadas]
@@ -1883,6 +1895,13 @@ def editar_empleado(empleado_id):
                     sql_asignacion = "INSERT INTO empleado_sucursales (empleado_id, sucursal_id) VALUES (%s, %s)"
                     for suc_id in sucursales_ids_seleccionadas:
                         cursor.execute(sql_asignacion, (empleado_id, suc_id))
+
+                # 3. SUBIR FOTO (Si se envió en edición)
+                archivo_foto = request.files.get('foto')
+                if archivo_foto and archivo_foto.filename:
+                    url_foto = subir_imagen(archivo_foto, carpeta="jv_studio_empleados", public_id_prefix=f"emp_{empleado_id}")
+                    if url_foto:
+                        cursor.execute("UPDATE empleados SET foto_url = %s WHERE id = %s", (url_foto, empleado_id))
 
             db_conn.commit()
             flash('Colaborador actualizado exitosamente!', 'success')
