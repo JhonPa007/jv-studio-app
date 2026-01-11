@@ -1723,6 +1723,8 @@ def nuevo_empleado():
                     if url_foto:
                         # Actualizamos el empleado con la URL
                         cursor.execute("UPDATE empleados SET foto_url = %s WHERE id = %s", (url_foto, nuevo_empleado_id))
+                    else:
+                         flash("Advertencia: La foto no se pudo subir. Verifique la configuración de Cloudinary.", "warning")
 
                 # 3. Insertar las asignaciones en 'empleado_sucursales'
                 if sucursales_ids_seleccionadas:
@@ -1902,6 +1904,8 @@ def editar_empleado(empleado_id):
                     url_foto = subir_imagen(archivo_foto, carpeta="jv_studio_empleados", public_id_prefix=f"emp_{empleado_id}")
                     if url_foto:
                         cursor.execute("UPDATE empleados SET foto_url = %s WHERE id = %s", (url_foto, empleado_id))
+                    else:
+                        flash("Advertencia: La foto no se pudo subir. Verifique la configuración de Cloudinary.", "warning")
 
             db_conn.commit()
             flash('Colaborador actualizado exitosamente!', 'success')
