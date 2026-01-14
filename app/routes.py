@@ -43,7 +43,7 @@ from lxml import etree as ET
 from signxml import XMLSigner, methods
 from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.hazmat.primitives import serialization
-from zeep import Client, Transport
+from zeep import Client, Transport, Settings
 from zeep.exceptions import Fault
 from zeep.wsse.username import UsernameToken
 
@@ -10204,7 +10204,8 @@ def _procesar_envio_sunat(venta_id):
     
     # Envío
     transport = Transport(timeout=30)
-    client = Client(wsdl=SUNAT_WSDL_URL, transport=transport, wsse=UsernameToken(usuario_wsse, clave_sol))
+    settings = Settings(strict=False, xml_huge_tree=True)
+    client = Client(wsdl=SUNAT_WSDL_URL, transport=transport, wsse=UsernameToken(usuario_wsse, clave_sol), settings=settings)
     
     # Zeep puede devolver bytes directos o un objeto, dependiendo de la versión
     response = client.service.sendBill(fileName=nombre_archivo_zip, contentFile=zip_base64)
