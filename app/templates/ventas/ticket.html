@@ -7,6 +7,10 @@
     {% set is_a4 = request.args.get('formato') == 'a4' %}
 
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         @media print {
             .no-print {
                 display: none !important;
@@ -16,6 +20,13 @@
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
+
+            @page {
+                size: A4;
+                margin: 0;
+            }
+
+            /* Reset browser margins */
         }
 
         body {
@@ -30,6 +41,10 @@
             padding: 10px;
             text-align: center;
             border-bottom: 1px solid #ccc;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 999;
         }
 
         .no-print button {
@@ -43,169 +58,180 @@
         }
 
         /* =========================================
-           A4 STYLES - FIXED & FORCED
+           A4 STYLES - STRICT LAYOUT
            ========================================= */
         body {
             width: 210mm;
+            height: 297mm;
             margin: 0 auto;
-            color: #000;
+            background: #fff;
+            padding: 15mm;
+            /* Margen interno fijo */
         }
 
-        .container {
-            width: 90%;
-            margin: 0 auto;
-            padding-top: 20px;
-        }
-
-        /* LAYOUT FLEXBOX HEADER */
-        .header-cont {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 2px solid #D4AF37;
-            padding-bottom: 15px;
+        /* HEADER TABLE FOR STABILITY */
+        .header-table {
+            width: 100%;
+            border-collapse: collapse;
             margin-bottom: 20px;
+            border-bottom: 2px solid #D4AF37;
         }
 
-        /* 1. LEFT LOGO */
-        .h-left {
+        .header-table td {
+            vertical-align: middle;
+            padding-bottom: 15px;
+        }
+
+        .h-col-1 {
             width: 25%;
             text-align: left;
         }
 
-        .h-left img {
-            width: 130px;
+        .h-col-2 {
+            width: 40%;
+            text-align: center;
+        }
+
+        .h-col-3 {
+            width: 35%;
+            text-align: right;
+        }
+
+        .logo-studio {
+            width: 140px;
             height: auto;
             display: block;
         }
 
-        /* 2. CENTER INFO */
-        .h-center {
-            width: 45%;
-            text-align: center;
-            font-size: 11px;
-            line-height: 1.3;
-        }
-
-        .h-center img {
-            width: 180px;
+        .logo-corp {
+            width: 160px;
             height: auto;
             display: block;
             margin: 0 auto 5px auto;
         }
 
-        /* 3. RIGHT RUC */
-        .h-right {
-            width: 30%;
-            border: 2px solid #D4AF37;
+        .corp-info {
+            font-size: 10px;
+            line-height: 1.2;
+            color: #000;
+        }
+
+        .ruc-box {
+            border: 1px solid #D4AF37;
             padding: 10px;
             text-align: center;
-            background: #fff;
+            width: 250px;
+            margin-left: auto;
+            /* Push to right */
         }
 
-        .h-right h4 {
+        .ruc-box h4 {
             margin: 0;
             font-size: 14px;
-            color: #000;
             font-weight: bold;
+            color: #000;
         }
 
-        .h-right h2 {
-            margin: 5px 0;
+        .ruc-box h2 {
+            margin: 8px 0;
             font-size: 16px;
             background: #fff;
             color: #D4AF37;
             font-weight: 800;
-            padding: 5px 0;
+            padding: 2px 0;
         }
 
-        /* INFO GRILLS */
-        .info-grid {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
+        /* INFO GRID */
+        .info-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 15px 0;
+            margin: 0 -15px 20px -15px;
         }
 
-        .info-box {
-            flex: 1;
+        .info-cell {
+            width: 50%;
             background-color: #f2f2f2 !important;
             border-left: 5px solid #D4AF37;
-            padding: 10px 15px;
-            font-size: 11px;
-            print-color-adjust: exact;
-            -webkit-print-color-adjust: exact;
+            padding: 10px;
+            vertical-align: top;
         }
 
-        .info-box h4 {
+        .info-title {
             color: #D4AF37;
-            margin: 0 0 10px 0;
             font-size: 11px;
             font-weight: bold;
             text-transform: uppercase;
+            margin-bottom: 8px;
         }
 
         .row {
             display: flex;
+            font-size: 11px;
             margin-bottom: 3px;
         }
 
         .lbl {
-            width: 80px;
+            width: 70px;
             font-weight: bold;
             color: #444;
+            flex-shrink: 0;
         }
 
         .val {
             flex: 1;
             color: #000;
+            word-wrap: break-word;
         }
 
-        /* TABLE */
-        table {
+        /* ITEMS TABLE */
+        .items-table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 20px;
+            table-layout: fixed;
         }
 
-        th {
+        .items-table th {
             background-color: #000 !important;
             color: #D4AF37 !important;
-            padding: 8px;
-            font-size: 11px;
+            padding: 8px 5px;
+            font-size: 10px;
             text-align: left;
             text-transform: uppercase;
-            -webkit-print-color-adjust: exact;
         }
 
-        td {
+        .items-table td {
             border-bottom: 1px solid #ccc;
-            padding: 6px 8px;
-            font-size: 11px;
+            padding: 6px 5px;
+            font-size: 10px;
             color: #000;
+            vertical-align: top;
         }
 
-        .text-right {
-            text-align: right;
-        }
-
-        .text-center {
+        .t-center {
             text-align: center;
         }
 
+        .t-right {
+            text-align: right;
+        }
+
         /* TOTALS */
-        .totals-wrap {
+        .totals-container {
+            width: 100%;
             display: flex;
             justify-content: flex-end;
         }
 
         .totals-box {
-            width: 320px;
-            border: 1px solid #ccc;
+            width: 300px;
             padding: 10px;
+            border: 1px solid #ccc;
             border-radius: 4px;
         }
 
-        .t-row {
+        .tot-row {
             display: flex;
             justify-content: space-between;
             font-size: 11px;
@@ -213,7 +239,7 @@
             font-weight: bold;
         }
 
-        .t-final {
+        .tot-final {
             border-top: 1px solid #999;
             margin-top: 8px;
             padding-top: 8px;
@@ -221,10 +247,10 @@
             color: #000;
         }
 
-        .footer {
+        .footer-lines {
             margin-top: 40px;
             text-align: center;
-            font-size: 10px;
+            font-size: 9px;
             color: #666;
             border-top: 1px solid #eee;
             padding-top: 10px;
@@ -244,6 +270,7 @@
             font-size: 10px;
             line-height: 1.2;
             color: #000;
+            padding-top: 50px;
         }
 
         .t-header {
@@ -329,29 +356,38 @@
     </div>
 
     {% if is_a4 %}
-    <!-- A4 LAYOUT -->
-    <div class="container">
+    <!-- =========================
+         A4 STRUCTURE (TABLE BASED)
+         ========================= -->
 
-        <!-- Headers -->
-        <div class="header-cont">
-            <div class="h-left">
-                <img src="{{ url_for('static', filename='img/logo_jv_studio.png') }}" style="width:130px;">
-            </div>
-            <div class="h-center">
-                <img src="{{ url_for('static', filename='img/logo_jv_corp.png') }}" style="width:180px;">
-                <div>Jr. Andahuaylas 216 - Abancay - Apurimac<br>965032443</div>
-            </div>
-            <div class="h-right">
-                <h4>R.U.C. 20606961007</h4>
-                <h2>{{ venta.tipo_comprobante|upper }} ELECTRICÓNICA</h2>
-                <h4>{{ venta.serie_comprobante }} - {{ '%08d'|format(venta.numero_comprobante|int) }}</h4>
-            </div>
-        </div>
+    <!-- HEADER -->
+    <table class="header-table">
+        <tr>
+            <td class="h-col-1">
+                <img src="{{ url_for('static', filename='img/logo_jv_studio.png') }}" class="logo-studio">
+            </td>
+            <td class="h-col-2">
+                <img src="{{ url_for('static', filename='img/logo_jv_corp.png') }}" class="logo-corp">
+                <div class="corp-info">
+                    <strong>Jr. Andahuaylas 216 - Abancay - Apurimac</strong><br>
+                    Cel: 965032443
+                </div>
+            </td>
+            <td class="h-col-3">
+                <div class="ruc-box">
+                    <h4>R.U.C. 20606961007</h4>
+                    <h2>{{ venta.tipo_comprobante|upper }} ELECTRÓNICA</h2>
+                    <h4>{{ venta.serie_comprobante }} - {{ '%08d'|format(venta.numero_comprobante|int) }}</h4>
+                </div>
+            </td>
+        </tr>
+    </table>
 
-        <!-- Info Boxes -->
-        <div class="info-grid">
-            <div class="info-box">
-                <h4>DATOS DEL CLIENTE</h4>
+    <!-- INFO BOXES -->
+    <table class="info-table">
+        <tr>
+            <td class="info-cell">
+                <div class="info-title">DATOS DEL CLIENTE</div>
                 <div class="row">
                     <div class="lbl">Cliente:</div>
                     <div class="val">{{ venta.cliente_nombre }}</div>
@@ -364,15 +400,15 @@
                     <div class="lbl">Dirección:</div>
                     <div class="val">{{ venta.cliente_dir or '-' }}</div>
                 </div>
-            </div>
-            <div class="info-box">
-                <h4>DATOS DE EMISIÓN</h4>
+            </td>
+            <td class="info-cell">
+                <div class="info-title">DATOS DE EMISIÓN</div>
                 <div class="row">
-                    <div class="lbl">Fecha:</div>
+                    <div class="lbl">Fecha Emisión:</div>
                     <div class="val">{{ venta.fecha_venta.strftime('%d/%m/%Y') }}</div>
                 </div>
                 <div class="row">
-                    <div class="lbl">Hora:</div>
+                    <div class="lbl">Hora Emisión:</div>
                     <div class="val">{{ venta.fecha_venta.strftime('%H:%M %p') }}</div>
                 </div>
                 <div class="row">
@@ -383,66 +419,67 @@
                     <div class="lbl">Moneda:</div>
                     <div class="val">SOLES (S/)</div>
                 </div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- ITEMS -->
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th class="t-center" width="8%">CANT.</th>
+                <th class="t-center" width="10%">UNIDAD</th>
+                <th width="52%">DESCRIPCIÓN</th>
+                <th class="t-right" width="15%">P. UNIT</th>
+                <th class="t-right" width="15%">TOTAL</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td class="t-center">{{ item.cantidad|int }}</td>
+                <td class="t-center">ZZ</td>
+                <td>
+                    {{ item.descripcion_item_venta }}
+                    {% if item.notas_item %}<br><small>({{ item.notas_item }})</small>{% endif %}
+                </td>
+                <td class="t-right">{{ "%.2f"|format(item.precio_unitario_venta) }}</td>
+                <td class="t-right">{{ "%.2f"|format(item.subtotal_item_neto) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- TOTALS -->
+    <div class="totals-container">
+        <div class="totals-box">
+            <div class="tot-row">
+                <span>OP. GRAVADA</span>
+                <span>S/ {{ "%.2f"|format(venta.monto_final_venta|float / 1.18) }}</span>
+            </div>
+            <div class="tot-row">
+                <span>I.G.V. (18%)</span>
+                <span>S/ {{ "%.2f"|format(venta.monto_final_venta|float - (venta.monto_final_venta|float / 1.18))
+                    }}</span>
+            </div>
+            {% if venta.descuento_monto > 0 %}
+            <div class="tot-row">
+                <span style="color:red">DESCUENTO (-)</span>
+                <span style="color:red">S/ {{ "%.2f"|format(venta.descuento_monto) }}</span>
+            </div>
+            {% endif %}
+            <div class="tot-row tot-final">
+                <span>IMPORTE TOTAL</span>
+                <span>S/ {{ "%.2f"|format(venta.monto_final_venta) }}</span>
             </div>
         </div>
+    </div>
 
-        <!-- Table -->
-        <table>
-            <thead>
-                <tr>
-                    <th class="text-center" width="10%">CANT.</th>
-                    <th class="text-center" width="15%">UNIDAD</th>
-                    <th width="45%">DESCRIPCIÓN</th>
-                    <th class="text-right" width="15%">P. UNIT</th>
-                    <th class="text-right" width="15%">TOTAL</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in items %}
-                <tr>
-                    <td class="text-center">{{ item.cantidad|int }}</td>
-                    <td class="text-center">NIU</td>
-                    <td>{{ item.descripcion_item_venta }}
-                        {% if item.notas_item %}<br><small>({{ item.notas_item }})</small>{% endif %}
-                    </td>
-                    <td class="text-right">{{ "%.2f"|format(item.precio_unitario_venta) }}</td>
-                    <td class="text-right">{{ "%.2f"|format(item.subtotal_item_neto) }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <!-- Totals -->
-        <div class="totals-wrap">
-            <div class="totals-box">
-                <div class="t-row">
-                    <span>OP. GRAVADA</span>
-                    <span>S/ {{ "%.2f"|format(venta.monto_final_venta|float / 1.18) }}</span>
-                </div>
-                <div class="t-row">
-                    <span>I.G.V. (18%)</span>
-                    <span>S/ {{ "%.2f"|format(venta.monto_final_venta|float - (venta.monto_final_venta|float / 1.18))
-                        }}</span>
-                </div>
-                {% if venta.descuento_monto > 0 %}
-                <div class="t-row">
-                    <span style="color:red">DESCUENTO (-)</span>
-                    <span style="color:red">S/ {{ "%.2f"|format(venta.descuento_monto) }}</span>
-                </div>
-                {% endif %}
-                <div class="t-row t-final">
-                    <span>IMPORTE TOTAL</span>
-                    <span>S/ {{ "%.2f"|format(venta.monto_final_venta) }}</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="footer">
-            <p>Representación Impresa del Comprobante Electrónico, autorizado mediante Resolución de Intendencia No.
-                0340050010017/SUNAT</p>
-            <p>Consulte su documento en <b>manager.jvcorp.pe</b></p>
-            {% if venta.hash_cpe %}<p>Hash: {{ venta.hash_cpe }}</p>{% endif %}
-        </div>
+    <div class="footer-lines">
+        <p>Representación Impresa del Comprobante Electrónico, autorizado mediante Resolución de Intendencia No.
+            0340050010017/SUNAT</p>
+        <p>Consulte su documento en <b>manager.jvcorp.pe</b></p>
+        {% if venta.hash_cpe %}<p>Hash: {{ venta.hash_cpe }}</p>{% endif %}
     </div>
 
     {% else %}
