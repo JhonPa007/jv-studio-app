@@ -409,11 +409,12 @@
                 {% else %}
                 <div class="total-row">
                     <span>OP. GRAVADA</span>
-                    <span>S/ {{ "%.2f"|format(venta.monto_final_venta / 1.18) }}</span>
+                    <span>S/ {{ "%.2f"|format(venta.monto_final_venta|float / 1.18) }}</span>
                 </div>
                 <div class="total-row">
                     <span>I.G.V. (18%)</span>
-                    <span>S/ {{ "%.2f"|format(venta.monto_final_venta - (venta.monto_final_venta / 1.18)) }}</span>
+                    <span>S/ {{ "%.2f"|format(venta.monto_final_venta|float - (venta.monto_final_venta|float / 1.18))
+                        }}</span>
                 </div>
                 {% endif %}
 
