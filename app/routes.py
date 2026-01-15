@@ -10176,7 +10176,7 @@ def generar_xml_venta(venta_id):
 
 def _procesar_envio_sunat(venta_id):
     # ... (Configuración inicial igual) ...
-    SUNAT_WSDL_URL = 'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService?wsdl'
+    SUNAT_WSDL_URL = os.path.join(current_app.root_path, 'sunat', 'billService_merged.wsdl')
     
     xml_firmado_str, nombre_base = _generar_y_firmar_xml(venta_id)
     nombre_archivo_zip = f"{nombre_base}.zip"
