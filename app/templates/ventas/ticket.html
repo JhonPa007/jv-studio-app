@@ -20,12 +20,6 @@
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
-
-            @page {
-                size: A4;
-                margin: 0;
-                /* Control total desde el body, evitar márgenes del navegador */
-            }
         }
 
         body {
@@ -56,6 +50,13 @@
             % if is_a4 %
         }
 
+        @media print {
+            @page {
+                size: A4;
+                margin: 0;
+            }
+        }
+
         /* =========================================
            A4 STYLES - STRICT CENTIMETER LAYOUT
            Ref: User Diagram 3cm/6.5cm/5.5cm etc
@@ -64,17 +65,13 @@
             width: 210mm;
             height: 297mm;
             background: #fff;
-            /* Centrado del contenido en la hoja */
             display: flex;
             justify-content: center;
             padding-top: 15mm;
-            /* Margen superior impreso */
         }
 
         .container {
             width: 17.5cm;
-            /* Ancho seguro para contenido de 17cm + holgura */
-            /* No margin auto here because flex body centers it, but just in case */
         }
 
         /* HEADER: 3 cols flex */
@@ -82,10 +79,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            /* Alineación vertical centro */
             margin-bottom: 0.5cm;
             padding-bottom: 10px;
-            /* No border bottom here provided in design, but keeps structure clean? design has none visible/explicit */
         }
 
         /* 1. LOGO BOX: 3cm x 3cm */
@@ -95,7 +90,6 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            /* border: 1px dashed red; debug */
         }
 
         .box-logo img {
@@ -107,7 +101,6 @@
         /* 2. CENTER INFO: 6.5cm width */
         .box-center {
             width: 7cm;
-            /* Slight adjust 6.5 -> 7 for spacing text */
             text-align: center;
             font-size: 10px;
             line-height: 1.3;
@@ -115,7 +108,6 @@
 
         .box-center img {
             width: 100%;
-            /* Full width of 6.5cm container */
             max-width: 180px;
             height: auto;
             display: block;
@@ -126,7 +118,6 @@
         .box-ruc {
             width: 5.5cm;
             height: 2.5cm;
-            /* Adjusted slightly for content fit */
             border: 2px solid #D4AF37;
             text-align: center;
             display: flex;
@@ -150,7 +141,7 @@
             font-weight: 800;
         }
 
-        /* INFO AREAS: 10cm & 5.5cm x 3cm high */
+        /* INFO AREAS */
         .info-section {
             display: flex;
             justify-content: space-between;
@@ -161,7 +152,6 @@
             width: 10cm;
             min-height: 3cm;
             background-color: #E6E6E6 !important;
-            /* Gris claro */
             border-left: 5px solid #D4AF37;
             padding: 8px;
             font-size: 10px;
@@ -170,7 +160,6 @@
 
         .info-card-right {
             width: 6.5cm;
-            /* Adjusted 5.5 -> 6.5 to align right margin with table (17cm total approx) */
             min-height: 3cm;
             background-color: #E6E6E6 !important;
             border-left: 5px solid #D4AF37;
@@ -204,7 +193,7 @@
             color: #000;
         }
 
-        /* TABLE: 17cm width */
+        /* TABLE */
         .table-container {
             width: 17cm;
             margin-bottom: 0.5cm;
@@ -219,7 +208,6 @@
             background: #000 !important;
             color: #D4AF37 !important;
             height: 1cm;
-            /* Altura cabecera */
             font-size: 10px;
             text-transform: uppercase;
             padding: 0 5px;
@@ -241,7 +229,7 @@
             text-align: right;
         }
 
-        /* TOTALS: 6cm x 2.5cm */
+        /* TOTALS */
         .totals-wrapper {
             width: 17cm;
             display: flex;
@@ -282,6 +270,13 @@
             % else %
         }
 
+        @media print {
+            @page {
+                size: auto;
+                margin: 0mm;
+            }
+        }
+
         /* =========================================
            THERMAL TICKET STYLES (80mm)
            ========================================= */
@@ -289,10 +284,10 @@
             width: 72mm;
             margin: 0 auto;
             font-family: 'Courier New', Courier, monospace;
-            font-size: 10px;
+            font-size: 11px;
             line-height: 1.2;
             color: #000;
-            padding-top: 50px;
+            padding: 5mm;
         }
 
         .t-header {
@@ -383,12 +378,10 @@
 
         <!-- HEADER ROW -->
         <div class="header-section">
-            <!-- 3cm -->
             <div class="box-logo">
                 <img src="{{ url_for('static', filename='img/logo_jv_studio.png') }}">
             </div>
 
-            <!-- 6.5cm (approx) -->
             <div class="box-center">
                 <img src="{{ url_for('static', filename='img/logo_jv_corp.png') }}">
                 <div>
@@ -397,18 +390,15 @@
                 </div>
             </div>
 
-            <!-- 5.5cm -->
             <div class="box-ruc">
                 <h4>R.U.C. 20606961007</h4>
                 <h2>{{ venta.tipo_comprobante|upper }} ELECTRÓNICA</h2>
                 <h4>F001 - {{ '%08d'|format(venta.numero_comprobante|int) }}</h4>
-                <!-- Serie hardcoded F001 por diseño ref, o usar dynamic -->
             </div>
         </div>
 
         <!-- INFO ROW -->
         <div class="info-section">
-            <!-- 10cm -->
             <div class="info-card-left">
                 <div class="info-title">DATOS DEL CLIENTE</div>
                 <div class="row-data">
@@ -425,7 +415,6 @@
                 </div>
             </div>
 
-            <!-- 5.5cm (scaled to 6.5 for alignment) -->
             <div class="info-card-right">
                 <div class="info-title">DATOS DE EMISIÓN</div>
                 <div class="row-data">
@@ -447,7 +436,7 @@
             </div>
         </div>
 
-        <!-- TABLE ROW: 17cm -->
+        <!-- TABLE ROW -->
         <div class="table-container">
             <table>
                 <thead>
@@ -478,7 +467,6 @@
 
         <!-- TOTALS ROW -->
         <div class="totals-wrapper">
-            <!-- 6cm -->
             <div class="totals-box">
                 <div class="tot-row">
                     <span>OP. GRAVADA</span>
@@ -508,7 +496,6 @@
             <p>Consulte su documento en <b>manager.jvcorp.pe</b></p>
             {% if venta.hash_cpe %}<p>Hash: {{ venta.hash_cpe }}</p>{% endif %}
         </div>
-
     </div>
 
     {% else %}
