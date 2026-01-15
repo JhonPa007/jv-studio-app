@@ -3,56 +3,39 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>{{ 'Consulta' if not venta else venta.tipo_comprobante }} #{{ venta.serie_comprobante }}-{{
-        venta.numero_comprobante }}</title>
-
+    <title>{{ venta.tipo_comprobante }} {{ venta.serie_comprobante }}-{{ venta.numero_comprobante }}</title>
     {% set is_a4 = request.args.get('formato') == 'a4' %}
 
     <style>
-        /* =========================================
-           ESTILOS COMUNES
-           ========================================= */
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+
         body {
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
             margin: 0;
             padding: 0;
+            font-family: Arial, sans-serif;
             background: #fff;
         }
 
         .no-print {
-            text-align: center;
-            background: #f1f1f1;
+            background: #f0f0f0;
             padding: 10px;
-            border-bottom: 1px solid #ddd;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 1000;
+            text-align: center;
+            border-bottom: 1px solid #ccc;
         }
 
         .no-print button {
             padding: 8px 15px;
             cursor: pointer;
-            background: #333;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
             margin: 0 5px;
-        }
-
-        .no-print button:hover {
-            background: #555;
-        }
-
-        @media print {
-            .no-print {
-                display: none;
-            }
-
-            body {
-                margin: 0;
-            }
         }
 
             {
@@ -60,32 +43,271 @@
         }
 
         /* =========================================
-           ESTILOS FORMATO A4 (Visual Refinado)
+           A4 STYLES - FIXED & FORCED
            ========================================= */
-        .items-table {
-            width: 100%;
-            font-size: 11px;
-            margin-bottom: 10px;
+        body {
+            width: 210mm;
+            margin: 0 auto;
+            color: #000;
         }
 
-        .items-table th {
+        .container {
+            width: 90%;
+            margin: 0 auto;
+            padding-top: 20px;
+        }
+
+        /* LAYOUT FLEXBOX HEADER */
+        .header-cont {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #D4AF37;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        /* 1. LEFT LOGO */
+        .h-left {
+            width: 25%;
             text-align: left;
-            border-bottom: 1px solid #000;
         }
 
-        .items-table td {
+        .h-left img {
+            width: 130px;
+            height: auto;
+            display: block;
+        }
+
+        /* 2. CENTER INFO */
+        .h-center {
+            width: 45%;
+            text-align: center;
+            font-size: 11px;
+            line-height: 1.3;
+        }
+
+        .h-center img {
+            width: 180px;
+            height: auto;
+            display: block;
+            margin: 0 auto 5px auto;
+        }
+
+        /* 3. RIGHT RUC */
+        .h-right {
+            width: 30%;
+            border: 2px solid #D4AF37;
+            padding: 10px;
+            text-align: center;
+            background: #fff;
+        }
+
+        .h-right h4 {
+            margin: 0;
+            font-size: 14px;
+            color: #000;
+            font-weight: bold;
+        }
+
+        .h-right h2 {
+            margin: 5px 0;
+            font-size: 16px;
+            background: #fff;
+            color: #D4AF37;
+            font-weight: 800;
+            padding: 5px 0;
+        }
+
+        /* INFO GRILLS */
+        .info-grid {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-box {
+            flex: 1;
+            background-color: #f2f2f2 !important;
+            border-left: 5px solid #D4AF37;
+            padding: 10px 15px;
+            font-size: 11px;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+
+        .info-box h4 {
+            color: #D4AF37;
+            margin: 0 0 10px 0;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .row {
+            display: flex;
+            margin-bottom: 3px;
+        }
+
+        .lbl {
+            width: 80px;
+            font-weight: bold;
+            color: #444;
+        }
+
+        .val {
+            flex: 1;
+            color: #000;
+        }
+
+        /* TABLE */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        th {
+            background-color: #000 !important;
+            color: #D4AF37 !important;
+            padding: 8px;
+            font-size: 11px;
+            text-align: left;
+            text-transform: uppercase;
+            -webkit-print-color-adjust: exact;
+        }
+
+        td {
+            border-bottom: 1px solid #ccc;
+            padding: 6px 8px;
+            font-size: 11px;
+            color: #000;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        /* TOTALS */
+        .totals-wrap {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .totals-box {
+            width: 320px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .t-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            margin-bottom: 4px;
+            font-weight: bold;
+        }
+
+        .t-final {
+            border-top: 1px solid #999;
+            margin-top: 8px;
+            padding-top: 8px;
+            font-size: 14px;
+            color: #000;
+        }
+
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+
+            {
+            % else %
+        }
+
+        /* =========================================
+           THERMAL TICKET STYLES (80mm)
+           ========================================= */
+        body {
+            width: 72mm;
+            margin: 0 auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 10px;
+            line-height: 1.2;
+            color: #000;
+        }
+
+        .t-header {
+            text-align: center;
+            margin-bottom: 10px;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 10px;
+        }
+
+        .t-header h2 {
+            font-size: 12px;
+            margin: 0 0 5px 0;
+            font-weight: bold;
+        }
+
+        .t-header p {
+            margin: 2px 0;
+        }
+
+        .t-section {
+            margin-bottom: 10px;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 5px;
+        }
+
+        .t-row {
+            display: flex;
+            margin-bottom: 2px;
+        }
+
+        .t-lbl {
+            width: 60px;
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+            font-size: 10px;
+            border-collapse: collapse;
+            margin-bottom: 5px;
+        }
+
+        th {
+            border-bottom: 1px dashed #000;
+            text-align: left;
             padding: 2px 0;
         }
 
-        .ticket-totals {
-            text-align: right;
-            font-size: 12px;
+        td {
+            padding: 4px 0;
+            vertical-align: top;
         }
 
-        .ticket-footer {
+        .t-totals {
+            text-align: right;
+            font-size: 11px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+
+        .t-foot {
             text-align: center;
-            margin-top: 15px;
             font-size: 10px;
+            margin-top: 15px;
         }
 
             {
@@ -102,203 +324,188 @@
         {% if not is_a4 %}
         <button onclick="window.location.href='?formato=a4'">Ver en A4</button>
         {% else %}
-        <button onclick="window.location.href='?'">Ver Ticket</button>
+        <button onclick="window.location.href='?'">Ver Ticket (80mm)</button>
         {% endif %}
     </div>
 
     {% if is_a4 %}
-    <!-- =========================================
-         LAYOUT A4 (DISEÑO REFINADO)
-         ========================================= -->
+    <!-- A4 LAYOUT -->
     <div class="container">
 
-        <!-- CABECERA -->
-        <div class="header-container">
-            <!-- 1. Logo Studio (Izquierda) -->
-            <div class="logo-studio-box">
-                <img src="{{ url_for('static', filename='img/logo_jv_studio.png') }}" alt="JV Studio">
+        <!-- Headers -->
+        <div class="header-cont">
+            <div class="h-left">
+                <img src="{{ url_for('static', filename='img/logo_jv_studio.png') }}" style="width:130px;">
             </div>
-
-            <!-- 2. Info Central (Logo Corp + Dirección) -->
-            <div class="company-info-box">
-                <img src="{{ url_for('static', filename='img/logo_jv_corp.png') }}" alt="JV Corp">
-                <div>
-                    <strong>Jr. Andahuaylas 216 - Abancay - Apurimac</strong><br>
-                    965032443
-                </div>
+            <div class="h-center">
+                <img src="{{ url_for('static', filename='img/logo_jv_corp.png') }}" style="width:180px;">
+                <div>Jr. Andahuaylas 216 - Abancay - Apurimac<br>965032443</div>
             </div>
-
-            <!-- 3. Caja RUC (Derecha) -->
-            <div class="ruc-box">
-                <h3>R.U.C. 20606961007</h3>
-                <h2>{{ venta.tipo_comprobante|upper }}</h2>
-                <h3>{{ venta.serie_comprobante }} - {{ '%08d'|format(venta.numero_comprobante|int) }}</h3>
+            <div class="h-right">
+                <h4>R.U.C. 20606961007</h4>
+                <h2>{{ venta.tipo_comprobante|upper }} ELECTRICÓNICA</h2>
+                <h4>{{ venta.serie_comprobante }} - {{ '%08d'|format(venta.numero_comprobante|int) }}</h4>
             </div>
         </div>
 
-        <!-- DATOS (Dos columnas grises) -->
+        <!-- Info Boxes -->
         <div class="info-grid">
-            <!-- Columna Cliente -->
             <div class="info-box">
                 <h4>DATOS DEL CLIENTE</h4>
-                <div class="info-row">
-                    <span class="info-label">Cliente:</span>
-                    <span class="info-val">{{ venta.cliente_nombre }}</span>
+                <div class="row">
+                    <div class="lbl">Cliente:</div>
+                    <div class="val">{{ venta.cliente_nombre }}</div>
                 </div>
-                <div class="info-row">
-                    <span class="info-label">RUC/DNI:</span>
-                    <span class="info-val">{{ venta.cliente_doc or '-' }}</span>
+                <div class="row">
+                    <div class="lbl">RUC/DNI:</div>
+                    <div class="val">{{ venta.cliente_doc or '-' }}</div>
                 </div>
-                <div class="info-row">
-                    <span class="info-label">Dirección:</span>
-                    <span class="info-val">{{ venta.cliente_dir or '-' }}</span>
+                <div class="row">
+                    <div class="lbl">Dirección:</div>
+                    <div class="val">{{ venta.cliente_dir or '-' }}</div>
                 </div>
             </div>
-
-            <!-- Columna Emisión -->
             <div class="info-box">
                 <h4>DATOS DE EMISIÓN</h4>
-                <div class="info-row">
-                    <span class="info-label">Fecha:</span>
-                    <span class="info-val">{{ venta.fecha_venta.strftime('%d/%m/%Y') }}</span>
+                <div class="row">
+                    <div class="lbl">Fecha:</div>
+                    <div class="val">{{ venta.fecha_venta.strftime('%d/%m/%Y') }}</div>
                 </div>
-                <div class="info-row">
-                    <span class="info-label">Hora:</span>
-                    <span class="info-val">{{ venta.fecha_venta.strftime('%I:%M %p') }}</span>
+                <div class="row">
+                    <div class="lbl">Hora:</div>
+                    <div class="val">{{ venta.fecha_venta.strftime('%H:%M %p') }}</div>
                 </div>
-                <div class="info-row">
-                    <span class="info-label">Vendedor:</span>
-                    <span class="info-val">{{ venta.empleado_nombre }} </span>
+                <div class="row">
+                    <div class="lbl">Vendedor:</div>
+                    <div class="val">{{ venta.empleado_nombre }}</div>
                 </div>
-                <div class="info-row">
-                    <span class="info-label">Moneda:</span>
-                    <span class="info-val">SOLES (S/)</span>
+                <div class="row">
+                    <div class="lbl">Moneda:</div>
+                    <div class="val">SOLES (S/)</div>
                 </div>
             </div>
         </div>
 
-        <!-- ITEMS -->
-        <table class="items-table">
+        <!-- Table -->
+        <table>
             <thead>
                 <tr>
-                    <th class="center" style="width: 10%;">CANT.</th>
-                    <th class="center" style="width: 15%;">UNIDAD</th>
-                    <th style="width: 45%;">DESCRIPCIÓN</th>
-                    <th class="right" style="width: 15%;">P. UNIT</th>
-                    <th class="right" style="width: 15%;">TOTAL</th>
+                    <th class="text-center" width="10%">CANT.</th>
+                    <th class="text-center" width="15%">UNIDAD</th>
+                    <th width="45%">DESCRIPCIÓN</th>
+                    <th class="text-right" width="15%">P. UNIT</th>
+                    <th class="text-right" width="15%">TOTAL</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in items %}
                 <tr>
-                    <td class="center">{{ item.cantidad|int }}</td>
-                    <td class="center">ZZ</td>
-                    <td>
-                        {{ item.descripcion_item_venta }}
+                    <td class="text-center">{{ item.cantidad|int }}</td>
+                    <td class="text-center">NIU</td>
+                    <td>{{ item.descripcion_item_venta }}
                         {% if item.notas_item %}<br><small>({{ item.notas_item }})</small>{% endif %}
                     </td>
-                    <td class="right">{{ "%.2f"|format(item.precio_unitario_venta) }}</td>
-                    <td class="right">{{ "%.2f"|format(item.subtotal_item_neto) }}</td>
+                    <td class="text-right">{{ "%.2f"|format(item.precio_unitario_venta) }}</td>
+                    <td class="text-right">{{ "%.2f"|format(item.subtotal_item_neto) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
 
-        <!-- TOTALES -->
-        <div class="totals-container">
+        <!-- Totals -->
+        <div class="totals-wrap">
             <div class="totals-box">
-                {% if venta.descuento_monto > 0 %}
-                <div class="total-row">
-                    <span>OP. GRAVADA</span>
-                    <span>S/ {{ "%.2f"|format(venta.monto_total_venta + venta.descuento_monto) }}</span>
-                </div>
-                <div class="total-row" style="color: red;">
-                    <span>DESCUENTO (-)</span>
-                    <span>S/ {{ "%.2f"|format(venta.descuento_monto) }}</span>
-                </div>
-                {% else %}
-                <div class="total-row">
+                <div class="t-row">
                     <span>OP. GRAVADA</span>
                     <span>S/ {{ "%.2f"|format(venta.monto_final_venta|float / 1.18) }}</span>
                 </div>
-                <div class="total-row">
+                <div class="t-row">
                     <span>I.G.V. (18%)</span>
                     <span>S/ {{ "%.2f"|format(venta.monto_final_venta|float - (venta.monto_final_venta|float / 1.18))
                         }}</span>
                 </div>
+                {% if venta.descuento_monto > 0 %}
+                <div class="t-row">
+                    <span style="color:red">DESCUENTO (-)</span>
+                    <span style="color:red">S/ {{ "%.2f"|format(venta.descuento_monto) }}</span>
+                </div>
                 {% endif %}
-
-                <div class="total-row final">
+                <div class="t-row t-final">
                     <span>IMPORTE TOTAL</span>
                     <span>S/ {{ "%.2f"|format(venta.monto_final_venta) }}</span>
                 </div>
             </div>
         </div>
 
-        <div class="a4-footer">
+        <div class="footer">
             <p>Representación Impresa del Comprobante Electrónico, autorizado mediante Resolución de Intendencia No.
                 0340050010017/SUNAT</p>
             <p>Consulte su documento en <b>manager.jvcorp.pe</b></p>
             {% if venta.hash_cpe %}<p>Hash: {{ venta.hash_cpe }}</p>{% endif %}
         </div>
-
     </div>
 
     {% else %}
-    <!-- =========================================
-         LAYOUT TICKET (80mm) - Original Mejorado
-         ========================================= -->
-    <div class="header">
-        <h2 style="margin:0;">{{ venta.sucursal_nombre }}</h2>
-        <p style="margin:0;">{{ venta.sucursal_direccion }}</p>
-        <div class="separator"></div>
-        <h3 style="margin:5px 0;">{{ venta.tipo_comprobante|upper }}</h3>
-        <span style="font-size:14px; font-weight:bold;">{{ venta.serie_comprobante }}-{{ venta.numero_comprobante
-            }}</span>
+    <!-- THERMAL LAYOUT -->
+    <div class="t-header">
+        <h2>{{ venta.sucursal_nombre }}</h2>
+        <p>{{ venta.sucursal_direccion }}</p>
+        <br>
+        <p><b>{{ venta.tipo_comprobante|upper }} ELECTRÓNICA</b></p>
+        <p>{{ venta.serie_comprobante }}-{{ '%08d'|format(venta.numero_comprobante|int) }}</p>
     </div>
 
-    <div class="ticket-info">
-        <div><b>Fecha:</b> {{ venta.fecha_venta.strftime('%d/%m/%Y %H:%M') }}</div>
-        <div><b>Cliente:</b> {{ venta.cliente_nombre }}</div>
-        {% if venta.cliente_doc %}<div><b>RUC/DNI:</b> {{ venta.cliente_doc }}</div>{% endif %}
-        <div><b>Atendido por:</b> {{ venta.empleado_nombre }}</div>
+    <div class="t-section">
+        <div class="t-row">
+            <div class="t-lbl">Fecha:</div>
+            <div>{{ venta.fecha_venta.strftime('%d/%m/%Y %H:%M') }}</div>
+        </div>
+        <div class="t-row">
+            <div class="t-lbl">Cliente:</div>
+            <div>{{ venta.cliente_nombre }}</div>
+        </div>
+        {% if venta.cliente_doc %}<div class="t-row">
+            <div class="t-lbl">RUC/DNI:</div>
+            <div>{{ venta.cliente_doc }}</div>
+        </div>{% endif %}
+        <div class="t-row">
+            <div class="t-lbl">Atiende:</div>
+            <div>{{ venta.empleado_nombre }}</div>
+        </div>
     </div>
 
-    <table class="items-table">
+    <table>
         <thead>
             <tr>
-                <th width="10%">Cant.</th>
-                <th width="65%">Desc.</th>
-                <th width="25%" style="text-align:right;">Total</th>
+                <th width="15%">Cant.</th>
+                <th width="60%">Desc.</th>
+                <th width="25%" style="text-align:right">Total</th>
             </tr>
         </thead>
         <tbody>
             {% for item in items %}
             <tr>
-                <td align="center" valign="top">{{ item.cantidad|int }}</td>
+                <td align="center">{{ item.cantidad|int }}</td>
                 <td>{{ item.descripcion_item_venta }}</td>
-                <td align="right" valign="top">{{ "%.2f"|format(item.subtotal_item_neto) }}</td>
+                <td align="right">{{ "%.2f"|format(item.subtotal_item_neto) }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 
-    <div class="separator"></div>
-
-    <div class="ticket-totals">
+    <div class="t-totals">
         {% if venta.descuento_monto > 0 %}
         <p>Subtotal: S/ {{ "%.2f"|format(venta.monto_total_venta + venta.descuento_monto) }}</p>
-        <p>Desc: -S/ {{ "%.2f"|format(venta.descuento_monto) }}</p>
+        <p>Dscnt: - S/ {{ "%.2f"|format(venta.descuento_monto) }}</p>
         {% endif %}
-        <p style="font-size:14px; font-weight:bold; margin-top:5px;">TOTAL: S/ {{ "%.2f"|format(venta.monto_final_venta)
-            }}</p>
+        <p style="font-size:12px; border-top:1px dashed #000; padding-top:5px;">TOTAL: S/ {{
+            "%.2f"|format(venta.monto_final_venta) }}</p>
     </div>
 
-    <div class="ticket-footer">
+    <div class="t-foot">
         <p>*** Gracias por su preferencia ***</p>
         <p>Vuelva Pronto</p>
     </div>
-
     {% endif %}
 
 </body>
