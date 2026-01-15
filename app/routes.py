@@ -10238,16 +10238,23 @@ def _procesar_envio_sunat(venta_id):
         # Analizar XML del CDR
         try:
             with zipfile.ZipFile(io.BytesIO(cdr_zip_data), 'r') as zip_ref:
-                nombre_cdr_xml = zip_ref.namelist()[0]
-                with zip_ref.open(nombre_cdr_xml) as cdr_xml_file:
-                    cdr_tree = ET.parse(cdr_xml_file)
-                    
-                    ns = {'cbc': "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"}
-                    code_node = cdr_tree.find('.//cbc:ResponseCode', ns)
-                    desc_node = cdr_tree.find('.//cbc:Description', ns)
-                    
-                    response_code = code_node.text if code_node is not None else "?"
-                    response_desc = desc_node.text if desc_node is not None else "Procesado sin mensaje"
+                # Buscar el primer archivo que termine en .xml (ignorando carpetas si las hay)
+                nombre_cdr_xml = next((n for n in zip_ref.namelist() if n.lower().endswith('.xml')), None)
+                
+                if nombre_cdr_xml:
+                    with zip_ref.open(nombre_cdr_xml) as cdr_xml_file:
+                        cdr_tree = ET.parse(cdr_xml_file)
+                        
+                        # Usar XPath agnóstico a namespaces para mayor robustez
+                        # 'local-name()' permite encontrar el tag sin importar el prefijo (cac, cbc, etc)
+                        code_node = cdr_tree.xpath('.//*[local-name()="ResponseCode"]')
+                        desc_node = cdr_tree.xpath('.//*[local-name()="Description"]')
+                        
+                        response_code = code_node[0].text if code_node else "?"
+                        response_desc = desc_node[0].text if desc_node else "Procesado sin mensaje"
+                else:
+                    response_code = "0"
+                    response_desc = "CDR recibido (ZIP válido) pero no contiene XML."
         except Exception as e:
             # Si falla leer el XML pero tenemos el ZIP, asumimos éxito parcial
             response_code = "0"
