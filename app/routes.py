@@ -10295,9 +10295,147 @@ def enviar_sunat(venta_id):
     return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
     
 
-# -------------------------------------------------------------------------
-# API CONSULTA DNI/RUC    sk_12199.6AOBIMls8TquShJ45J3rnmPfCR0BtWcK
-# -------------------------------------------------------------------------
+    return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
+    
+
+@main_bp.route('/ventas/consultar-sunat/<int:venta_id>', methods=['POST'])
+@login_required
+def consultar_estado_sunat(venta_id):
+    """
+    Consulta el estado del comprobante directamente a SUNAT (getStatus).
+    Útil para verificar si un comprobante ya fue enviado/aceptado previamente.
+    """
+    db = get_db()
+    try:
+        # 1. Obtener Datos Venta
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            cursor.execute("SELECT * FROM ventas WHERE id = %s", (venta_id,))
+            venta = cursor.fetchone()
+            
+            cursor.execute("SELECT ruc_empresa, usuario_sol, clave_sol FROM configuracion_sistema WHERE id = 1")
+            config_sol = cursor.fetchone()
+
+        if not venta:
+            flash("Venta no encontrada.", "danger")
+            return redirect(url_for('main.listar_ventas'))
+
+        # 2. Configurar Cliente SOAP (Reutilizando lógica)
+        SUNAT_WSDL_URL = os.path.join(current_app.root_path, 'sunat', 'billService_merged.wsdl')
+        
+        ruc_emisor = str(config_sol.get('ruc_empresa', '')).strip()
+        usuario_sol = str(config_sol.get('usuario_sol', '')).strip()
+        clave_sol = str(config_sol.get('clave_sol', '')).strip()
+
+        if usuario_sol.startswith(ruc_emisor):
+            usuario_wsse = usuario_sol
+        else:
+            usuario_wsse = f"{ruc_emisor}{usuario_sol}"
+        
+        transport = Transport(timeout=30)
+        settings = Settings(strict=False, xml_huge_tree=True)
+        client = Client(wsdl=SUNAT_WSDL_URL, transport=transport, wsse=UsernameToken(usuario_wsse, clave_sol), settings=settings)
+
+        # 3. Preparar Parámetros getStatus
+        # tipoComprobante: 01=Factura, 03=Boleta (Aunque boleta no se consulta por getStatus indivual usualmente, pero probemos)
+        # Nota: getStatus funciona para Facturas y Notas vinculadas. Para Boletas se suele usar getStatus de resumen, pero intentaremos.
+        tipo_code = '01' if venta['tipo_comprobante'] == 'Factura Electrónica' else '03'
+        
+        response = client.service.getStatus(
+            rucComprobante=ruc_emisor,
+            tipoComprobante=tipo_code,
+            serieComprobante=venta['serie_comprobante'],
+            numeroComprobante=int(venta['numero_comprobante']) # SUNAT pide integer a veces, o string. Zeep maneja el tipo según WSDL.
+        )
+        
+        # 4. Analizar Respuesta
+        # La respuesta tiene 'status' -> { 'statusCode': '...', 'content': 'base64...' }
+        # statusCode:
+        # '0001': El comprobante existe
+        # '0011': Aceptado? 
+        # Lo más importante es decodificar el 'content' (CDR) si viene.
+        
+        status_data = response.status if hasattr(response, 'status') else response.get('status')
+        
+        if status_data:
+            code_sunat = status_data.get('statusCode')
+            cdr_base64 = status_data.get('content')
+            
+            mensaje_extra = f"Código SUNAT: {code_sunat}."
+            
+            if cdr_base64:
+                # Si hay CDR, lo procesamos igual que en el envío
+                import base64
+                cdr_zip_data = base64.b64decode(cdr_base64)
+                
+                # Guardar CDR
+                instance_path = current_app.instance_path
+                cdr_path = os.path.join(instance_path, 'cdr')
+                os.makedirs(cdr_path, exist_ok=True)
+                nombre_base = f"{ruc_emisor}-{tipo_code}-{venta['serie_comprobante']}-{str(venta['numero_comprobante']).zfill(8)}"
+                nombre_cdr_zip = f"R-{nombre_base}.zip"
+                
+                with open(os.path.join(cdr_path, nombre_cdr_zip), 'wb') as f:
+                    f.write(cdr_zip_data)
+
+                # Leer estado del XML del CDR
+                try:
+                    with zipfile.ZipFile(io.BytesIO(cdr_zip_data), 'r') as zip_ref:
+                        nombre_cdr_xml = next((n for n in zip_ref.namelist() if n.lower().endswith('.xml')), None)
+                        if nombre_cdr_xml:
+                            with zip_ref.open(nombre_cdr_xml) as cdr_xml_file:
+                                cdr_tree = ET.parse(cdr_xml_file)
+                                code_node = cdr_tree.xpath('.//*[local-name()="ResponseCode"]')
+                                desc_node = cdr_tree.xpath('.//*[local-name()="Description"]')
+                                response_code = code_node[0].text if code_node else "?"
+                                response_desc = desc_node[0].text if desc_node else ""
+                                mensaje_extra = f"CDR: {response_desc}"
+                        else:
+                            response_code = "0" # Asumimos éxito si hay ZIP
+                except:
+                    response_code = "?"
+
+                # Actualizar BD
+                nuevo_estado = "Aceptada" if response_code == "0" else f"Rechazada ({response_code})"
+                with db.cursor() as cursor:
+                    cursor.execute("UPDATE ventas SET estado_sunat=%s, cdr_sunat_path=%s WHERE id=%s", 
+                                   (nuevo_estado, nombre_cdr_zip, venta_id))
+                    db.commit()
+                
+                flash(f"Consulta Exitosa. Estado Actualizado: {nuevo_estado}. {mensaje_extra}", "success")
+            
+            else:
+                # No hay CDR, solo código de estado
+                # Códigos comunes getStatus:
+                # 0001: El comprobante existe y está Aceptado (a veces no devuelve CDR si ya pasó tiempo)
+                # 0002: El comprobante existe y está Anulado
+                # 0003: El comprobante existe y está Rechazado
+                # 0127: El comprobante no existe
+                
+                interpretacion = {
+                    '0001': 'Aceptada (Existe)',
+                    '0002': 'Anulada',
+                    '0003': 'Rechazada',
+                    '0127': 'No Existe en SUNAT'
+                }.get(code_sunat, f"Código {code_sunat}")
+                
+                if code_sunat == '0001':
+                     with db.cursor() as cursor:
+                        cursor.execute("UPDATE ventas SET estado_sunat='Aceptada' WHERE id=%s", (venta_id,))
+                        db.commit()
+                
+                flash(f"SUNAT Responde: {interpretacion}", "info")
+
+        else:
+            flash("Respuesta vacía de SUNAT.", "warning")
+
+    except Fault as fault:
+        flash(f"SUNAT Error (SOAP): {fault.message}", "danger")
+    except Exception as e:
+        flash(f"Error al consultar: {e}", "danger")
+        current_app.logger.error(f"Error consultar_sunat: {e}")
+
+    return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
+
 @main_bp.route('/api/consultar-documento/<tipo>/<numero>', methods=['GET'])
 @login_required
 def consultar_documento_api(tipo, numero):

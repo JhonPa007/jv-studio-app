@@ -71,6 +71,14 @@
                         </button>
                     </form>
                 {% endif %}
+
+                <!-- Botón de Consulta de Estado Siempre Disponible para verificar -->
+                <form class="d-inline" method="POST" action="{{ url_for('main.consultar_estado_sunat', venta_id=venta.id) }}">
+                    <button type="submit" class="btn btn-outline-light btn-sm ms-2" title="Consultar estado actual en SUNAT">
+                        <i class="fas fa-sync-alt"></i> Estado
+                    </button>
+                </form>
+
             {% endif %}
             
             {% if venta.estado_pago != 'Anulado' %}
