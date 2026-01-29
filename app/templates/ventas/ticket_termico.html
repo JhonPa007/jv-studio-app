@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{{ venta.tipo_comprobante }} {{ venta.serie_comprobante }}-{{ venta.numero_comprobante }}</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+
+        /* =========================================
+           THERMAL TICKET STYLES (80mm) - PREMIUM REDESIGN
+           ========================================= */
+        body {
+            width: 80mm;
+            /* Seteamos al ancho del papel */
+            margin: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            font-size: 10px;
+            line-height: 1.4;
+            color: #000;
+            padding: 0;
+            background: #fff;
+        }
+
+        .t-container {
+            width: 72mm;
+            /* El contenido real si es de 72mm */
+            margin: 0 auto;
+            /* Centramos el contenido dentro de los 80mm */
+            padding: 2mm 0;
+        }
+
+        .t-center {
+            text-align: center;
+        }
+
+        .t-bold {
+            font-weight: bold;
+        }
+
+        .t-uppercase {
+            text-transform: uppercase;
+        }
+
+        .t-dashed-line {
+            border-top: 1px dotted #000;
+            margin: 8px 0;
+            width: 100%;
+        }
+
+        /* 1. Header & Logos */
+        .t-logo-studio {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 5px auto;
+            display: block;
+        }
+
+        .t-comp-title {
+            font-size: 13px;
+            font-weight: 800;
+            margin: 5px 0;
+            letter-spacing: 0.5px;
+        }
+
+        .t-logo-corp {
+            max-width: 120px;
+            height: auto;
+            margin: 5px auto;
+            display: block;
+        }
+
+        .t-header-info {
+            font-size: 9px;
+            margin-bottom: 2px;
+        }
+
+        /* 2. Client & Emission Info */
+        .t-info-block {
+            margin: 8px 0;
+            font-size: 10px;
+        }
+
+        .t-info-row {
+            display: flex;
+            margin-bottom: 1px;
+        }
+
+        .t-info-lbl {
+            width: 85px;
+            flex-shrink: 0;
+        }
+
+        .t-info-val {
+            flex-grow: 1;
+        }
+
+        /* 3. Table Items */
+        .t-items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+
+        .t-items-table th {
+            text-align: left;
+            font-weight: bold;
+            padding: 4px 0;
+            font-size: 9px;
+            border-bottom: none;
+        }
+
+        .t-items-table td {
+            padding: 6px 0;
+            vertical-align: top;
+            font-size: 10px;
+        }
+
+        .t-txt-r {
+            text-align: right;
+        }
+
+        .t-txt-c {
+            text-align: center;
+        }
+
+        /* 4. Totals */
+        .t-totals-container {
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .t-total-row {
+            display: flex;
+            justify-content: flex-start;
+            margin-bottom: 3px;
+        }
+
+        .t-total-lbl {
+            width: 105px;
+            text-align: left;
+            font-size: 9px;
+        }
+
+        .t-total-val {
+            width: 80px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        .t-grand-total {
+            font-size: 11px;
+            margin-top: 5px;
+        }
+
+        /* 5. Footer Info */
+        .t-footer {
+            margin-top: 20px;
+            font-size: 8px;
+            line-height: 1.3;
+            color: #333;
+        }
+
+        .t-thanks {
+            margin: 15px 0;
+            font-size: 10px;
+        }
+
+        @media print {
+            body {
+                width: 80mm;
+                margin: 0;
+                padding: 0;
+            }
+
+            .t-container {
+                margin: 0 auto;
+                /* Permite que el driver de la impresora maneje el centrado si el papel es exacto */
+            }
+
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body onload="window.print()">
+
+    <div class="no-print">
+        <button onclick="window.print()">🖨️ Imprimir</button>
+        <button onclick="window.close()">✖ Cerrar</button>
+        <button onclick="window.location.href='?formato=a4'">Ver en A4</button>
+    </div>
+
+    <!-- THERMAL LAYOUT REDESIGNED -->
+    <div class="t-container">
+
+        <div class="t-center">
+            <img src="{{ url_for('static', filename='img/logo_jv_studio.png') }}" class="t-logo-studio">
+        </div>
+
+        <div class="t-dashed-line"></div>
+        <div class="t-center t-comp-title t-uppercase">
+            {{ venta.tipo_comprobante|upper }} ELECTRÓNICA
+        </div>
+        <div class="t-dashed-line"></div>
+
+        <div class="t-center">
+            <img src="{{ url_for('static', filename='img/logo_jv_corp.png') }}" class="t-logo-corp">
+            <div class="t-bold t-header-info">R.U.C. 20606961007</div>
+            <div class="t-header-info">JR. ANDAHUAYLAS 216 - ABANCAY - APURIMAC</div>
+        </div>
+
+        <div class="t-dashed-line"></div>
+
+        <div class="t-center t-info-block">
+            <div class="t-bold t-uppercase">SEDE PRINCIPAL</div>
+            <div>JR. ANDAHUAYLAS 216 - ABANCAY - APURIMAC</div>
+            <div>936646972</div>
+            <div>{{ venta.fecha_venta.strftime('%d/%m/%Y %H:%M:%S') }}</div>
+            <div class="t-bold">{{ venta.serie_comprobante }}-{{ '%08d'|format(venta.numero_comprobante|int) }}</div>
+        </div>
+
+        <div class="t-dashed-line"></div>
+
+        <div class="t-info-block">
+            <div class="t-center t-bold t-uppercase">{{ venta.cliente_nombre }}</div>
+            {% if venta.cliente_telefono %}
+            <div class="t-center">Telf. {{ venta.cliente_telefono }}</div>
+            {% endif %}
+            {% if venta.cliente_doc %}
+            <div class="t-center">DNI: {{ venta.cliente_doc }}</div>
+            {% endif %}
+            {% if venta.cliente_dir %}
+            <div class="t-center">{{ venta.cliente_dir }}</div>
+            {% endif %}
+        </div>
+
+        <div class="t-dashed-line"></div>
+
+        <table class="t-items-table">
+            <thead>
+                <tr>
+                    <th width="50%">Descripción</th>
+                    <th width="12%" class="t-txt-c">Cant.</th>
+                    <th width="18%" class="t-txt-r">P. Und</th>
+                    <th width="20%" class="t-txt-r">P. Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.descripcion_item_venta|upper }}</td>
+                    <td class="t-txt-c">{{ item.cantidad|int }} ZZ</td>
+                    <td class="t-txt-r">{{ "%.2f"|format(item.precio_unitario_venta) }}</td>
+                    <td class="t-txt-r">S/ {{ "%.2f"|format(item.subtotal_item_neto) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="t-dashed-line"></div>
+
+        <div class="t-totals-container">
+            <div class="t-total-row">
+                <div class="t-total-lbl">OP. GRAVADA</div>
+                <div class="t-total-val">S/ {{ "%.2f"|format(venta.monto_final_venta|float / 1.18) }}</div>
+            </div>
+            <div class="t-total-row">
+                <div class="t-total-lbl">I.G.V. (18%)</div>
+                <div class="t-total-val">S/ {{ "%.2f"|format(venta.monto_final_venta|float -
+                    (venta.monto_final_venta|float / 1.18)) }}</div>
+            </div>
+            <div class="t-total-row t-bold t-grand-total">
+                <div class="t-total-lbl">IMPORTE TOTAL</div>
+                <div class="t-total-val">S/ {{ "%.2f"|format(venta.monto_final_venta) }}</div>
+            </div>
+        </div>
+
+        <div class="t-dashed-line"></div>
+
+        <div class="t-center t-info-block">
+            Atendido por: <span class="t-bold t-uppercase">{{ venta.empleado_nombre }}</span>
+            <div class="t-thanks">Gracias por su preferencia</div>
+        </div>
+
+        <div class="t-center t-footer">
+            Representación Impresa del Comprobante Electrónico, autorizado mediante Resolución de Intendencia No.
+            0340050010017/SUNAT<br>
+            Consulte su documento en <b>manager.jvcorp.pe</b>
+        </div>
+
+    </div>
+
+</body>
+
+</html>

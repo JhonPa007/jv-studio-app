@@ -6031,14 +6031,20 @@ def ver_detalle_venta(venta_id):
 @login_required
 def ver_ticket(venta_id):
     db_conn = get_db()
+    formato = request.args.get('formato')
     try:
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # 1. Datos Cabecera
+            # 1. Datos Cabecera - Mejoramos para obtener nombre completo
             cursor.execute("""
                 SELECT v.*, 
-                       COALESCE(c.razon_social_nombres, 'Cliente Varios') as cliente_nombre,
+                       CASE 
+                           WHEN c.razon_social_nombres IS NOT NULL AND c.apellidos IS NOT NULL 
+                           THEN CONCAT(c.razon_social_nombres, ' ', c.apellidos)
+                           ELSE COALESCE(c.razon_social_nombres, 'Cliente Varios')
+                       END as cliente_nombre,
                        c.numero_documento as cliente_doc,
                        c.direccion as cliente_dir,
+                       c.telefono as cliente_telefono,
                        e.nombres as empleado_nombre,
                        s.nombre as sucursal_nombre,
                        s.direccion as sucursal_direccion
@@ -6061,7 +6067,8 @@ def ver_ticket(venta_id):
             cursor.execute("SELECT * FROM venta_pagos WHERE venta_id = %s", (venta_id,))
             pagos = cursor.fetchall()
 
-            return render_template('ventas/ticket.html', venta=venta, items=items, pagos=pagos)
+            template = 'ventas/ticket_a4.html' if formato == 'a4' else 'ventas/ticket_termico.html'
+            return render_template(template, venta=venta, items=items, pagos=pagos)
 
     except Exception as e:
         return f"Error generando ticket: {e}", 500
