@@ -6045,7 +6045,7 @@ def ver_ticket(venta_id):
                        c.numero_documento as cliente_doc,
                        c.direccion as cliente_dir,
                        c.telefono as cliente_telefono,
-                       e.nombres as empleado_nombre,
+                       COALESCE(e.nombre_display, e.nombres) as empleado_nombre,
                        s.nombre as sucursal_nombre,
                        s.direccion as sucursal_direccion
                 FROM ventas v
