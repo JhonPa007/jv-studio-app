@@ -118,7 +118,7 @@
                     <select class="form-select form-select-lg" name="empleado_id" id="empleado_id" required>
                         <option value="">Seleccione...</option>
                         {% for e in empleados %}
-                        <option value="{{ e.id }}" {% if current_user.id==e.id %}selected{% endif %}>
+                        <option value="{{ e.id }}">
                             {{ e.nombre_display }}
                         </option>
                         {% endfor %}
