@@ -6173,7 +6173,7 @@ def listar_ventas():
 def eliminar_venta_nota_venta(venta_id):
     """
     Permite eliminar una venta SOLO si es una Nota de Venta.
-    Elimina en cascada (items y pagos) y luego la venta.
+    Revierte el stock, elimina registros de kardex y luego elimina la venta en cascada.
     """
     db_conn = get_db()
     try:
@@ -6190,17 +6190,35 @@ def eliminar_venta_nota_venta(venta_id):
                 flash("Solo se pueden eliminar Notas de Venta.", "danger")
                 return redirect(url_for('main.listar_ventas'))
 
-            # 2. Eliminar items y pagos (si no hay cascade en BD)
+            # 2. Revertir Stock de Productos 
+            # Primero obtenemos los items para saber qué devolver
+            cursor.execute("SELECT producto_id, cantidad FROM venta_items WHERE venta_id = %s", (venta_id,))
+            items_venta = cursor.fetchall()
+            
+            for item in items_venta:
+                if item['producto_id']:
+                    # Devolver stock al inventario
+                    cursor.execute("UPDATE productos SET stock_actual = stock_actual + %s WHERE id = %s", 
+                                   (item['cantidad'], item['producto_id']))
+
+            # 3. Eliminar registros del Kardex asociados a esta venta
+            # Esto soluciona el error de Foreign Key Constraint
+            cursor.execute("DELETE FROM kardex WHERE venta_id = %s", (venta_id,))
+
+            # 4. Eliminar items y pagos
             cursor.execute("DELETE FROM venta_items WHERE venta_id = %s", (venta_id,))
             cursor.execute("DELETE FROM venta_pagos WHERE venta_id = %s", (venta_id,))
+            
+            # 5. Finalmente eliminar la venta
             cursor.execute("DELETE FROM ventas WHERE id = %s", (venta_id,))
             
             db_conn.commit()
-            flash("Nota de Venta eliminada exitosamente.", "success")
+            flash("Nota de Venta eliminada exitosamente. El stock ha sido restaurado.", "success")
             
     except Exception as e:
         db_conn.rollback()
         current_app.logger.error(f"Error eliminando venta {venta_id}: {e}")
+        # Mostrar el error completo para debug si es necesario, pero limpiar para usuario
         flash(f"Error al eliminar la venta: {e}", "danger")
 
     return redirect(url_for('main.listar_ventas'))
