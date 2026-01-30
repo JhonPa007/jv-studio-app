@@ -10104,7 +10104,7 @@ def _generar_y_firmar_xml(venta_id):
     
     # Tipo Comprobante (01=Factura, 03=Boleta)
     tipo_code = '01' if venta['tipo_comprobante'] == 'Factura Electrónica' else '03'
-    ET.SubElement(invoice, ET.QName(NS_MAP["cbc"], "InvoiceTypeCode"), listID="0101").text = tipo_code
+    ET.SubElement(invoice, ET.QName(NS_MAP["cbc"], "InvoiceTypeCode"), listID="0101", listAgencyName="PE:SUNAT", listName="Tipo de Operacion").text = tipo_code
     ET.SubElement(invoice, ET.QName(NS_MAP["cbc"], "DocumentCurrencyCode")).text = "PEN"
 
     # Emisor
