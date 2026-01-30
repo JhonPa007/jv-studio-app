@@ -10132,10 +10132,40 @@ def _generar_y_firmar_xml(venta_id):
     party_legal_c = ET.SubElement(party_c, ET.QName(NS_MAP["cac"], "PartyLegalEntity"))
     ET.SubElement(party_legal_c, ET.QName(NS_MAP["cbc"], "RegistrationName")).text = cliente_nom or "CLIENTES VARIOS"
 
-    # Totales
-    monto_total = float(venta['monto_final_venta'])
-    monto_impuestos = float(venta['monto_impuestos'])
-    base_imponible = monto_total - monto_impuestos
+    # --- RECALCULAR TOTALES DESDE ÍTEMS (Para asegurar consistencia) ---
+    total_base_imponible = 0.0
+    total_igv = 0.0
+    total_venta_calculado = 0.0
+    
+    # Pre-calcular totales recorriendo los ítems
+    detalle_items_xml = [] # Guardaremos los valores calculados para usarlos luego en el bucle XML
+    
+    for item in items:
+        p_unit = float(item['precio_unitario_venta'])
+        # Asumiendo operación Gravada (IGV incluido en el precio)
+        valor_unit = p_unit / 1.18
+        
+        cantidad = float(item['cantidad'])
+        valor_venta_item = valor_unit * cantidad
+        igv_item = valor_venta_item * 0.18
+        
+        precio_venta_aggregate = valor_venta_item + igv_item
+        
+        total_base_imponible += valor_venta_item
+        total_igv += igv_item
+        total_venta_calculado += precio_venta_aggregate
+        
+        detalle_items_xml.append({
+            'valor_unit': valor_unit,
+            'valor_venta_item': valor_venta_item,
+            'igv_item': igv_item,
+            'p_unit': p_unit
+        })
+
+    # Usamos los totales recalculados para el encabezado
+    monto_impuestos = total_igv
+    base_imponible = total_base_imponible
+    monto_total = total_venta_calculado
 
     tax_total = ET.SubElement(invoice, ET.QName(NS_MAP["cac"], "TaxTotal"))
     ET.SubElement(tax_total, ET.QName(NS_MAP["cbc"], "TaxAmount"), currencyID="PEN").text = f"{monto_impuestos:.2f}"
@@ -10155,30 +10185,27 @@ def _generar_y_firmar_xml(venta_id):
     ET.SubElement(legal, ET.QName(NS_MAP["cbc"], "PayableAmount"), currencyID="PEN").text = f"{monto_total:.2f}"
 
     # Detalle Ítems
-    for i, item in enumerate(items, 1):
+    # Detalle Ítems
+    for i, item in enumerate(items): # Nota: enumerate desde 0, ajustamos ID +1
+        vals = detalle_items_xml[i]
+        
         line = ET.SubElement(invoice, ET.QName(NS_MAP["cac"], "InvoiceLine"))
-        ET.SubElement(line, ET.QName(NS_MAP["cbc"], "ID")).text = str(i)
+        ET.SubElement(line, ET.QName(NS_MAP["cbc"], "ID")).text = str(i + 1)
         ET.SubElement(line, ET.QName(NS_MAP["cbc"], "InvoicedQuantity"), unitCode="NIU").text = str(int(item['cantidad']))
         
-        p_unit = float(item['precio_unitario_venta'])
-        valor_unit = p_unit / 1.18
-        subtotal_neto = float(item['subtotal_item_neto'])
-        valor_venta_item = subtotal_neto / 1.18
-        igv_item = subtotal_neto - valor_venta_item
-
-        ET.SubElement(line, ET.QName(NS_MAP["cbc"], "LineExtensionAmount"), currencyID="PEN").text = f"{valor_venta_item:.2f}"
+        ET.SubElement(line, ET.QName(NS_MAP["cbc"], "LineExtensionAmount"), currencyID="PEN").text = f"{vals['valor_venta_item']:.2f}"
 
         pricing = ET.SubElement(line, ET.QName(NS_MAP["cac"], "PricingReference"))
         alt = ET.SubElement(pricing, ET.QName(NS_MAP["cac"], "AlternativeConditionPrice"))
-        ET.SubElement(alt, ET.QName(NS_MAP["cbc"], "PriceAmount"), currencyID="PEN").text = f"{p_unit:.2f}"
+        ET.SubElement(alt, ET.QName(NS_MAP["cbc"], "PriceAmount"), currencyID="PEN").text = f"{vals['p_unit']:.2f}"
         ET.SubElement(alt, ET.QName(NS_MAP["cbc"], "PriceTypeCode")).text = "01"
 
         tax_line = ET.SubElement(line, ET.QName(NS_MAP["cac"], "TaxTotal"))
-        ET.SubElement(tax_line, ET.QName(NS_MAP["cbc"], "TaxAmount"), currencyID="PEN").text = f"{igv_item:.2f}"
+        ET.SubElement(tax_line, ET.QName(NS_MAP["cbc"], "TaxAmount"), currencyID="PEN").text = f"{vals['igv_item']:.2f}"
         
         tax_sub_line = ET.SubElement(tax_line, ET.QName(NS_MAP["cac"], "TaxSubtotal"))
-        ET.SubElement(tax_sub_line, ET.QName(NS_MAP["cbc"], "TaxableAmount"), currencyID="PEN").text = f"{valor_venta_item:.2f}"
-        ET.SubElement(tax_sub_line, ET.QName(NS_MAP["cbc"], "TaxAmount"), currencyID="PEN").text = f"{igv_item:.2f}"
+        ET.SubElement(tax_sub_line, ET.QName(NS_MAP["cbc"], "TaxableAmount"), currencyID="PEN").text = f"{vals['valor_venta_item']:.2f}"
+        ET.SubElement(tax_sub_line, ET.QName(NS_MAP["cbc"], "TaxAmount"), currencyID="PEN").text = f"{vals['igv_item']:.2f}"
         
         tax_cat_line = ET.SubElement(tax_sub_line, ET.QName(NS_MAP["cac"], "TaxCategory"))
         ET.SubElement(tax_cat_line, ET.QName(NS_MAP["cbc"], "Percent")).text = "18.00"
@@ -10193,7 +10220,7 @@ def _generar_y_firmar_xml(venta_id):
         ET.SubElement(item_node, ET.QName(NS_MAP["cbc"], "Description")).text = item['descripcion_item_venta']
         
         price = ET.SubElement(line, ET.QName(NS_MAP["cac"], "Price"))
-        ET.SubElement(price, ET.QName(NS_MAP["cbc"], "PriceAmount"), currencyID="PEN").text = f"{valor_unit:.2f}"
+        ET.SubElement(price, ET.QName(NS_MAP["cbc"], "PriceAmount"), currencyID="PEN").text = f"{vals['valor_unit']:.2f}"
 
     # --- 4. FIRMA DIGITAL (CORRECCIÓN CRÍTICA AQUÍ) ---
     signer = XMLSigner(
