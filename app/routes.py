@@ -6157,7 +6157,6 @@ def listar_ventas():
                     v.estado_sunat,
                     v.serie_comprobante, 
                     v.numero_comprobante,
-                    v.mensaje_sunat, -- Agregado para tooltips
                     e.nombre_display AS empleado_nombre,
                     COALESCE(CONCAT(c.razon_social_nombres, ' ', c.apellidos), 'Cliente Varios') AS cliente_nombre
                 FROM ventas v
