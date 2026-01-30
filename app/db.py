@@ -15,12 +15,13 @@ def get_db():
                 print("✅ Conectado a base de datos NUBE")
             else:
                 # MODO LOCAL (Tu PC)
-                print("⚠️ Variable DATABASE_URL no encontrada, usando localhost...")
+                print("⚠️ Variable DATABASE_URL no encontrada, usando credenciales locales (.env)...")
                 g.db = psycopg2.connect(
-                    host="localhost",
-                    user="postgres",       
-                    password="jv123",  # <--- Asegúrate de poner tu clave local si vas a probar en tu PC
-                    database="jv_studio_pg_db"
+                    host=os.environ.get('DB_HOST', 'localhost'),
+                    user=os.environ.get('DB_USER', 'postgres'),
+                    password=os.environ.get('DB_PASSWORD', 'jv123'),
+                    database=os.environ.get('DB_NAME', 'jv_studio_pg_db'),
+                    port=os.environ.get('DB_PORT', '5432')
                 )
                 print("✅ Conectado a base de datos LOCAL")
             

@@ -17,27 +17,11 @@ with app.app_context():
         config = cursor.fetchone()
         
         if config:
-            print("Configuration found:")
-            print(config)
-            if not config['ruc_empresa']:
-                print("RUC is missing. 更新ing...")
-                cursor.execute("""
-                    UPDATE configuracion_sistema 
-                    SET ruc_empresa = %s 
-                    WHERE id = 1
-                """, ('20614287561',))
-                db.commit()
-                print("RUC updated.")
-            else:
-                print(f"RUC already exists: {config['ruc_empresa']}")
+            print("--- Current Configuration (ID=1) ---")
+            for key, value in config.items():
+                print(f"{key}: {value}")
+            print("------------------------------------")
         else:
-            print("Configuration NOT found (id=1). Creating default record...")
-            sql_insert = """
-                INSERT INTO configuracion_sistema (id, ruc_empresa, razon_social, direccion_fiscal, ubigeo, clave_certificado, usuario_sol, clave_sol)
-                VALUES (1, %s, %s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(sql_insert, ('20614287561', '', '', '', '', '', ''))
-            db.commit()
-            print("Default configuration created with RUC 20614287561.")
+            print("❌ Configuration record (ID=1) NOT FOUND.")
 
     db.close()
