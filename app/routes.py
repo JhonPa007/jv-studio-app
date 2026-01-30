@@ -10104,7 +10104,15 @@ def _generar_y_firmar_xml(venta_id):
     
     # Tipo Comprobante (01=Factura, 03=Boleta)
     tipo_code = '01' if venta['tipo_comprobante'] == 'Factura Electrónica' else '03'
-    ET.SubElement(invoice, ET.QName(NS_MAP["cbc"], "InvoiceTypeCode"), listID="0101", listAgencyName="PE:SUNAT", listName="Tipo de Operacion").text = tipo_code
+    # Corrección Completa UBL 2.1 para SUNAT (Error 3244)
+    # Se requieren atributos específicos para definir el Tipo de Operación (listID) dentro del Tipo de Documento
+    ET.SubElement(invoice, ET.QName(NS_MAP["cbc"], "InvoiceTypeCode"), 
+                  listID="0101", 
+                  listAgencyName="PE:SUNAT", 
+                  listName="Tipo de Documento", 
+                  name="Tipo de Operacion",
+                  listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo01"
+                  ).text = tipo_code
     ET.SubElement(invoice, ET.QName(NS_MAP["cbc"], "DocumentCurrencyCode")).text = "PEN"
 
     # Emisor
