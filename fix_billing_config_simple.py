@@ -2,6 +2,10 @@
 from app import create_app
 from app.db import get_db
 import psycopg2.extras
+from dotenv import load_dotenv
+import os
+
+load_dotenv() # Load environment variables from .env
 
 app = create_app()
 
