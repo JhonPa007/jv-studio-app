@@ -10182,6 +10182,7 @@ def _generar_y_firmar_xml(venta_id):
 
     legal = ET.SubElement(invoice, ET.QName(NS_MAP["cac"], "LegalMonetaryTotal"))
     ET.SubElement(legal, ET.QName(NS_MAP["cbc"], "LineExtensionAmount"), currencyID="PEN").text = f"{base_imponible:.2f}"
+    ET.SubElement(legal, ET.QName(NS_MAP["cbc"], "TaxInclusiveAmount"), currencyID="PEN").text = f"{monto_total:.2f}"
     ET.SubElement(legal, ET.QName(NS_MAP["cbc"], "PayableAmount"), currencyID="PEN").text = f"{monto_total:.2f}"
 
     # Detalle Ítems
