@@ -6129,17 +6129,25 @@ def listar_ventas():
         flash('Acceso denegado', 'danger')
         return redirect(url_for('main.index'))
     """
-    Muestra una lista de todas las ventas registradas.
-    Versión corregida con el alias 'venta_id' verificado.
+    Muestra una lista de todas las ventas registradas con filtros.
     """
     db_conn = get_db()
     lista_de_ventas = []
     
+    # Obtener filtros de la URL
+    fecha_inicio_str = request.args.get('fecha_inicio')
+    fecha_fin_str = request.args.get('fecha_fin')
+    estado_pago = request.args.get('estado_pago')
+    tipo_comprobante = request.args.get('tipo_comprobante')
+
+    # Valores por defecto para fechas si no se especifican (ej. mes actual o últimos 30 días)
+    # Estrategia: Si no hay filtros, mostrar ultimos 100 registros para no saturar.
+    # Si hay filtros de fecha, respetar el rango.
+    
     try:
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # --- CORRECCIÓN CLAVE ---
-            # Nos aseguramos de que la columna v.id se renombre a 'venta_id'
-            sql = """
+            
+            base_sql = """
                 SELECT 
                     v.id AS venta_id, 
                     v.fecha_venta, 
@@ -6149,14 +6157,41 @@ def listar_ventas():
                     v.estado_sunat,
                     v.serie_comprobante, 
                     v.numero_comprobante,
+                    v.mensaje_sunat, -- Agregado para tooltips
                     e.nombre_display AS empleado_nombre,
                     COALESCE(CONCAT(c.razon_social_nombres, ' ', c.apellidos), 'Cliente Varios') AS cliente_nombre
                 FROM ventas v
                 JOIN empleados e ON v.empleado_id = e.id
                 LEFT JOIN clientes c ON v.cliente_receptor_id = c.id
-                ORDER BY v.fecha_venta DESC
+                WHERE 1=1
             """
-            cursor.execute(sql)
+            params = []
+
+            # Filtros Dinámicos
+            if fecha_inicio_str:
+                base_sql += " AND DATE(v.fecha_venta) >= %s"
+                params.append(fecha_inicio_str)
+            
+            if fecha_fin_str:
+                base_sql += " AND DATE(v.fecha_venta) <= %s"
+                params.append(fecha_fin_str)
+
+            if estado_pago and estado_pago != 'Todos':
+                base_sql += " AND v.estado_pago = %s"
+                params.append(estado_pago)
+            
+            if tipo_comprobante and tipo_comprobante != 'Todos':
+                base_sql += " AND v.tipo_comprobante = %s"
+                params.append(tipo_comprobante)
+            
+            # Ordenamiento
+            base_sql += " ORDER BY v.fecha_venta DESC"
+
+            # Límite por defecto si no hay filtro de fechas para evitar carga masiva experimental
+            if not fecha_inicio_str and not fecha_fin_str:
+                 base_sql += " LIMIT 200"
+
+            cursor.execute(base_sql, tuple(params))
             lista_de_ventas = cursor.fetchall()
             
     except Exception as err:
@@ -6164,8 +6199,9 @@ def listar_ventas():
         current_app.logger.error(f"Error en listar_ventas: {err}")
         
     return render_template('ventas/lista_ventas.html', 
-                           ventas=lista_de_ventas,
-                           titulo_pagina="Historial de Ventas")
+                            ventas=lista_de_ventas,
+                            titulo_pagina="Historial de Ventas",
+                            filtros=request.args)
 
 @main_bp.route('/ventas/eliminar/<int:venta_id>', methods=['POST'])
 @login_required
@@ -8079,12 +8115,13 @@ def listar_historial_caja():
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             
             # LÓGICA INTELIGENTE:
-            # 1. Si es Administrador: Ver historial de TODAS las sucursales.
+            # 1. Si es Admin/Gerente/Encargado: Ver historial de TODAS las sucursales.
             # 2. Si es Cajero/Otro: Ver solo historial de SU sucursal actual.
             
-            es_admin = getattr(current_user, 'rol_nombre', '') == 'Administrador'
+            rol_actual = getattr(current_user, 'rol_nombre', '')
+            es_admin_global = rol_actual in ['Administrador', 'Gerente', 'Encargado']
             
-            if es_admin:
+            if es_admin_global:
                 # Consulta GLOBAL (sin filtro de sucursal)
                 sql = """
                     SELECT cs.*, 
