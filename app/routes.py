@@ -10115,6 +10115,10 @@ def _generar_y_firmar_xml(venta_id):
     ET.SubElement(party_id_s, ET.QName(NS_MAP["cbc"], "ID"), schemeID="6").text = config_empresa['ruc_empresa']
     party_legal_s = ET.SubElement(party_s, ET.QName(NS_MAP["cac"], "PartyLegalEntity"))
     ET.SubElement(party_legal_s, ET.QName(NS_MAP["cbc"], "RegistrationName")).text = config_empresa['razon_social']
+    
+    # --- FIX: Agregar Dirección Fiscal (Código Local Anexo) ---
+    registration_address = ET.SubElement(party_legal_s, ET.QName(NS_MAP["cac"], "RegistrationAddress"))
+    ET.SubElement(registration_address, ET.QName(NS_MAP["cbc"], "AddressTypeCode"), listAgencyName="PE:SUNAT", listName="Establecimientos anexos").text = "0000"
 
     # Receptor
     doc_type_map = {'DNI': '1', 'RUC': '6', 'Otro': '0'}
