@@ -141,6 +141,7 @@
             padding: 8px;
             font-size: 10px;
             -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
 
         .info-card-right {
@@ -151,6 +152,7 @@
             padding: 8px;
             font-size: 10px;
             -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
 
         .info-title {
@@ -198,6 +200,7 @@
             padding: 0 5px;
             text-align: left;
             -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
 
         td {
@@ -279,7 +282,8 @@
             </div>
 
             <div class="box-ruc">
-                <h4>R.U.C. 20606961007</h4>
+                <h4>R.U.C. {{ config_sistema.ruc_empresa if config_sistema and config_sistema.ruc_empresa else
+                    '20614287561' }}</h4>
                 <h2>{{ venta.tipo_comprobante|upper }} ELECTRÓNICA</h2>
                 <h4>F001 - {{ '%08d'|format(venta.numero_comprobante|int) }}</h4>
             </div>
