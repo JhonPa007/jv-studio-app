@@ -86,11 +86,26 @@
                     </select>
                 </div>
                 <div class="col-md-auto">
+                    <label class="form-label small text-muted mb-1">Colaborador:</label>
+                    <select name="empleado_id" class="form-select form-select-sm bg-secondary text-light border-0">
+                        <option value="Todos">Todos</option>
+                        {% for emp in empleados %}
+                        <option value="{{ emp.id }}" {% if filtros.empleado_id|int==emp.id %}selected{% endif %}>
+                            {{ emp.nombre_display }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-auto">
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-sm btn-info text-white"><i
                                 class="fas fa-filter me-1"></i>Filtrar</button>
                         <a href="{{ url_for('main.listar_ventas') }}" class="btn btn-sm btn-outline-secondary"
                             title="Limpiar Filtros"><i class="fas fa-undo"></i></a>
+
+                        <!-- BOTÓN EXPORTAR EXCEL -->
+                        <a href="{{ url_for('main.exportar_ventas_excel', **filtros) }}" class="btn btn-sm btn-success"
+                            title="Exportar a Excel"><i class="fas fa-file-excel me-1"></i>Exportar</a>
                     </div>
                 </div>
             </form>

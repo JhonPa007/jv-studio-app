@@ -6139,13 +6139,19 @@ def listar_ventas():
     fecha_fin_str = request.args.get('fecha_fin')
     estado_pago = request.args.get('estado_pago')
     tipo_comprobante = request.args.get('tipo_comprobante')
+    empleado_id = request.args.get('empleado_id') # Nuevo Filtro
 
     # Valores por defecto para fechas si no se especifican (ej. mes actual o últimos 30 días)
     # Estrategia: Si no hay filtros, mostrar ultimos 100 registros para no saturar.
     # Si hay filtros de fecha, respetar el rango.
     
+    lista_de_empleados = []
+
     try:
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Obtener lista de colaboradores para el filtro
+            cursor.execute("SELECT id, nombre_display FROM empleados WHERE activo=TRUE ORDER BY nombre_display")
+            lista_de_empleados = cursor.fetchall()
             
             base_sql = """
                 SELECT 
@@ -6155,6 +6161,7 @@ def listar_ventas():
                     v.estado_pago,
                     v.tipo_comprobante,
                     v.estado_sunat,
+                    v.mensaje_sunat,
                     v.serie_comprobante, 
                     v.numero_comprobante,
                     e.nombre_display AS empleado_nombre,
@@ -6182,6 +6189,10 @@ def listar_ventas():
             if tipo_comprobante and tipo_comprobante != 'Todos':
                 base_sql += " AND v.tipo_comprobante = %s"
                 params.append(tipo_comprobante)
+
+            if empleado_id and empleado_id != 'Todos':
+                base_sql += " AND v.empleado_id = %s"
+                params.append(empleado_id)
             
             # Ordenamiento
             base_sql += " ORDER BY v.fecha_venta DESC"
@@ -6199,8 +6210,118 @@ def listar_ventas():
         
     return render_template('ventas/lista_ventas.html', 
                             ventas=lista_de_ventas,
+                            empleados=lista_de_empleados,
                             titulo_pagina="Historial de Ventas",
                             filtros=request.args)
+
+
+@main_bp.route('/ventas/exportar/excel')
+@login_required
+def exportar_ventas_excel():
+    """
+    Exporta el listado de ventas filtrado a Excel.
+    """
+    if not current_user.can('ver_ventas'):
+        return "Acceso Denegado", 403
+
+    db_conn = get_db()
+    
+    # Obtener filtros (Misma lógica que listar_ventas - Ideal refactorizar a función común)
+    fecha_inicio_str = request.args.get('fecha_inicio')
+    fecha_fin_str = request.args.get('fecha_fin')
+    estado_pago = request.args.get('estado_pago')
+    tipo_comprobante = request.args.get('tipo_comprobante')
+    empleado_id = request.args.get('empleado_id')
+
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            sql = """
+                SELECT 
+                    v.fecha_venta, 
+                    COALESCE(CONCAT(c.razon_social_nombres, ' ', c.apellidos), 'Cliente Varios') AS cliente,
+                    e.nombre_display AS colaborador,
+                    v.tipo_comprobante,
+                    CONCAT(v.serie_comprobante, '-', v.numero_comprobante) AS numero,
+                    v.monto_final_venta AS monto,
+                    v.estado_pago,
+                    COALESCE(v.estado_sunat, 'Pendiente') as sunat
+                FROM ventas v
+                JOIN empleados e ON v.empleado_id = e.id
+                LEFT JOIN clientes c ON v.cliente_receptor_id = c.id
+                WHERE 1=1
+            """
+            params = []
+
+            if fecha_inicio_str:
+                sql += " AND DATE(v.fecha_venta) >= %s"
+                params.append(fecha_inicio_str)
+            if fecha_fin_str:
+                sql += " AND DATE(v.fecha_venta) <= %s"
+                params.append(fecha_fin_str)
+            if estado_pago and estado_pago != 'Todos':
+                sql += " AND v.estado_pago = %s"
+                params.append(estado_pago)
+            if tipo_comprobante and tipo_comprobante != 'Todos':
+                sql += " AND v.tipo_comprobante = %s"
+                params.append(tipo_comprobante)
+            if empleado_id and empleado_id != 'Todos':
+                sql += " AND v.empleado_id = %s"
+                params.append(empleado_id)
+            
+            sql += " ORDER BY v.fecha_venta DESC"
+
+            cursor.execute(sql, tuple(params))
+            datos = cursor.fetchall()
+            
+            if not datos:
+                 flash("No hay datos para exportar con los filtros actuales.", "warning")
+                 return redirect(url_for('main.listar_ventas'))
+
+            # Generar DataFrame
+            df = pd.DataFrame(datos)
+            
+            # Renombrar columnas para el Excel
+            df.rename(columns={
+                'fecha_venta': 'Fecha',
+                'cliente': 'Cliente',
+                'colaborador': 'Colaborador',
+                'tipo_comprobante': 'Tipo',
+                'numero': 'Comprobante',
+                'monto': 'Total',
+                'estado_pago': 'Estado Pago',
+                'sunat': 'Estado SUNAT'
+            }, inplace=True)
+
+            # Formatear Fecha
+            # Convertir a datetime si no lo es (psycopg2 suele devolver datetime)
+            # Y luego a string sin zona horaria para Excel
+            if 'Fecha' in df.columns:
+                 df['Fecha'] = df['Fecha'].apply(lambda x: x.strftime('%Y-%m-%d %H:%M') if x else '')
+
+            # Buffer en memoria
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Ventas')
+                
+                # Ajuste de ancho de columnas (Opcional, básico)
+                worksheet = writer.sheets['Ventas']
+                for idx, col in enumerate(df.columns):
+                    max_len = max((df[col].astype(str).map(len).max(), len(str(col)))) + 2
+                    worksheet.column_dimensions[chr(65 + idx)].width = min(max_len, 50) 
+
+            output.seek(0)
+            
+            return send_file(
+                output,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=f'ventas_export_{date.today()}.xlsx'
+            )
+
+    except Exception as e:
+        flash(f"Error generando Excel: {e}", "danger")
+        current_app.logger.error(f"Error exportar Excel: {e}")
+        return redirect(url_for('main.listar_ventas'))
 
 @main_bp.route('/ventas/eliminar/<int:venta_id>', methods=['POST'])
 @login_required
