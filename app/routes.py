@@ -6161,7 +6161,6 @@ def listar_ventas():
                     v.estado_pago,
                     v.tipo_comprobante,
                     v.estado_sunat,
-                    v.mensaje_sunat,
                     v.serie_comprobante, 
                     v.numero_comprobante,
                     e.nombre_display AS empleado_nombre,
