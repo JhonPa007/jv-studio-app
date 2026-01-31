@@ -46,9 +46,10 @@
             margin: 0 5px;
         }
 
-            {
-            % if is_a4 %
-        }
+        /*
+        {% if is_a4 %}
+        {% else %}
+        */
 
         @media print {
             @page {
@@ -266,9 +267,9 @@
             color: #666;
         }
 
-            {
-            % else %
-        }
+        /*
+        {% else %}
+        */
 
         @media print {
             @page {
@@ -486,7 +487,8 @@
             </div>
 
             <div class="box-ruc">
-                <h4>R.U.C. 20606961007</h4>
+                <h4>R.U.C. {{ config_sistema.ruc_empresa if config_sistema and config_sistema.ruc_empresa else
+                    '20614287561' }}</h4>
                 <h2>{{ venta.tipo_comprobante|upper }} ELECTRÓNICA</h2>
                 <h4>F001 - {{ '%08d'|format(venta.numero_comprobante|int) }}</h4>
             </div>
@@ -609,7 +611,8 @@
 
         <div class="t-center">
             <img src="{{ url_for('static', filename='img/logo_jv_corp.png') }}" class="t-logo-corp">
-            <div class="t-bold t-header-info">R.U.C. 20606961007</div>
+            <div class="t-bold t-header-info">R.U.C. {{ config_sistema.ruc_empresa if config_sistema and
+                config_sistema.ruc_empresa else '20614287561' }}</div>
             <div class="t-header-info">JR. ANDAHUAYLAS 216 - ABANCAY - APURIMAC</div>
         </div>
 

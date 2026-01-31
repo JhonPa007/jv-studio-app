@@ -221,7 +221,8 @@
 
         <div class="t-center">
             <img src="{{ url_for('static', filename='img/logo_jv_corp.png') }}" class="t-logo-corp">
-            <div class="t-bold t-header-info">R.U.C. 20606961007</div>
+            <div class="t-bold t-header-info">R.U.C. {{ config_sistema.ruc_empresa if config_sistema and
+                config_sistema.ruc_empresa else '20614287561' }}</div>
             <div class="t-header-info">JR. ANDAHUAYLAS 216 - ABANCAY - APURIMAC</div>
         </div>
 
