@@ -5405,6 +5405,31 @@ def nueva_venta():
             empleado_id = request.form.get('empleado_id')
             tipo_comprobante = request.form.get('tipo_comprobante')
 
+            # 🟢 LOGICA CLIENTE DEFAULT: Si no hay cliente, asignamos "Clientes Varios"
+            if not cliente_id_str or not cliente_id_str.strip():
+                try:
+                    with db_conn.cursor() as cursor_temp:
+                        # Buscar si existe
+                        cursor_temp.execute("SELECT id FROM clientes WHERE razon_social_nombres = 'Clientes Varios' LIMIT 1")
+                        res_varios = cursor_temp.fetchone()
+                        
+                        if res_varios:
+                            cliente_id_str = str(res_varios[0])
+                        else:
+                            # Crear si no existe
+                            # Usamos DNI dummy 00000000
+                            cursor_temp.execute("""
+                                INSERT INTO clientes (razon_social_nombres, tipo_documento, numero_documento, direccion)
+                                VALUES ('Clientes Varios', 'DNI', '00000000', '-')
+                                RETURNING id
+                            """)
+                            nuevo_id = cursor_temp.fetchone()[0]
+                            db_conn.commit() # Confirmar la creación inmediatamente para que esté disponible
+                            cliente_id_str = str(nuevo_id)
+                except Exception as e_cli:
+                    current_app.logger.error(f"Error asignando Clientes Varios: {e_cli}")
+                    # No fallamos aquí, dejamos que intente procesar null y lance error normal si es requerido
+            
             cliente_receptor_id = int(cliente_id_str) if cliente_id_str and cliente_id_str.strip() else None
             cliente_id = cliente_receptor_id  # Alias para compatibilidad con bloques inferiores
             empleado_id = int(empleado_id) if empleado_id and empleado_id.strip() else None
