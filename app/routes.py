@@ -10261,6 +10261,13 @@ def _generar_y_firmar_xml(venta_id):
     party_legal_c = ET.SubElement(party_c, ET.QName(NS_MAP["cac"], "PartyLegalEntity"))
     ET.SubElement(party_legal_c, ET.QName(NS_MAP["cbc"], "RegistrationName")).text = cliente_nom or "CLIENTES VARIOS"
 
+    # --- CORRECCIÓN: Agregar PaymentTerms (Forma de Pago) ---
+    # Por defecto "Contado" para cumplir con validación SUNAT (Error 3244)
+    payment_terms = ET.SubElement(invoice, ET.QName(NS_MAP["cac"], "PaymentTerms"))
+    ET.SubElement(payment_terms, ET.QName(NS_MAP["cbc"], "ID")).text = "FormaPago"
+    ET.SubElement(payment_terms, ET.QName(NS_MAP["cbc"], "PaymentMeansID")).text = "Contado"
+
+
     # --- RECALCULAR TOTALES DESDE ÍTEMS (Para asegurar consistencia) ---
     total_base_imponible = 0.0
     total_igv = 0.0
