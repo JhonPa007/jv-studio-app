@@ -90,7 +90,8 @@
                     <select name="empleado_id" class="form-select form-select-sm bg-secondary text-light border-0">
                         <option value="Todos">Todos</option>
                         {% for emp in empleados %}
-                        <option value="{{ emp.id }}" {% if filtros.empleado_id|int==emp.id %}selected{% endif %}>
+                        <option value="{{ emp.id }}" {% if filtros.get('empleado_id') and filtros.get('empleado_id')
+                            !='Todos' and filtros.get('empleado_id')|int==emp.id %}selected{% endif %}>
                             {{ emp.nombre_display }}
                         </option>
                         {% endfor %}
