@@ -487,6 +487,11 @@
             // 🟢 Mostrar Monedero
             const saldoMonedero = parseFloat(dataset.saldo || 0);
             document.getElementById('lbl_monedero_cliente').innerText = saldoMonedero.toFixed(2);
+
+            // Forzar visualización del panel (independiente de la API de puntos)
+            const panel = document.getElementById('panel_puntos');
+            panel.classList.remove('d-none');
+            panel.classList.add('d-flex');
         });
 
         // VERIFICAR SI VENIMOS DE UNA VENTA EXITOSA
