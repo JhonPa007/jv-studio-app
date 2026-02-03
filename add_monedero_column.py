@@ -1,11 +1,22 @@
 
 import psycopg2
-from app.db import get_db_connection
+import os
+
+def get_db_connection():
+    return psycopg2.connect(
+        host=os.environ.get('DB_HOST', 'localhost'),
+        user=os.environ.get('DB_USER', 'postgres'),
+        password=os.environ.get('DB_PASSWORD', 'jv123'),
+        database=os.environ.get('DB_NAME', 'jv_studio_pg_db'),
+        port=os.environ.get('DB_PORT', '5432')
+    )
 
 def run_migration():
     conn = None
     try:
         conn = get_db_connection()
+        # Try LATIN1 which is common on Windows Postgres
+        conn.set_client_encoding('LATIN1')
         cur = conn.cursor()
         
         # Check if column exists
@@ -21,7 +32,7 @@ def run_migration():
     except Exception as e:
         if conn:
             conn.rollback()
-        print(f"Migration failed: {e}")
+        print(f"Migration failed: {repr(e)}")
     finally:
         if conn:
             conn.close()

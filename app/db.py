@@ -177,6 +177,7 @@ def check_schema_updates(app):
                     # CLIENTES
                     ("clientes", "apellido_paterno", "VARCHAR(100)"),
                     ("clientes", "apellido_materno", "VARCHAR(100)"),
+                    ("clientes", "saldo_monedero", "DECIMAL(12, 2) DEFAULT 0.00"),
                 ]
                 
                 print("--- Iniciando Verificación de Schema (Auto-Migration) ---")
