@@ -5714,7 +5714,8 @@ def nueva_venta():
             cursor.execute("""
                 SELECT id, razon_social_nombres, apellidos, telefono, numero_documento,
                        TO_CHAR(fecha_nacimiento, 'YYYY-MM-DD') as fecha_nac_str,
-                       cumpleanos_validado, rechazo_dato_cumpleanos
+                       cumpleanos_validado, rechazo_dato_cumpleanos,
+                       saldo_monedero
                 FROM clientes ORDER BY razon_social_nombres
             """)
             clientes = cursor.fetchall()

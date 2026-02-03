@@ -101,7 +101,8 @@
                             <option value="{{ c.id }}" data-documento="{{ c.numero_documento }}"
                                 data-fecha="{{ c.fecha_nac_str or '' }}"
                                 data-validado="{{ 'true' if c.cumpleanos_validado else 'false' }}"
-                                data-rechazo="{{ 'true' if c.rechazo_dato_cumpleanos else 'false' }}">
+                                data-rechazo="{{ 'true' if c.rechazo_dato_cumpleanos else 'false' }}"
+                                data-saldo="{{ c.saldo_monedero or 0.00 }}">
                                 {{ c.texto_busqueda }}
                             </option>
                             {% endfor %}
@@ -144,7 +145,12 @@
                     <strong>Puntos: <span id="lbl_puntos_cliente">0</span></strong>
                     <small class="ms-2">(Valor: S/ <span id="lbl_valor_puntos">0.00</span>)</small>
                 </div>
-                <button type="button" class="btn btn-sm btn-light text-info fw-bold" onclick="canjearPuntos()">
+                <!-- NUEVO: Mostrar Monedero -->
+                <div class="ms-3 text-end">
+                    <i class="fas fa-wallet text-success me-2"></i>
+                    <strong>Monedero: S/ <span id="lbl_monedero_cliente" class="text-white">0.00</span></strong>
+                </div>
+                <button type="button" class="btn btn-sm btn-light text-info fw-bold ms-auto" onclick="canjearPuntos()">
                     <i class="fas fa-gift me-1"></i> Usar Puntos
                 </button>
             </div>
@@ -477,6 +483,10 @@
                 if (it.tipo === 'servicio') verificarFidelidadItem(idx);
             });
             checkClientPoints(clienteIdCampana);
+
+            // 🟢 Mostrar Monedero
+            const saldoMonedero = parseFloat(dataset.saldo || 0);
+            document.getElementById('lbl_monedero_cliente').innerText = saldoMonedero.toFixed(2);
         });
 
         // VERIFICAR SI VENIMOS DE UNA VENTA EXITOSA
