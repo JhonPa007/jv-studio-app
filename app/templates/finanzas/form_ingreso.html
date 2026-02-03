@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Registrar Ingreso - JV Studio{% endblock %}
+
+{% block head_extra %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .form-section {
+        background-color: #3a3a3a;
+        padding: 25px;
+        border-radius: 8px;
+    }
+
+    .form-section h2 {
+        color: var(--color-acento-dorado);
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--color-secundario-gris);
+        padding-bottom: 10px;
+    }
+
+    .select2-container .select2-selection--single {
+        height: 38px;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 38px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="form-section">
+        <h2>
+            <i class="fas fa-hand-holding-usd me-2"></i>Registrar Nuevo Ingreso
+        </h2>
+
+        <form method="POST" action="{{ url_for('finanzas.registrar_ingreso') }}">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="fecha" class="form-label">Fecha del Ingreso</label>
+                    <input type="date" class="form-control" id="fecha" name="fecha" value="{{ fecha_hoy }}" required>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="tipo_ingreso" class="form-label">Tipo de Ingreso</label>
+                    <select class="form-select" id="tipo_ingreso" name="tipo_ingreso" required
+                        onchange="toggleCliente()">
+                        <option value="Abono Cliente">Abono Cliente / Puntos</option>
+                        <option value="Academia">Pago de Academia</option>
+                        <option value="Prestamo">Préstamo Recibido</option>
+                        <option value="Gerencia">Aporte Gerencia / Sencillo</option>
+                        <option value="Otros">Otros Ingresos</option>
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="metodo_pago" class="form-label">Método de Pago</label>
+                    <select class="form-select" id="metodo_pago" name="metodo_pago" required>
+                        <option value="Efectivo">Efectivo</option>
+                        <option value="Yape">Yape</option>
+                        <option value="Plin">Plin</option>
+                        <option value="Tarjeta">Tarjeta Crédito/Débito</option>
+                        <option value="Deposito">Depósito Bancario</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="cliente_id" class="form-label">Cliente (Origen del dinero)</label>
+                    <select class="form-select" id="cliente_id" name="cliente_id">
+                        <option value="">Buscar cliente...</option>
+                        {% for c in clientes %}
+                        <option value="{{ c.id }}">{{ c.razon_social_nombres }} {{ c.apellidos or '' }} (Doc: {{
+                            c.numero_documento or 'S/D' }})</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text text-light" id="helpCliente">Requerido para 'Abono Cliente'.</div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="monto" class="form-label">Monto (S/)</label>
+                    <input type="number" step="0.01" min="0" class="form-control" id="monto" name="monto"
+                        placeholder="0.00" required>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="descripcion" class="form-label">Descripción / Motivo</label>
+                <textarea class="form-control" id="descripcion" name="descripcion" rows="2"
+                    placeholder="Detalle del ingreso..."></textarea>
+            </div>
+
+            <div class="mb-3 form-check p-3 border rounded" style="background-color: #444;">
+                <input type="checkbox" class="form-check-input" id="abonar_monedero" name="abonar_monedero">
+                <label class="form-check-label text-warning fw-bold" for="abonar_monedero">
+                    <i class="fas fa-wallet me-1"></i> Abonar directamente al Monedero Virtual del Cliente
+                </label>
+                <div class="form-text text-light ms-4">
+                    Si se marca, el dinero ingresa a Caja Y también aumenta el saldo disponible del cliente para futuros
+                    pagos.
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end mt-4">
+                <a href="{{ url_for('main.index') }}" class="btn btn-secondary me-2">Cancelar</a>
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-save me-1"></i>Registrar Ingreso
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+    $(document).ready(function () {
+        $('#cliente_id').select2({
+            theme: "classic",
+            width: '100%',
+            placeholder: "Buscar cliente por nombre o documento..."
+        });
+
+        toggleCliente(); // Init state
+    });
+
+    function toggleCliente() {
+        const tipo = document.getElementById('tipo_ingreso').value;
+        const checkMonedero = document.getElementById('abonar_monedero');
+        const selectCliente = $('#cliente_id');
+
+        if (tipo === 'Abono Cliente') {
+            checkMonedero.checked = true;
+            // checkMonedero.disabled = true; // Opcional: forzarlo
+        } else {
+            checkMonedero.checked = false;
+            // checkMonedero.disabled = false;
+        }
+    }
+</script>
+{% endblock %}

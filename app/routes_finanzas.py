@@ -795,6 +795,99 @@ def ver_fondo_admin():
 
 # --- AGREGAR ESTO EN routes_finanzas.py ---
 
+
+# ==============================================================================
+# 3. ENDPOINT: REGISTRAR INGRESOS (Y MONEDERO)
+# ==============================================================================
+@finanzas_bp.route('/ingresos/nuevo', methods=['GET', 'POST'])
+@login_required
+def registrar_ingreso():
+    """
+    Registra un Nuevo Ingreso Financiero.
+    
+    Tipos:
+    - Abono a Monedero / Adelanto Cliente: Aumenta saldo cliente + Ingreso Caja.
+    - Academia / Pago Gerencia / Prestamo: Ingreso Caja solamente.
+    """
+    
+    if request.method == 'POST':
+        tipo_ingreso = request.form.get('tipo_ingreso') # 'Abono Cliente', 'Academia', 'Prestamo', 'Gerencia', 'Otros'
+        fecha = request.form.get('fecha')
+        monto = float(request.form.get('monto'))
+        metodo_pago = request.form.get('metodo_pago')
+        cliente_id = request.form.get('cliente_id') # Solo si es Abono o vinculado
+        descripcion = request.form.get('descripcion')
+        abonar_monedero = 'abonar_monedero' in request.form # Checkbox
+        
+        sucursal_id = session.get('sucursal_id')
+        if not sucursal_id:
+            flash("Error: No se ha seleccionado una sucursal.", "danger")
+            return redirect(url_for('finanzas.registrar_ingreso'))
+
+        db = get_db()
+        try:
+            with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                # 1. Obtener Caja Abierta
+                cursor.execute("""
+                    SELECT id FROM caja_sesiones 
+                    WHERE usuario_id = %s AND sucursal_id = %s AND estado = 'Abierta'
+                """, (current_user.id, sucursal_id))
+                caja = cursor.fetchone()
+                
+                if not caja:
+                    flash("Debe tener una CAJA ABIERTA para registrar ingresos.", "warning")
+                    return redirect(url_for('finanzas.registrar_ingreso'))
+                
+                caja_id = caja['id']
+                
+                # 2. Registrar Movimiento en Caja
+                concepto_final = f"{tipo_ingreso}: {descripcion}"
+                
+                # Insertar Movimiento
+                cursor.execute("""
+                    INSERT INTO movimientos_caja (caja_sesion_id, tipo, monto, concepto, metodo_pago, usuario_id, fecha)
+                    VALUES (%s, 'INGRESO', %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (caja_id, monto, concepto_final, metodo_pago, current_user.id, fecha))
+                
+                mov_id = cursor.fetchone()['id']
+                
+                # 3. Lógica Específica: ABONO A MONEDERO
+                if tipo_ingreso == 'Abono Cliente' or abonar_monedero:
+                    if not cliente_id:
+                        raise ValueError("Debe seleccionar un cliente para abonar al monedero.")
+                    
+                    # Actualizar Saldo Cliente
+                    cursor.execute("""
+                        UPDATE clientes 
+                        SET saldo_monedero = COALESCE(saldo_monedero, 0) + %s 
+                        WHERE id = %s
+                    """, (monto, cliente_id))
+                    
+                    # Registrar Historial Puntos / Monedero (Opcional, si queremos trazarlo)
+                    # Podemos usar la tabla 'puntos_historial' adaptada o crear 'monedero_historial'
+                    # Por ahora, agregamos al concepto de caja que fue a monedero.
+                    
+                    flash(f"Ingreso registrado y abonado S/ {monto:.2f} al monedero del cliente.", "success")
+                else:
+                    flash(f"Ingreso de S/ {monto:.2f} registrado correctamente.", "success")
+                
+                db.commit()
+                return redirect(url_for('finanzas.registrar_ingreso'))
+
+        except Exception as e:
+            flash(f"Error al registrar ingreso: {e}", "danger")
+            return redirect(url_for('finanzas.registrar_ingreso'))
+
+    # GET: Mostrar Formulario
+    # Necesitamos lista de clientes para el select
+    db = get_db()
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+        cursor.execute("SELECT id, razon_social_nombres, apellidos, numero_documento FROM clientes WHERE activo = TRUE ORDER BY razon_social_nombres")
+        clientes = cursor.fetchall()
+        
+    return render_template('finanzas/form_ingreso.html', clientes=clientes, fecha_hoy=date.today())
+
 @finanzas_bp.route('/fondo/penalidad', methods=['POST'])
 @login_required
 def aplicar_penalidad_fondo():
