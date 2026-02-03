@@ -5720,6 +5720,11 @@ def nueva_venta():
             """)
             clientes = cursor.fetchall()
             
+            # DEBUG: Inspect wallet balance
+            for c in clientes:
+                if c['telefono'] == '983000102':
+                     print(f"DEBUG TARGET CLIENT: {c['razon_social_nombres']} | SALDO DB: {c.get('saldo_monedero')} | Type: {type(c.get('saldo_monedero'))}")
+
             for c in clientes:
                 nombre_full = f"{c['razon_social_nombres']} {c['apellidos'] or ''}".strip()
                 doc = c['numero_documento'] or 'S/D'
@@ -5863,7 +5868,7 @@ def editar_venta(venta_id):
             sucursales = cursor.fetchall()
             
             cursor.execute("""
-                SELECT id, razon_social_nombres, apellidos, numero_documento 
+                SELECT id, razon_social_nombres, apellidos, numero_documento, saldo_monedero 
                 FROM clientes ORDER BY razon_social_nombres
             """)
             clientes = cursor.fetchall()
