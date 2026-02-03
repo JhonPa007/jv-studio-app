@@ -1,0 +1,24 @@
+--- COLUMNS IN CLIENTES ---
+apellidos (character varying)
+apoderado_id (integer)
+cumpleanos_validado (boolean)
+direccion (character varying)
+email (character varying)
+fecha_nacimiento (date)
+fecha_registro (timestamp without time zone)
+genero (character varying)
+id (integer)
+notas_adicionales (text)
+numero_documento (character varying)
+preferencia_servicio (character varying)
+puntos_fidelidad (integer)
+razon_social_nombres (character varying)
+rechazo_dato_cumpleanos (boolean)
+sucursal_id (integer)
+telefono (character varying)
+tipo_documento (character varying)
+
+--- CHECKING PERMISSIONS ---
+Adding saldo_monedero...
+Error modifying table: debe ser dueño de la tabla clientes
+

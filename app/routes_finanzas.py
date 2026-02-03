@@ -857,18 +857,23 @@ def registrar_ingreso():
                     if not cliente_id:
                         raise ValueError("Debe seleccionar un cliente para abonar al monedero.")
                     
-                    # Actualizar Saldo Cliente
-                    cursor.execute("""
-                        UPDATE clientes 
-                        SET saldo_monedero = COALESCE(saldo_monedero, 0) + %s 
-                        WHERE id = %s
-                    """, (monto, cliente_id))
+                    try:
+                        # Actualizar Saldo Cliente
+                        cursor.execute("""
+                            UPDATE clientes 
+                            SET saldo_monedero = COALESCE(saldo_monedero, 0) + %s 
+                            WHERE id = %s
+                        """, (monto, cliente_id))
+                        flash(f"Ingreso registrado y abonado S/ {monto:.2f} al monedero del cliente.", "success")
+                    except Exception as e:
+                        # Si falla (ej. no existe columna saldo_monedero por permisos), no crashear todo el ingreso
+                        current_app.logger.error(f"No se pudo actualizar monedero: {e}")
+                        flash(f"Ingreso registrado en CAJA, pero no se pudo actualizar el Monedero Virtual (Verifique permisos DB).", "warning")
                     
                     # Registrar Historial Puntos / Monedero (Opcional, si queremos trazarlo)
                     # Podemos usar la tabla 'puntos_historial' adaptada o crear 'monedero_historial'
                     # Por ahora, agregamos al concepto de caja que fue a monedero.
                     
-                    flash(f"Ingreso registrado y abonado S/ {monto:.2f} al monedero del cliente.", "success")
                 else:
                     flash(f"Ingreso de S/ {monto:.2f} registrado correctamente.", "success")
                 
@@ -883,7 +888,8 @@ def registrar_ingreso():
     # Necesitamos lista de clientes para el select
     db = get_db()
     with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-        cursor.execute("SELECT id, razon_social_nombres, apellidos, numero_documento FROM clientes WHERE activo = TRUE ORDER BY razon_social_nombres")
+        # CORREGIDO: Eliminamos 'WHERE activo = TRUE' porque la columna activo no existe en la tabla clientes
+        cursor.execute("SELECT id, razon_social_nombres, apellidos, numero_documento FROM clientes ORDER BY razon_social_nombres")
         clientes = cursor.fetchall()
         
     return render_template('finanzas/form_ingreso.html', clientes=clientes, fecha_hoy=date.today())
