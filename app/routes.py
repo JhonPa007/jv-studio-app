@@ -5516,6 +5516,26 @@ def nueva_venta():
                 pagos = [{'metodo': 'Efectivo', 'monto': monto_final, 'referencia': ''}]
             sql_pago = "INSERT INTO venta_pagos (venta_id, metodo_pago, monto, referencia_pago) VALUES (%s, %s, %s, %s)"
             for p in pagos:
+                # 🟢 NUEVO: Lógica de Pago con Monedero (Validation + Deduction)
+                if p['metodo'] == 'Monedero':
+                    monto_a_pagar = float(p['monto'])
+                    if not cliente_id:
+                        raise ValueError("Para pagar con Monedero debe seleccionar un cliente.")
+                    
+                    # Verificar Saldo Actual
+                    cursor.execute("SELECT saldo_monedero FROM clientes WHERE id = %s", (cliente_id,))
+                    res_saldo = cursor.fetchone()
+                    saldo_actual = float(res_saldo['saldo_monedero'] or 0.00)
+                    
+                    if saldo_actual < monto_a_pagar:
+                         raise ValueError(f"Saldo insuficiente en Monedero. (Disponible: S/ {saldo_actual:.2f}, Requerido: S/ {monto_a_pagar:.2f})")
+                    
+                    # Descontar saldo
+                    cursor.execute("UPDATE clientes SET saldo_monedero = saldo_monedero - %s WHERE id = %s", (monto_a_pagar, cliente_id))
+                    
+                    # Registrar Historial (Opcional pero recomendado para auditoría)
+                    # cursor.execute("INSERT INTO monedero_historial ...") # Si existiera la tabla
+
                 cursor.execute(sql_pago, (venta_id, p['metodo'], p['monto'], p.get('referencia')))
 
             # 8. PROPINA
