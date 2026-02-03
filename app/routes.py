@@ -5362,6 +5362,171 @@ def toggle_activo_proveedor(proveedor_id):
     return redirect(url_for('main.listar_proveedores'))
 
 
+# --- RUTAS PARA MARCAS ---
+
+@main_bp.route('/marcas')
+@login_required
+@admin_required
+def listar_marcas():
+    """
+    Muestra la lista de todas las marcas.
+    """
+    try:
+        db = get_db()
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("SELECT * FROM marcas ORDER BY nombre")
+        lista_marcas = cursor.fetchall()
+        cursor.close()
+    except Exception as err:
+        flash(f"Error al acceder a las marcas: {err}", "danger")
+        current_app.logger.error(f"Error en listar_marcas: {err}")
+        lista_marcas = []
+        
+    return render_template('marcas/lista_marcas.html', marcas=lista_marcas)
+
+@main_bp.route('/marcas/nueva', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def nueva_marca():
+    """
+    Registra una nueva marca.
+    """
+    form_titulo = "Registrar Nueva Marca"
+    action_url_form = url_for('main.nueva_marca')
+    
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        descripcion = request.form.get('descripcion', '').strip()
+        activo = 'activo' in request.form
+        
+        if not nombre:
+            flash('El nombre de la marca es obligatorio.', 'warning')
+            return render_template('marcas/form_marca.html', form_data=request.form, es_nueva=True, titulo_form=form_titulo, action_url=action_url_form)
+            
+        try:
+            db = get_db()
+            cursor = db.cursor()
+            cursor.execute("INSERT INTO marcas (nombre, descripcion, activo) VALUES (%s, %s, %s)", (nombre, descripcion, activo))
+            db.commit()
+            flash(f'Marca "{nombre}" registrada exitosamente.', 'success')
+            return redirect(url_for('main.listar_marcas'))
+        except Exception as e:
+            db.rollback()
+            current_app.logger.error(f"Error al crear marca: {e}")
+            flash(f"Error al crear la marca: {e}", "danger")
+            
+    return render_template('marcas/form_marca.html', es_nueva=True, titulo_form=form_titulo, action_url=action_url_form)
+
+@main_bp.route('/marcas/editar/<int:marca_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def editar_marca(marca_id):
+    """
+    Edita una marca existente.
+    """
+    db = get_db()
+    cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor.execute("SELECT * FROM marcas WHERE id = %s", (marca_id,))
+    marca = cursor.fetchone()
+    cursor.close()
+    
+    if not marca:
+        flash("Marca no encontrada.", "warning")
+        return redirect(url_for('main.listar_marcas'))
+        
+    form_titulo = f"Editar Marca: {marca['nombre']}"
+    action_url_form = url_for('main.editar_marca', marca_id=marca_id)
+    
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        descripcion = request.form.get('descripcion', '').strip()
+        activo = 'activo' in request.form
+        
+        if not nombre:
+            flash('El nombre de la marca es obligatorio.', 'warning')
+            return render_template('marcas/form_marca.html', marca=marca, es_nueva=False, titulo_form=form_titulo, action_url=action_url_form)
+
+        try:
+            cursor = db.cursor()
+            cursor.execute("UPDATE marcas SET nombre = %s, descripcion = %s, activo = %s WHERE id = %s", (nombre, descripcion, activo, marca_id))
+            db.commit()
+            flash('Marca actualizada correctamente.', 'success')
+            return redirect(url_for('main.listar_marcas'))
+        except Exception as e:
+            db.rollback()
+            flash(f"Error al actualizar: {e}", "danger")
+            
+    return render_template('marcas/form_marca.html', marca=marca, es_nueva=False, titulo_form=form_titulo, action_url=action_url_form)
+
+@main_bp.route('/marcas/toggle_activo/<int:marca_id>')
+@login_required
+@admin_required
+def toggle_activo_marca(marca_id):
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("UPDATE marcas SET activo = NOT activo WHERE id = %s", (marca_id,))
+        db.commit()
+        flash('Estado de la marca cambiado.', 'success')
+    except Exception as e:
+        db.rollback()
+        flash(f"Error al cambiar estado: {e}", "danger")
+    return redirect(url_for('main.listar_marcas'))
+
+@main_bp.route('/marcas/eliminar/<int:marca_id>')
+@login_required
+@admin_required
+def eliminar_marca(marca_id):
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("DELETE FROM marcas WHERE id = %s", (marca_id,))
+        db.commit()
+        flash('Marca eliminada.', 'success')
+    except Exception as e:
+        db.rollback()
+        # Verificar integridad referencial (si hay productos usando la marca)
+        if "foreign key constraint" in str(e).lower():
+            flash("No se puede eliminar la marca porque tiene productos asociados.", "warning")
+        else:
+            flash(f"Error al eliminar: {e}", "danger")
+    return redirect(url_for('main.listar_marcas'))
+
+
+@main_bp.route('/api/marcas/crear_rapida', methods=['POST'])
+@login_required
+def api_crear_marca_rapida():
+    """
+    Crea una nueva marca vía AJAX desde el formulario de producto.
+    """
+    if not request.is_json:
+        return jsonify({"success": False, "message": "Se requiere JSON"}), 400
+        
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip()
+    
+    if not nombre:
+        return jsonify({"success": False, "message": "El nombre es obligatorio"}), 400
+        
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        
+        # Verificar duplicados
+        cursor.execute("SELECT id FROM marcas WHERE nombre = %s", (nombre,))
+        if cursor.fetchone():
+             return jsonify({"success": False, "message": f"Ya existe una marca llamada '{nombre}'"}), 409
+             
+        cursor.execute("INSERT INTO marcas (nombre, activo) VALUES (%s, TRUE) RETURNING id", (nombre,))
+        new_id = cursor.fetchone()[0]
+        db.commit()
+        
+        return jsonify({"success": True, "id": new_id, "nombre": nombre})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 # --- RUTAS PARA VENTAS ---
 
 
