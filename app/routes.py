@@ -7983,6 +7983,36 @@ def gestionar_caja():
             """, (caja_id,))
             total_gastos = float(cursor.fetchone()['total'])
 
+            # 5. [CORRECCIÓN] OTROS INGRESOS (Ej: Abonos a Monedero, Ingresos Varios)
+            # Excluimos 'Propina%' para no duplicar lo que ya sumamos arriba desde la tabla 'propinas'
+            cursor.execute("""
+                SELECT COALESCE(SUM(monto), 0) as total
+                FROM movimientos_caja 
+                WHERE caja_sesion_id = %s 
+                  AND tipo = 'INGRESO' 
+                  AND metodo_pago = 'Efectivo'
+                  AND concepto NOT ILIKE 'Propina%%'
+            """, (caja_id,))
+            total_otros_ingresos_efectivo = float(cursor.fetchone()['total'])
+
+             # 5.1 Otros Ingresos Digitales (Para cuadre global si fuera necesario)
+            cursor.execute("""
+                SELECT COALESCE(SUM(monto), 0) as total
+                FROM movimientos_caja 
+                WHERE caja_sesion_id = %s 
+                  AND tipo = 'INGRESO' 
+                  AND metodo_pago != 'Efectivo'
+                  AND concepto NOT ILIKE 'Propina%%'
+            """, (caja_id,))
+            total_otros_ingresos_digital = float(cursor.fetchone()['total'])
+
+
+            # TOTAL EFECTIVO (Ventas + Propinas + Otros)
+            total_efectivo = total_ventas_efectivo + total_propinas_efectivo + total_otros_ingresos_efectivo
+            
+            # Actualizar total digital también
+            total_digital = total_digital + total_otros_ingresos_digital
+
             # Saldo Teórico Final
             saldo_teorico = (float(sesion_abierta['monto_inicial']) + total_efectivo) - total_gastos
 
@@ -7997,9 +8027,17 @@ def gestionar_caja():
                 (SELECT g.fecha_registro as fecha, (g.monto * -1) as monto, g.metodo_pago, 
                         g.descripcion, 'Egreso' as flujo, g.id as id, 'Gasto' as tipo
                  FROM gastos g WHERE g.caja_sesion_id = %s)
+                UNION ALL
+                (SELECT mc.fecha as fecha, mc.monto, mc.metodo_pago,
+                        mc.concepto as descripcion, 'Ingreso' as flujo, mc.id as id, 'Otro Ingreso' as tipo
+                 FROM movimientos_caja mc
+                 WHERE mc.caja_sesion_id = %s 
+                   AND mc.tipo = 'INGRESO'
+                   AND mc.concepto NOT ILIKE 'Propina%%')
                 ORDER BY fecha DESC LIMIT 20
+
             """
-            cursor.execute(sql_movimientos, (caja_id, caja_id))
+            cursor.execute(sql_movimientos, (caja_id, caja_id, caja_id))
             movimientos_caja = cursor.fetchall()
 
             # --- COMISIONES PENDIENTES ---

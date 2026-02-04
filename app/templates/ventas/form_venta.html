@@ -146,9 +146,13 @@
                     <small class="ms-2">(Valor: S/ <span id="lbl_valor_puntos">0.00</span>)</small>
                 </div>
                 <!-- NUEVO: Mostrar Monedero -->
-                <div class="ms-3 text-end">
+                <div class="ms-3 text-end d-flex align-items-center">
                     <i class="fas fa-wallet text-success me-2"></i>
-                    <strong>Monedero: S/ <span id="lbl_monedero_cliente" class="text-white">0.00</span></strong>
+                    <strong class="me-2">Monedero: S/ <span id="lbl_monedero_cliente"
+                            class="text-white">0.00</span></strong>
+                    <button type="button" class="btn btn-sm btn-outline-warning fw-bold" onclick="usarMonedero()">
+                        <i class="fas fa-coins me-1"></i> Usar Saldo
+                    </button>
                 </div>
                 <button type="button" class="btn btn-sm btn-light text-info fw-bold ms-auto" onclick="canjearPuntos()">
                     <i class="fas fa-gift me-1"></i> Usar Puntos
@@ -400,6 +404,7 @@
     // Variables Globales
     let listaItems = [];
     let clienteIdCampana = null;
+    window.saldoMonederoActual = 0; // Global tracking for wallet balance
 
     // 1. Recibir datos del Backend (NUEVO)
     const datosPreCargados = JSON.parse('{{ prefill_data | tojson | safe if prefill_data else "null" }}');
@@ -463,6 +468,7 @@
 
             // 🟢 Mostrar Monedero
             const saldoMonedero = parseFloat(dataset.saldo || 0);
+            window.saldoMonederoActual = saldoMonedero; // Update global
             document.getElementById('lbl_monedero_cliente').innerText = saldoMonedero.toFixed(2);
 
             // Forzar visualización del panel
@@ -724,10 +730,50 @@
 
     function delItem(i) { listaItems.splice(i, 1); renderTabla(); }
 
-    function agregarPago() {
+    function agregarPago(metodo = null, monto = null) {
         const tpl = document.getElementById('pago_template');
         document.getElementById('pagos_container').appendChild(tpl.content.cloneNode(true));
+
+        // Auto-select method/amount if provided
+        const insertedRow = document.getElementById('pagos_container').lastElementChild;
+        if (metodo && insertedRow) {
+            const sel = insertedRow.querySelector('.metodo-pago');
+            if (sel) sel.value = metodo;
+        }
+        if (monto !== null && insertedRow) {
+            const inp = insertedRow.querySelector('.monto-pago');
+            if (inp) inp.value = parseFloat(monto).toFixed(2);
+        }
+
         calcularTotales();
+    }
+
+    function usarMonedero() {
+        if (!window.saldoMonederoActual || window.saldoMonederoActual <= 0) {
+            alert("El cliente no tiene saldo disponible en su monedero.");
+            return;
+        }
+
+        // Calcular cuánto falta pagar
+        const lblFaltante = document.getElementById('lbl_faltante');
+        let faltante = 0;
+        if (lblFaltante) {
+            const text = lblFaltante.innerText.replace('S/', '').replace('Vuelto:', '').trim();
+            // Si dice Vuelto, faltante es 0 o negativo
+            if (lblFaltante.innerText.includes('Vuelto')) {
+                faltante = 0;
+            } else {
+                faltante = parseFloat(text) || 0;
+            }
+        }
+
+        if (faltante <= 0) {
+            alert("No hay saldo pendiente por pagar.");
+            return;
+        }
+
+        const montoAplicar = Math.min(window.saldoMonederoActual, faltante);
+        agregarPago('Monedero', montoAplicar);
     }
 
     function eliminarPago(btn) { btn.closest('.pago-row').remove(); calcularTotales(); }
@@ -853,6 +899,12 @@
             const res = await fetch(`/marketing/api/client-status/${id}`);
             const data = await res.json();
             puntosDisponibles = data.puntos || 0;
+
+            // Si la API devuelve el saldo monedero actualizado, lo usamos
+            if (data.saldo_monedero !== undefined) {
+                window.saldoMonederoActual = parseFloat(data.saldo_monedero);
+                document.getElementById('lbl_monedero_cliente').innerText = window.saldoMonederoActual.toFixed(2);
+            }
 
             document.getElementById('lbl_puntos_cliente').innerText = puntosDisponibles;
             const valorSoles = (puntosDisponibles / 25).toFixed(2);
