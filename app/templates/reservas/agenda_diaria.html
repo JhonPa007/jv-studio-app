@@ -197,11 +197,22 @@
         color: var(--agenda-txt-reserva) !important;
     }
 
-    /* 3.1 Citas Completadas */
     .fc-timegrid-event.reserva-completada,
     .fc-v-event.reserva-completada {
         background-color: var(--agenda-bg-completado) !important;
         border-color: var(--agenda-bg-completado) !important;
+    }
+
+    /* 3.2 Reserva Fuera de Horario (Granate con líneas) */
+    .reserva-fuera-horario {
+        background-color: #8c2d38 !important;
+        /* Granate */
+        background-image: repeating-linear-gradient(45deg,
+                rgba(255, 255, 255, 0.15),
+                rgba(255, 255, 255, 0.15) 5px,
+                transparent 5px,
+                transparent 10px) !important;
+        border-color: #5c1e25 !important;
     }
 
     /* HORA (Axis) - FONDO BLANCO SOLICITADO */
@@ -903,8 +914,8 @@
                     const slotDT = new Date(info.dateStr).getTime();
                     const colaboradorId = info.resource.id;
 
-                    // 1. Validar Horario Habil
-                    // Ahora confiamos en la CLASE 'turno-disponible' que asigna el backend y CSS
+                    // 1. Validar Horario Habil (IGNORADO - Lógica Flexible)
+                    /*
                     const esHorarioHabil = datosApiAgenda.eventos.some(evento =>
                         evento.resourceId == colaboradorId &&
                         evento.display === 'background' &&
@@ -912,9 +923,10 @@
                         new Date(evento.start).getTime() <= slotDT &&
                         new Date(evento.end).getTime() > slotDT
                     );
+                    */
 
-                    // 2. Validar que NO sea Ausencia (Checked by NOT having turno-disponible usually, or explicit check)
-                    // Las ausencias tienen 'bg-danger-subtle'
+                    // 2. Validar que NO sea Ausencia (IGNORADO - Lógica Flexible)
+                    /*
                     const enAusencia = datosApiAgenda.eventos.some(evento =>
                         evento.resourceId == colaboradorId &&
                         evento.display === 'background' &&
@@ -922,13 +934,14 @@
                         new Date(evento.start).getTime() <= slotDT &&
                         new Date(evento.end).getTime() > slotDT
                     );
+                    */
 
-                    if (esHorarioHabil && !enAusencia) {
-                        const hora = info.dateStr.slice(11, 16);
-                        abrirModalNuevaReserva(info.resource.id, info.resource.title, info.dateStr.slice(0, 10), hora);
-                    } else {
-                        console.log("Clic en zona no disponible (Sin turno o Ausente)");
-                    }
+                    // if (esHorarioHabil && !enAusencia) {
+                    const hora = info.dateStr.slice(11, 16);
+                    abrirModalNuevaReserva(info.resource.id, info.resource.title, info.dateStr.slice(0, 10), hora);
+                    // } else {
+                    //    console.log("Clic en zona no disponible (Sin turno o Ausente) -> PERMITIDO POR FLEXIBILIDAD");
+                    // }
                 },
 
                 // B. Clic en Evento
@@ -943,8 +956,9 @@
                     const nuevoColaboradorId = info.event.getResources()[0].id;
 
                     if (nuevoInicio < new Date()) {
-                        alert("No se puede mover una reserva al pasado.");
-                        info.revert(); return;
+                        // alert("No se puede mover una reserva al pasado.");
+                        // info.revert(); return;
+                        console.log("Movimiento al pasado permitido.");
                     }
                     if (!confirm("¿Seguro que deseas mover esta reserva?")) {
                         info.revert(); return;

@@ -2550,6 +2550,9 @@ def api_agenda_dia_data():
                 # --- 2. HORARIOS (FONDO BLANCO) ---
                 dia_semana_num = fecha_obj.isoweekday()
                 
+                # Estructura para validar horario de reservas: { emp_id: [ (start_time, end_time), ... ] }
+                turnos_validos = {} 
+
                 sql_turnos = f"""
                     SELECT empleado_id, hora_inicio, hora_fin 
                     FROM horarios_empleado 
@@ -2557,17 +2560,21 @@ def api_agenda_dia_data():
                 """
                 cursor.execute(sql_turnos, params_base + [dia_semana_num])
                 
-                for turno in cursor.fetchall():
+                rows_turnos = cursor.fetchall()
+                for turno in rows_turnos:
+                    # Guardar para validación
+                    if turno['empleado_id'] not in turnos_validos: turnos_validos[turno['empleado_id']] = []
+                    turnos_validos[turno['empleado_id']].append((turno['hora_inicio'], turno['hora_fin']))
+
                     eventos.append({
                         "resourceId": turno['empleado_id'],
                         "start": f"{fecha_str}T{turno['hora_inicio']}", 
                         "end": f"{fecha_str}T{turno['hora_fin']}",
                         "display": "background", 
-                        # "backgroundColor": "#ffffff", REMOVED
                         "classNames": ["turno-disponible"]
                     })
                 
-                # --- 2.1 HORARIOS EXTRA (Turnos Adicionales) ---
+                # --- 2.1 HORARIOS EXTRA ---
                 sql_extras = f"""
                     SELECT empleado_id, hora_inicio, hora_fin, motivo
                     FROM horarios_extra
@@ -2575,13 +2582,17 @@ def api_agenda_dia_data():
                 """
                 cursor.execute(sql_extras, params_base + [fecha_str])
                 
-                for extra in cursor.fetchall():
-                     eventos.append({
+                rows_extras = cursor.fetchall()
+                for extra in rows_extras:
+                    # Guardar para validación
+                    if extra['empleado_id'] not in turnos_validos: turnos_validos[extra['empleado_id']] = []
+                    turnos_validos[extra['empleado_id']].append((extra['hora_inicio'], extra['hora_fin']))
+
+                    eventos.append({
                         "resourceId": extra['empleado_id'],
                         "start": f"{fecha_str}T{extra['hora_inicio']}", 
                         "end": f"{fecha_str}T{extra['hora_fin']}",
                         "display": "background", 
-                        # "backgroundColor": "#ffffff", REMOVED
                         "classNames": ["turno-disponible", "turno-extra"],
                         "title": f"Extra: {extra.get('motivo','')}"
                     })
@@ -2603,8 +2614,7 @@ def api_agenda_dia_data():
                         "start": ausencia['fecha_hora_inicio'].isoformat(),
                         "end": ausencia['fecha_hora_fin'].isoformat(),
                         "display": "background", 
-                        # "backgroundColor": "rgba(220, 53, 69, 0.5)", REMOVED
-                        "classNames": ["bg-danger-subtle"], # To match CSS selector
+                        "classNames": ["bg-danger-subtle"], 
                         "title": "Ausente"
                     })
                 
@@ -2627,19 +2637,50 @@ def api_agenda_dia_data():
                 cursor.execute(sql_reservas, (sucursal_id, fecha_str))
                 
                 for reserva in cursor.fetchall():
-                    # Colors handled by CSS now
+                    # 🟢 LÓGICA DE FUERA DE HORARIO
+                    fuera_de_horario = True
+                    # Obtenemos los turnos del empleado
+                    mis_turnos = turnos_validos.get(reserva['resourceId'], [])
                     
+                    # Convertir tiempos de la reserva para comparar
+                    r_start = reserva['start'].time()
+                    r_end = reserva['end'].time()
+                    
+                    # Si tiene turnos, verificamos si encaja en alguno
+                    if mis_turnos:
+                        for t_start, t_end in mis_turnos:
+                            # Asegurar tipos time (a veces vienen como datetime en extras?? NO, time en ambos casos normalmente)
+                            # Pero psycopg2 suele devolver time para TIME y datetime para TIMESTAMP.
+                            # Horarios es TIME.
+                            
+                            # Normalización defensiva (por si acaso)
+                            def to_time(val):
+                                if isinstance(val, datetime): return val.time()
+                                if isinstance(val, str): return datetime.strptime(val, "%H:%M:%S").time()
+                                return val
+
+                            ts = to_time(t_start)
+                            te = to_time(t_end)
+
+                            if r_start >= ts and r_end <= te:
+                                fuera_de_horario = False
+                                break
+                    
+                    titulo_final = reserva['title']
+                    clases = ["reserva-card"]
+                    
+                    if fuera_de_horario:
+                        clases.append("reserva-fuera-horario")
+                        titulo_final = "⚠️ " + titulo_final
+
                     eventos.append({
                         "id": reserva['id'],
                         "resourceId": reserva['resourceId'],
-                        "title": reserva['title'],
+                        "title": titulo_final,
                         "start": reserva['start'].isoformat(),
                         "end": reserva['end'].isoformat(),
-                        # "backgroundColor": color_fondo, REMOVED
-                        # "borderColor": border_color, REMOVED
-                        # "textColor": "#fff", REMOVED
-                        "extendedProps": {"estado": reserva['estado']}, # IMPORTANT for JS class logic
-                        "classNames": ["reserva-card"]
+                        "extendedProps": {"estado": reserva['estado']}, 
+                        "classNames": clases
                     })
 
     except Exception as e:
@@ -2921,7 +2962,7 @@ def nueva_reserva():
                 fecha_hora_inicio_aware = peru_tz.localize(fecha_hora_inicio)
 
                 if fecha_hora_inicio_aware < ahora_peru:
-                    errores.append('La fecha y hora de inicio no puede ser en el pasado.')
+                    pass # permitido: errores.append('La fecha y hora de inicio no puede ser en el pasado.')
             except ValueError:
                 errores.append('Formato de fecha y hora de inicio inválido.')
 
@@ -2957,7 +2998,7 @@ def nueva_reserva():
             turnos_del_dia = turnos_recurrentes + turnos_extra
             
             if not turnos_del_dia:
-                return jsonify({"success": False, "message": f"El colaborador no trabaja el día seleccionado."}), 409
+                 pass # return jsonify({"success": False, "message": f"El colaborador no trabaja el día seleccionado."}), 409
             
             esta_en_turno_valido = False
             for turno in turnos_del_dia:
@@ -2974,14 +3015,19 @@ def nueva_reserva():
                     break
             
             if not esta_en_turno_valido:
-                return jsonify({"success": False, "message": "Fuera de horario laboral del colaborador."}), 409
+                current_app.logger.info("Advertencia: Reserva fuera de horario laboral.")
+                # return jsonify({"success": False, "message": "Fuera de horario laboral del colaborador."}), 409
 
             # Validar Ausencias y Choques (Resumido)
             cursor.execute("SELECT id FROM ausencias_empleado WHERE empleado_id=%s AND aprobado=TRUE AND fecha_hora_inicio<%s AND fecha_hora_fin>%s", (empleado_id, fecha_hora_fin, fecha_hora_inicio))
-            if cursor.fetchone(): return jsonify({"success": False, "message": "Colaborador ausente."}), 409
+            if cursor.fetchone(): 
+                current_app.logger.info("Advertencia: Reserva coincide con ausencia.")
+                # return jsonify({"success": False, "message": "Colaborador ausente."}), 409
 
             cursor.execute("SELECT id FROM reservas WHERE empleado_id=%s AND sucursal_id=%s AND estado NOT IN ('Cancelada', 'Cancelada por Cliente', 'Cancelada por Staff', 'No Asistio', 'Completada') AND fecha_hora_inicio<%s AND fecha_hora_fin>%s", (empleado_id, sucursal_id, fecha_hora_fin, fecha_hora_inicio))
-            if cursor.fetchone(): return jsonify({"success": False, "message": "Horario ocupado."}), 409
+            if cursor.fetchone(): 
+                current_app.logger.info("Advertencia: Choque de horarios permitido.")
+                # return jsonify({"success": False, "message": "Horario ocupado."}), 409
             
             # --- 3. Insertar Reserva ---
             sql = "INSERT INTO reservas (sucursal_id, cliente_id, empleado_id, servicio_id, fecha_hora_inicio, fecha_hora_fin, estado, notas_cliente, precio_cobrado) VALUES (%s, %s, %s, %s, %s, %s, 'Programada', %s, %s) RETURNING id"
@@ -3106,7 +3152,7 @@ def editar_reserva(reserva_id):
             cursor.execute("SELECT hora_inicio, hora_fin FROM horarios_empleado WHERE empleado_id = %s AND dia_semana = %s", (empleado_id, dia_semana_reserva))
             turnos_del_dia = cursor.fetchall()
             if not turnos_del_dia:
-                return jsonify({"success": False, "message": f"El colaborador no trabaja el día seleccionado."}), 409
+                pass # return jsonify({"success": False, "message": f"El colaborador no trabaja el día seleccionado."}), 409
 
             esta_en_turno = False
             for turno in turnos_del_dia:
@@ -3116,7 +3162,7 @@ def editar_reserva(reserva_id):
                     esta_en_turno = True
                     break
             if not esta_en_turno:
-                 return jsonify({"success": False, "message": "El nuevo horario está fuera del turno laboral del colaborador."}), 409
+                 pass # return jsonify({"success": False, "message": "El nuevo horario está fuera del turno laboral del colaborador."}), 409
 
             # Validar que no choque con otra reserva (excluyendo la reserva actual)
             cursor.execute("""
@@ -3125,12 +3171,13 @@ def editar_reserva(reserva_id):
                 AND fecha_hora_inicio < %s AND fecha_hora_fin > %s
             """, (empleado_id, reserva_id, nueva_fecha_fin, fecha_hora_inicio))
             if cursor.fetchone():
-                return jsonify({"success": False, "message": "El nuevo horario entra en conflicto con otra reserva existente."}), 409
+                current_app.logger.info("Advertencia: Choque horario en edición permitido.")
+                # return jsonify({"success": False, "message": "El nuevo horario entra en conflicto con otra reserva existente."}), 409
 
             # Validar que no choque con una ausencia
             cursor.execute("SELECT id FROM ausencias_empleado WHERE empleado_id = %s AND aprobado = TRUE AND fecha_hora_inicio < %s AND fecha_hora_fin > %s", (empleado_id, nueva_fecha_fin, fecha_hora_inicio))
             if cursor.fetchone():
-                 return jsonify({"success": False, "message": "El nuevo horario coincide con una ausencia registrada."}), 409
+                 pass # return jsonify({"success": False, "message": "El nuevo horario coincide con una ausencia registrada."}), 409
 
             # 3. Si todas las validaciones pasan, actualizar la reserva
             sql_update = """UPDATE reservas SET 
