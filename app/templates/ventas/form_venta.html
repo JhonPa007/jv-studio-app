@@ -754,12 +754,14 @@
             return;
         }
 
-        // Calcular cuánto falta pagar
+        // Calcular datos actuales
+        const totalPagar = parseFloat(document.getElementById('lbl_total_pagar').innerText.replace('S/ ', '')) || 0;
         const lblFaltante = document.getElementById('lbl_faltante');
         let faltante = 0;
+
         if (lblFaltante) {
             const text = lblFaltante.innerText.replace('S/', '').replace('Vuelto:', '').trim();
-            // Si dice Vuelto, faltante es 0 o negativo
+            // Si dice Vuelto, faltante es 0 (o negativo para lógica interna, pero aquí nos importa "pendiente")
             if (lblFaltante.innerText.includes('Vuelto')) {
                 faltante = 0;
             } else {
@@ -767,13 +769,41 @@
             }
         }
 
-        if (faltante <= 0) {
-            alert("No hay saldo pendiente por pagar.");
+        // CASO 1: Hay faltante positivo -> Comportamiento normal
+        if (faltante > 0) {
+            const montoAplicar = Math.min(window.saldoMonederoActual, faltante);
+            agregarPago('Monedero', montoAplicar);
             return;
         }
 
-        const montoAplicar = Math.min(window.saldoMonederoActual, faltante);
-        agregarPago('Monedero', montoAplicar);
+        // CASO 2: Faltante es 0 (o hay vuelto), verificar si es por "Auto-relleno" de un solo pago
+        // (El sistema pone "Efectivo" por el total automáticamente).
+        const filasPago = document.querySelectorAll('.pago-row');
+        if (filasPago.length === 1) {
+            const unicaFila = filasPago[0];
+            const inpMonto = unicaFila.querySelector('.monto-pago');
+            const montoFila = parseFloat(inpMonto.value) || 0;
+
+            // Si el monto de esa única fila cubre todo el total (aprox), asumimos que es el default
+            if (Math.abs(montoFila - totalPagar) < 0.1 && totalPagar > 0) {
+                // Procedemos a "partir" ese pago
+                const montoAplicar = Math.min(window.saldoMonederoActual, totalPagar);
+                const nuevoMontoOriginal = totalPagar - montoAplicar;
+
+                if (nuevoMontoOriginal > 0) {
+                    inpMonto.value = nuevoMontoOriginal.toFixed(2);
+                } else {
+                    // Si el monedero cubre TODO, eliminamos la fila original (ej. Efectivo 0)
+                    eliminarPago(unicaFila.querySelector('.btn-danger'));
+                }
+
+                agregarPago('Monedero', montoAplicar);
+                return;
+            }
+        }
+
+        // Si llega aquí, es porque ya hay varios pagos o está todo pagado manualmente
+        alert("No hay saldo pendiente por pagar.");
     }
 
     function eliminarPago(btn) { btn.closest('.pago-row').remove(); calcularTotales(); }
