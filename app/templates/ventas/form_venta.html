@@ -455,7 +455,22 @@
             clienteIdCampana = el.value;
             const nombre = e.params.data.text.split('|')[0];
 
-            // Si ya validó o rechazó, no hacemos nada
+            // 🟢 Al seleccionar cliente, re-verificar fidelidad
+            listaItems.forEach((it, idx) => {
+                if (it.tipo === 'servicio') verificarFidelidadItem(idx);
+            });
+            checkClientPoints(clienteIdCampana);
+
+            // 🟢 Mostrar Monedero
+            const saldoMonedero = parseFloat(dataset.saldo || 0);
+            document.getElementById('lbl_monedero_cliente').innerText = saldoMonedero.toFixed(2);
+
+            // Forzar visualización del panel
+            const panel = document.getElementById('panel_puntos');
+            panel.classList.remove('d-none');
+            panel.classList.add('d-flex');
+
+            // Si ya validó o rechazó, no mostramos el MODAL, pero la lógica anterior YA CORRIÓ.
             if (dataset.validado === 'true' || dataset.rechazo === 'true') return;
 
             // Preparar Modal
@@ -477,21 +492,6 @@
 
             const modal = new bootstrap.Modal(document.getElementById('modalCampanaDatos'));
             modal.show();
-
-            // 🟢 Al seleccionar cliente, re-verificar fidelidad
-            listaItems.forEach((it, idx) => {
-                if (it.tipo === 'servicio') verificarFidelidadItem(idx);
-            });
-            checkClientPoints(clienteIdCampana);
-
-            // 🟢 Mostrar Monedero
-            const saldoMonedero = parseFloat(dataset.saldo || 0);
-            document.getElementById('lbl_monedero_cliente').innerText = saldoMonedero.toFixed(2);
-
-            // Forzar visualización del panel (independiente de la API de puntos)
-            const panel = document.getElementById('panel_puntos');
-            panel.classList.remove('d-none');
-            panel.classList.add('d-flex');
         });
 
         // VERIFICAR SI VENIMOS DE UNA VENTA EXITOSA
