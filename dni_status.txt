@@ -1,0 +1,7 @@
+Column: numero_documento, Nullable: YES
+Constraints:
+clientes_pkey: p
+clientes_numero_documento_key: u
+clientes_email_key: u
+clientes_apoderado_id_fkey: f
+clientes_sucursal_id_fkey: f
