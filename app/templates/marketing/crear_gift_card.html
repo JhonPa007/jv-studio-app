@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Nueva Gift Card | JV Studio{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 800px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-accent"><i class="fas fa-plus-circle me-2"></i> Crear Nueva Gift Card</h2>
+        <a href="{{ url_for('marketing.listar_gift_cards') }}" class="btn btn-outline-light">
+            <i class="fas fa-arrow-left me-1"></i> Volver
+        </a>
+    </div>
+
+    <div class="card shadow border-0">
+        <div class="card-body p-4">
+            <form method="POST" action="{{ url_for('marketing.nueva_gift_card') }}">
+
+                <h5 class="mb-3 text-warning border-bottom pb-2">Información de la Tarjeta</h5>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Código de la Tarjeta</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control font-monospace fw-bold" name="code"
+                                placeholder="Dejar vacío para generar auto...">
+                            <button class="btn btn-outline-secondary" type="button" onclick="generarCodigo()">
+                                <i class="fas fa-random"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">Si se deja vacío, se generará uno automáticamente.</div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Monto (S/)</label>
+                        <div class="input-group">
+                            <span class="input-group-text">S/</span>
+                            <input type="number" step="0.01" min="0" class="form-control" name="amount" required>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Fecha de Vencimiento</label>
+                        <input type="date" class="form-control" name="expiration_date">
+                        <div class="form-text">Opcional. Dejar vacío para sin vencimiento.</div>
+                    </div>
+                </div>
+
+                <h5 class="mb-3 text-warning border-bottom pb-2">Datos del Cliente</h5>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label">Nombre del Comprador</label>
+                        <input type="text" class="form-control" name="purchaser_name" placeholder="Ej. Juan Pérez">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Nombre del Beneficiario (Destinatario)</label>
+                        <input type="text" class="form-control" name="recipient_name" placeholder="Ej. María Gómez">
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary btn-lg px-5">
+                        <i class="fas fa-save me-2"></i> Crear Gift Card
+                    </button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function generarCodigo() {
+        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let result = '';
+        const length = 12;
+        for (let i = 0; i < length; i++) {
+            result += characters.charAt(Math.floor(Math.random() * characters.length));
+        }
+        // Formato XXXX-XXXX-XXXX
+        let formatted = result.match(/.{1,4}/g).join('-');
+        document.querySelector('input[name="code"]').value = formatted;
+    }
+</script>
+{% endblock %}

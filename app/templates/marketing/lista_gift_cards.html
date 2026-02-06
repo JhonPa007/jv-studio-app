@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Gift Cards | JV Studio{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2 class="text-accent"><i class="fas fa-gift me-2"></i> Gestión de Gift Cards</h2>
+        <p class="text-muted">Administra las tarjetas de regalo, saldos y estados.</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('marketing.nueva_gift_card') }}" class="btn btn-warning">
+            <i class="fas fa-plus me-1"></i> Nueva Gift Card
+        </a>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Código</th>
+                        <th>Destinatario</th>
+                        <th>Saldo Inicial</th>
+                        <th>Saldo Actual</th>
+                        <th>Estado</th>
+                        <th>Vencimiento</th>
+                        <th>Creado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for gc in gift_cards %}
+                    <tr>
+                        <td>
+                            <strong class="font-monospace text-primary">{{ gc.code }}</strong>
+                        </td>
+                        <td>
+                            {% if gc.recipient_name %}
+                            {{ gc.recipient_name }}
+                            {% else %}
+                            <span class="text-muted fst-italic">--</span>
+                            {% endif %}
+                            <br>
+                            <small class="text-muted">Comprado por: {{ gc.purchaser_name }}</small>
+                        </td>
+                        <td>S/ {{ "%.2f"|format(gc.initial_amount) }}</td>
+                        <td>
+                            {% if gc.current_balance > 0 %}
+                            <span class="text-success fw-bold">S/ {{ "%.2f"|format(gc.current_balance) }}</span>
+                            {% else %}
+                            <span class="text-muted">S/ 0.00</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if gc.status == 'activa' %}
+                            <span class="badge bg-success">Activa</span>
+                            {% elif gc.status == 'canjeada' %}
+                            <span class="badge bg-secondary">Canjeada (agotada)</span>
+                            {% elif gc.status == 'vencida' %}
+                            <span class="badge bg-danger">Vencida</span>
+                            {% elif gc.status == 'anulada' %}
+                            <span class="badge bg-dark">Anulada</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ gc.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if gc.expiration_date %}
+                            {{ gc.expiration_date.strftime('%d/%m/%Y') }}
+                            {% else %}
+                            <span class="badge bg-info text-dark">Sin vencimiento</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ gc.created_at.strftime('%d/%m/%Y') }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-secondary" title="Ver detalles (Pronto)">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5">
+                            <div class="text-muted">
+                                <i class="fas fa-gift fa-3x mb-3"></i>
+                                <p>No hay Gift Cards registradas aún.</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

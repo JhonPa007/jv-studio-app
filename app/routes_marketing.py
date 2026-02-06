@@ -519,3 +519,59 @@ def fix_db_schema():
     except Exception as e:
         db.rollback()
         return f"Error: {e}", 500
+
+# ==============================================================================
+# 4. GESTIÓN DE GIFT CARDS
+# ==============================================================================
+
+@marketing_bp.route('/gift-cards', methods=['GET'])
+@login_required
+def listar_gift_cards():
+    db = get_db()
+    try:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            cursor.execute("SELECT * FROM gift_cards ORDER BY created_at DESC")
+            gift_cards = cursor.fetchall()
+        return render_template('marketing/lista_gift_cards.html', gift_cards=gift_cards)
+    except Exception as e:
+        flash(f"Error listando Gift Cards: {e}", "danger")
+        return redirect(url_for('marketing.index_marketing_placeholder')) # Fallback or index
+
+@marketing_bp.route('/gift-cards/nueva', methods=['GET', 'POST'])
+@login_required
+def nueva_gift_card():
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip()
+        amount = request.form.get('amount')
+        expiration = request.form.get('expiration_date') or None
+        purchaser = request.form.get('purchaser_name', '').strip()
+        recipient = request.form.get('recipient_name', '').strip()
+        
+        # Auto-generate code if empty
+        if not code:
+            import uuid
+            code = str(uuid.uuid4()).split('-')[0].upper() # Simple short code fallback
+        
+        db = get_db()
+        try:
+            with db.cursor() as cursor:
+                # Check duplicate
+                cursor.execute("SELECT id FROM gift_cards WHERE code = %s", (code,))
+                if cursor.fetchone():
+                    flash("El código de Gift Card ya existe. Intenta con otro.", "warning")
+                    return redirect(url_for('marketing.nueva_gift_card'))
+                
+                cursor.execute("""
+                    INSERT INTO gift_cards 
+                    (code, initial_amount, current_balance, status, expiration_date, purchaser_name, recipient_name)
+                    VALUES (%s, %s, %s, 'activa', %s, %s, %s)
+                """, (code, amount, amount, expiration, purchaser, recipient))
+                db.commit()
+                flash("Gift Card creada exitosamente.", "success")
+                return redirect(url_for('marketing.listar_gift_cards'))
+                
+        except Exception as e:
+            db.rollback()
+            flash(f"Error creando Gift Card: {e}", "danger")
+            
+    return render_template('marketing/crear_gift_card.html')
