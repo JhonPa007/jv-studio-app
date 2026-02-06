@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Paquetes de Servicios | JV Studio{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2 class="text-accent"><i class="fas fa-box-open me-2"></i> Paquetes de Servicios</h2>
+        <p class="text-muted">Gestiona los combos y promociones disponibles.</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('marketing.nuevo_paquete') }}" class="btn btn-warning">
+            <i class="fas fa-plus me-1"></i> Nuevo Paquete
+        </a>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Nombre del Paquete</th>
+                        <th>Precio</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in paquetes %}
+                    <tr>
+                        <td>
+                            <strong>{{ p.name }}</strong>
+                        </td>
+                        <td>S/ {{ "%.2f"|format(p.price) }}</td>
+                        <td>
+                            {% if p.is_active %}
+                            <span class="badge bg-success">Activo</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <!-- Acciones futuras: Editar, eliminar -->
+                            <button class="btn btn-sm btn-outline-primary" disabled><i class="fas fa-edit"></i></button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center py-5">No hay paquetes registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
