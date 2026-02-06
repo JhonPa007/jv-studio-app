@@ -525,6 +525,59 @@ def fix_db_schema():
         return f"Error: {e}", 500
 
 # ==============================================================================
+# 5. GESTIÓN DE PAQUETES
+# ==============================================================================
+
+@marketing_bp.route('/paquetes', methods=['GET'])
+@login_required
+def listar_paquetes():
+    db = get_db()
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+        cursor.execute("SELECT * FROM packages ORDER BY name")
+        paquetes = cursor.fetchall()
+    return render_template('marketing/lista_paquetes.html', paquetes=paquetes)
+
+@marketing_bp.route('/paquetes/nuevo', methods=['GET', 'POST'])
+@login_required
+def nuevo_paquete():
+    db = get_db()
+    if request.method == 'POST':
+        name = request.form.get('name')
+        price = request.form.get('price')
+        service_ids = request.form.getlist('service_ids') # Multi-select
+        
+        try:
+            with db.cursor() as cursor:
+                # 1. Create Package
+                cursor.execute("""
+                    INSERT INTO packages (name, price, is_active)
+                    VALUES (%s, %s, TRUE) RETURNING id
+                """, (name, price))
+                package_id = cursor.fetchone()[0]
+                
+                # 2. Add Items
+                for sid in service_ids:
+                    # Default quantity 1 for simplification in UI for now
+                    cursor.execute("""
+                        INSERT INTO package_items (package_id, service_id, quantity)
+                        VALUES (%s, %s, 1)
+                    """, (package_id, sid))
+                    
+                db.commit()
+                flash("Paquete creado exitosamente.", "success")
+                return redirect(url_for('marketing.listar_paquetes'))
+        except Exception as e:
+            db.rollback()
+            flash(f"Error creando paquete: {e}", "danger")
+            
+    # GET: Load services for select
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+        cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY nombre")
+        servicios = cursor.fetchall()
+        
+    return render_template('marketing/crear_paquete.html', servicios=servicios)
+
+# ==============================================================================
 # 4. GESTIÓN DE GIFT CARDS
 # ==============================================================================
 
@@ -585,14 +638,37 @@ def generate_gift_card_code(db):
 @marketing_bp.route('/gift-cards/nueva', methods=['GET', 'POST'])
 @login_required
 def nueva_gift_card():
+    db = get_db()
     if request.method == 'POST':
         code = request.form.get('code', '').strip()
-        amount = request.form.get('amount')
-        expiration = request.form.get('expiration_date') or None
         purchaser = request.form.get('purchaser_name', '').strip()
         recipient = request.form.get('recipient_name', '').strip()
         
-        db = get_db()
+        # Logic for selection type
+        selection_type = request.form.get('selection_type') # 'amount' or 'package'
+        
+        amount = 0
+        package_id = None
+        
+        if selection_type == 'package':
+            package_id = request.form.get('package_id')
+            if not package_id:
+                flash("Debes seleccionar un paquete.", "danger")
+                return redirect(url_for('marketing.nueva_gift_card'))
+                
+            # Get package price for records (balance is tracked but display is package name)
+            with db.cursor() as cursor:
+                cursor.execute("SELECT price FROM packages WHERE id = %s", (package_id,))
+                res = cursor.fetchone()
+                if res:
+                    amount = res[0] 
+        else:
+            amount = request.form.get('amount')
+            if not amount:
+                 flash("Debes ingresar un monto.", "danger")
+                 return redirect(url_for('marketing.nueva_gift_card'))
+
+        expiration = request.form.get('expiration_date') or None
         
         # Auto-generate code if empty
         if not code:
@@ -608,9 +684,21 @@ def nueva_gift_card():
                 
                 cursor.execute("""
                     INSERT INTO gift_cards 
-                    (code, initial_amount, current_balance, status, expiration_date, purchaser_name, recipient_name)
-                    VALUES (%s, %s, %s, 'activa', %s, %s, %s)
-                """, (code, amount, amount, expiration, purchaser, recipient))
+                    (code, initial_amount, current_balance, status, expiration_date, purchaser_name, recipient_name, package_id)
+                    VALUES (%s, %s, %s, 'activa', %s, %s, %s, %s)
+                """, (code, amount, amount, expiration, purchaser, recipient, package_id))
+                
+                if package_id:
+                     # If package, verify we get the name for the image? 
+                     # For now, generator uses amount. Ideally generator should show package name if present.
+                     # Let's verify generator call in next step if needed.
+                     pass
+
+                db.commit()
+
+                # Generate Image
+                # Warning: generate_gift_card_image current signature is (code, amount, recipient)
+                # We might want to pass package name if applicable.
                 
                 image_url = generate_gift_card_image(code, amount, recipient)
                 
@@ -621,4 +709,9 @@ def nueva_gift_card():
             db.rollback()
             flash(f"Error creando Gift Card: {e}", "danger")
             
-    return render_template('marketing/crear_gift_card.html')
+    # GET Request: Fetch packages for dropdown
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+        cursor.execute("SELECT * FROM packages WHERE is_active = TRUE ORDER BY name")
+        packages = cursor.fetchall()
+            
+    return render_template('marketing/crear_gift_card.html', packages=packages)

@@ -30,12 +30,42 @@
                         <div class="form-text">Si se deja vacío, se generará uno automáticamente.</div>
                     </div>
 
-                    <div class="col-md-6">
+                    <div class="col-12 mb-3">
+                        <label class="form-label fw-bold">¿Qué incluye la tarjeta?</label>
+                        <div class="d-flex gap-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="selection_type" id="typeAmount"
+                                    value="amount" checked onchange="toggleType()">
+                                <label class="form-check-label" for="typeAmount">
+                                    Saldo en Dinero (Monto Libre)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="selection_type" id="typePackage"
+                                    value="package" onchange="toggleType()">
+                                <label class="form-check-label" for="typePackage">
+                                    Paquete de Servicios (Combo)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6" id="amountField">
                         <label class="form-label fw-bold">Monto (S/)</label>
                         <div class="input-group">
                             <span class="input-group-text">S/</span>
-                            <input type="number" step="0.01" min="0" class="form-control" name="amount" required>
+                            <input type="number" step="0.01" min="0" class="form-control" name="amount">
                         </div>
+                    </div>
+
+                    <div class="col-md-6 d-none" id="packageField">
+                        <label class="form-label fw-bold">Seleccionar Paquete</label>
+                        <select class="form-select" name="package_id">
+                            <option value="">-- Selecciona un Pack --</option>
+                            {% for pack in packages %}
+                            <option value="{{ pack.id }}">{{ pack.name }} (S/ {{ "%.2f"|format(pack.price) }})</option>
+                            {% endfor %}
+                        </select>
                     </div>
 
                     <div class="col-md-6">
@@ -80,6 +110,24 @@
         // Formato XXXX-XXXX-XXXX
         let formatted = result.match(/.{1,4}/g).join('-');
         document.querySelector('input[name="code"]').value = formatted;
+    }
+
+    function toggleType() {
+        const isPackage = document.getElementById('typePackage').checked;
+        const amountField = document.getElementById('amountField');
+        const packageField = document.getElementById('packageField');
+
+        if (isPackage) {
+            amountField.classList.add('d-none');
+            packageField.classList.remove('d-none');
+            document.querySelector('input[name="amount"]').required = false;
+            document.querySelector('select[name="package_id"]').required = true;
+        } else {
+            amountField.classList.remove('d-none');
+            packageField.classList.add('d-none');
+            document.querySelector('input[name="amount"]').required = true;
+            document.querySelector('select[name="package_id"]').required = false;
+        }
     }
 </script>
 {% endblock %}
