@@ -2,6 +2,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 import psycopg2
 import psycopg2.extras
+import random
+import string
 from .db import get_db
 
 marketing_bp = Blueprint('marketing', __name__, url_prefix='/marketing')
@@ -537,6 +539,31 @@ def listar_gift_cards():
         flash(f"Error listando Gift Cards: {e}", "danger")
         return redirect(url_for('marketing.index_marketing_placeholder')) # Fallback or index
 
+# Helper para generar códigos
+def generate_gift_card_code(db):
+    """
+    Genera un código único en formato JV-XXX-NNNN
+    Ejemplo: JV-FEB-4921
+    """
+    # Intenta generar un código único hasta 10 veces
+    for _ in range(10):
+        # 3 letras mayúsculas aleatorias (Ej. ABC)
+        letters = ''.join(random.choices(string.ascii_uppercase, k=3))
+        # 4 números aleatorios
+        numbers = ''.join(random.choices(string.digits, k=4))
+        
+        code = f"JV-{letters}-{numbers}"
+        
+        # Verificar unicidad
+        with db.cursor() as cursor:
+            cursor.execute("SELECT 1 FROM gift_cards WHERE code = %s", (code,))
+            if not cursor.fetchone():
+                return code
+                
+    # Fallback muy improbable si falla 10 veces
+    import uuid
+    return f"JV-AUTO-{str(uuid.uuid4())[:4].upper()}"
+
 @marketing_bp.route('/gift-cards/nueva', methods=['GET', 'POST'])
 @login_required
 def nueva_gift_card():
@@ -547,15 +574,15 @@ def nueva_gift_card():
         purchaser = request.form.get('purchaser_name', '').strip()
         recipient = request.form.get('recipient_name', '').strip()
         
+        db = get_db()
+        
         # Auto-generate code if empty
         if not code:
-            import uuid
-            code = str(uuid.uuid4()).split('-')[0].upper() # Simple short code fallback
+            code = generate_gift_card_code(db)
         
-        db = get_db()
         try:
             with db.cursor() as cursor:
-                # Check duplicate
+                # Check duplicate (only relevant if manual code was entered)
                 cursor.execute("SELECT id FROM gift_cards WHERE code = %s", (code,))
                 if cursor.fetchone():
                     flash("El código de Gift Card ya existe. Intenta con otro.", "warning")
