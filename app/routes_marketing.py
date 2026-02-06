@@ -534,7 +534,12 @@ def listar_gift_cards():
     db = get_db()
     try:
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            cursor.execute("SELECT * FROM gift_cards ORDER BY created_at DESC")
+            cursor.execute("""
+                SELECT gc.*, p.name as package_name 
+                FROM gift_cards gc
+                LEFT JOIN packages p ON gc.package_id = p.id
+                ORDER BY gc.created_at DESC
+            """)
             gift_cards = cursor.fetchall()
             
         # Check for images

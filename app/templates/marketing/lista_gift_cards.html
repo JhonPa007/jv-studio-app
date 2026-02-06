@@ -48,10 +48,16 @@
                         </td>
                         <td>S/ {{ "%.2f"|format(gc.initial_amount) }}</td>
                         <td>
+                            {% if gc.package_name %}
+                            <span class="badge bg-info text-dark">
+                                <i class="fas fa-box-open me-1"></i> {{ gc.package_name }}
+                            </span>
+                            {% else %}
                             {% if gc.current_balance > 0 %}
                             <span class="text-success fw-bold">S/ {{ "%.2f"|format(gc.current_balance) }}</span>
                             {% else %}
                             <span class="text-muted">S/ 0.00</span>
+                            {% endif %}
                             {% endif %}
                         </td>
                         <td>
