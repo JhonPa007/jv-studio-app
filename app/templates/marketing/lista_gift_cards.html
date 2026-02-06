@@ -76,6 +76,12 @@
                         </td>
                         <td>{{ gc.created_at.strftime('%d/%m/%Y') }}</td>
                         <td>
+                            {% if gc.image_url %}
+                            <a href="{{ gc.image_url }}" target="_blank" class="btn btn-sm btn-outline-warning"
+                                title="Descargar Tarjeta">
+                                <i class="fas fa-image"></i>
+                            </a>
+                            {% endif %}
                             <button class="btn btn-sm btn-outline-secondary" title="Ver detalles (Pronto)">
                                 <i class="fas fa-eye"></i>
                             </button>

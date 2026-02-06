@@ -4,7 +4,9 @@ import psycopg2
 import psycopg2.extras
 import random
 import string
+import os
 from .db import get_db
+from .utils.gift_card_generator import generate_gift_card_image
 
 marketing_bp = Blueprint('marketing', __name__, url_prefix='/marketing')
 
@@ -534,6 +536,17 @@ def listar_gift_cards():
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT * FROM gift_cards ORDER BY created_at DESC")
             gift_cards = cursor.fetchall()
+            
+        # Check for images
+        static_folder = current_app.static_folder
+        for gc in gift_cards:
+            filename = f"gift_card_{gc['code']}.jpg"
+            filepath = os.path.join(static_folder, 'img', 'gift_cards', filename)
+            if os.path.exists(filepath):
+                gc['image_url'] = url_for('static', filename=f'img/gift_cards/{filename}')
+            else:
+                gc['image_url'] = None
+                
         return render_template('marketing/lista_gift_cards.html', gift_cards=gift_cards)
     except Exception as e:
         flash(f"Error listando Gift Cards: {e}", "danger")
@@ -593,8 +606,10 @@ def nueva_gift_card():
                     (code, initial_amount, current_balance, status, expiration_date, purchaser_name, recipient_name)
                     VALUES (%s, %s, %s, 'activa', %s, %s, %s)
                 """, (code, amount, amount, expiration, purchaser, recipient))
-                db.commit()
-                flash("Gift Card creada exitosamente.", "success")
+                
+                image_url = generate_gift_card_image(code, amount, recipient)
+                
+                flash(f"Gift Card creada exitosamente. <a href='{image_url}' target='_blank' class='btn btn-sm btn-light ms-2'><i class='fas fa-download'></i> Descargar Tarjeta</a>", "success")
                 return redirect(url_for('marketing.listar_gift_cards'))
                 
         except Exception as e:
