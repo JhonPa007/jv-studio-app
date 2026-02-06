@@ -200,6 +200,8 @@
                         </li>
                         <li><a class="nav-link small" href="{{ url_for('main.listar_productos') }}">Productos
                                 (Catálogo)</a></li>
+                        <li><a class="nav-link small"
+                                href="{{ url_for('main.listar_categorias_productos') }}">Categorías</a></li>
                         <li><a class="nav-link small" href="{{ url_for('main.nueva_compra') }}">Registrar Compra</a>
                         </li>
                         <li><a class="nav-link small" href="{{ url_for('main.listar_compras') }}">Historial Compras</a>
@@ -607,6 +609,8 @@
         });
     </script>
     {% endblock scripts %}
+
+    {% block scripts_extra %}{% endblock %}
 </body>
 
 </html>

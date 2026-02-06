@@ -4391,6 +4391,41 @@ def listar_categorias_productos():
     return render_template('productos/lista_categorias_productos.html', 
                            categorias=lista_de_categorias)
 
+@main_bp.route('/api/productos/categorias/crear_rapida', methods=['POST'])
+@login_required
+def api_crear_categoria_rapida():
+    """
+    Crea una nueva categoría de producto vía AJAX desde el formulario de producto.
+    """
+    if not request.is_json:
+        return jsonify({"success": False, "message": "Se requiere JSON"}), 400
+        
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip()
+    
+    if not nombre:
+        return jsonify({"success": False, "message": "El nombre es obligatorio"}), 400
+        
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        
+        # Verificar duplicados
+        cursor.execute("SELECT id FROM categorias_productos WHERE nombre = %s", (nombre,))
+        if cursor.fetchone():
+             return jsonify({"success": False, "message": f"Ya existe una categoría llamada '{nombre}'"}), 409
+             
+        cursor.execute("INSERT INTO categorias_productos (nombre, descripcion) VALUES (%s, '') RETURNING id", (nombre,))
+        new_id = cursor.fetchone()[0]
+        db.commit()
+        
+        return jsonify({"success": True, "id": new_id, "nombre": nombre})
+    except Exception as e:
+        db.rollback()
+        current_app.logger.error(f"Error al crear categoría rápida: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 @main_bp.route('/productos/categorias/nueva', methods=['GET', 'POST'])
 @login_required
 def nueva_categoria_producto():

@@ -83,15 +83,21 @@
                 </div>
                 <div class="col-md-4 mb-3">
                     <label for="categoria_id" class="form-label">Categoría <span class="text-danger">*</span></label>
-                    <select class="form-select" id="categoria_id" name="categoria_id" required>
-                        <option value="">Seleccione una categoría...</option>
-                        {% for cat in categorias_prod %} {# categorias_prod se pasa desde Flask #}
-                        <option value="{{ cat.id }}" {% if data_source.get('categoria_id')|string==cat.id|string
-                            %}selected{% endif %}>
-                            {{ cat.nombre }}
-                        </option>
-                        {% endfor %}
-                    </select>
+                    <div class="input-group">
+                        <select class="form-select" id="categoria_id" name="categoria_id" required>
+                            <option value="">Seleccione una categoría...</option>
+                            {% for cat in categorias_prod %} {# categorias_prod se pasa desde Flask #}
+                            <option value="{{ cat.id }}" {% if data_source.get('categoria_id')|string==cat.id|string
+                                %}selected{% endif %}>
+                                {{ cat.nombre }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button class="btn btn-outline-secondary" type="button" id="btnNuevaCategoria"
+                            title="Registrar Nueva Categoría">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -186,6 +192,8 @@
     document.addEventListener('DOMContentLoaded', function () {
         const btnNuevaMarca = document.getElementById('btnNuevaMarca');
         const selectMarca = document.getElementById('marca_id');
+        const btnNuevaCategoria = document.getElementById('btnNuevaCategoria');
+        const selectCategoria = document.getElementById('categoria_id');
 
         if (btnNuevaMarca) {
             btnNuevaMarca.addEventListener('click', function () {
@@ -235,6 +243,62 @@
                                 icon: 'success',
                                 title: '¡Registrado!',
                                 text: `La marca "${data.nombre}" ha sido creada y seleccionada.`,
+                                timer: 2000,
+                                showConfirmButton: false
+                            });
+                        }
+                    }
+                });
+            });
+        }
+
+        if (btnNuevaCategoria) {
+            btnNuevaCategoria.addEventListener('click', function () {
+                Swal.fire({
+                    title: 'Nueva Categoría',
+                    input: 'text',
+                    inputLabel: 'Ingrese el nombre de la nueva categoría',
+                    inputPlaceholder: 'Ej. Ceras, Shampoos, etc.',
+                    showCancelButton: true,
+                    confirmButtonText: 'Guardar',
+                    cancelButtonText: 'Cancelar',
+                    showLoaderOnConfirm: true,
+                    preConfirm: (nombre) => {
+                        if (!nombre) {
+                            Swal.showValidationMessage('El nombre es obligatorio');
+                        } else {
+                            // Usamos la URL generada por Flask
+                            return fetch("{{ url_for('main.api_crear_categoria_rapida') }}", {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ nombre: nombre })
+                            })
+                                .then(response => {
+                                    if (!response.ok) {
+                                        return response.json().then(data => { throw new Error(data.message || 'Error desconocido') });
+                                    }
+                                    return response.json();
+                                })
+                                .catch(error => {
+                                    Swal.showValidationMessage(`Error: ${error.message}`);
+                                });
+                        }
+                    },
+                    allowOutsideClick: () => !Swal.isLoading()
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        const data = result.value;
+                        if (data.success) {
+                            // Agregar la nueva opción al select y seleccionarla
+                            const option = new Option(data.nombre, data.id, true, true);
+                            selectCategoria.add(option, undefined);
+
+                            Swal.fire({
+                                icon: 'success',
+                                title: '¡Registrado!',
+                                text: `La categoría "${data.nombre}" ha sido creada y seleccionada.`,
                                 timer: 2000,
                                 showConfirmButton: false
                             });
