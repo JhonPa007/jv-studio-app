@@ -2,7 +2,7 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 from flask import current_app
 
-def generate_gift_card_image(code, amount, recipient_name):
+def generate_gift_card_image(code, amount, recipient_name, package_name=None, services_text=None):
     """
     Generates a Gift Card image by overlaying text on a base template.
     Returns the web-accessible path to the generated image.
@@ -34,27 +34,61 @@ def generate_gift_card_image(code, amount, recipient_name):
         # --- CONFIGURATION (Adjust coordinates based on actual template) ---
         # Assuming 800x400 approx or similar ratio
         
-        # 1. AMOUNT (Center, Gold, Elegant)
+        # 1. MAIN CONTENT (Amount OR Package Name)
         try:
-            font_amount = ImageFont.truetype(font_path_bold, 80)
+            font_main = ImageFont.truetype(font_path_bold, 80)
         except:
-            font_amount = ImageFont.load_default()
+            font_main = ImageFont.load_default()
         
-        text_amount = f"S/ {float(amount):.2f}"
+        if package_name:
+            # PACKAGE MODE
+            text_main = str(package_name).upper()
+            # If name is too long, we might need to reduce font size (simple heuristic)
+            if len(text_main) > 20: 
+                try: font_main = ImageFont.truetype(font_path_bold, 60)
+                except: pass
+        else:
+            # MONEY MODE
+            text_main = f"S/ {float(amount):.2f}"
         
-        # Calculate text size (new method for Pillow >= 10, fallback for older)
+        # Calculate text size
         try:
-            _, _, w_amt, h_amt = draw.textbbox((0, 0), text_amount, font=font_amount)
+            _, _, w_main, h_main = draw.textbbox((0, 0), text_main, font=font_main)
         except AttributeError:
-             w_amt, h_amt = draw.textsize(text_amount, font=font_amount)
+            w_main, h_main = draw.textsize(text_main, font=font_main)
              
         # Center horizontally, slightly above center vertically
-        x_amt = (width - w_amt) / 2
-        y_amt = (height / 2) - h_amt - 20 
+        x_main = (width - w_main) / 2
+        y_main = (height / 2) - h_main - 30 
         
-        draw.text((x_amt, y_amt), text_amount, font=font_amount, fill="#D4AF37") # Gold color
+        draw.text((x_main, y_main), text_main, font=font_main, fill="#D4AF37") # Gold color
 
-        # 2. RECIPIENT (Below amount, smaller)
+        # 2. SUB CONTENT (Services List OR Recipient)
+        # We will put Recipient always, but if there are services, we put them below main text first
+        
+        current_y = y_main + h_main + 20
+        
+        # If Package: Show Services
+        if package_name and services_text:
+            try:
+                font_services = ImageFont.truetype(font_path_reg, 24)
+            except:
+                font_services = ImageFont.load_default()
+            
+            # Truncate if too long (very basic)
+            if len(services_text) > 60:
+                services_text = services_text[:57] + "..."
+                
+            try:
+                _, _, w_srv, h_srv = draw.textbbox((0, 0), services_text, font=font_services)
+            except AttributeError:
+                w_srv, h_srv = draw.textsize(services_text, font=font_services)
+                
+            x_srv = (width - w_srv) / 2
+            draw.text((x_srv, current_y), services_text, font=font_services, fill="white")
+            current_y += h_srv + 10
+
+        # 3. RECIPIENT (Always show, below everything)
         if recipient_name:
             try:
                 font_recipient = ImageFont.truetype(font_path_reg, 30)
@@ -68,11 +102,10 @@ def generate_gift_card_image(code, amount, recipient_name):
                  w_rec, h_rec = draw.textsize(text_recipient, font=font_recipient)
             
             x_rec = (width - w_rec) / 2
-            y_rec = y_amt + h_amt + 20
-            
-            draw.text((x_rec, y_rec), text_recipient, font=font_recipient, fill="white")
+            # Use current_y calculated above
+            draw.text((x_rec, current_y), text_recipient, font=font_recipient, fill="white")
 
-        # 3. CODE (Bottom, White, Monospace-ish)
+        # 4. CODE (Bottom, White, Monospace-ish)
         try:
             font_code = ImageFont.truetype(font_path_bold, 24)
         except:

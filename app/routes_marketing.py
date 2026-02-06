@@ -678,18 +678,33 @@ def nueva_gift_card():
         amount = 0
         package_id = None
         
+        package_name = None
+        services_text = None
+
         if selection_type == 'package':
             package_id = request.form.get('package_id')
             if not package_id:
                 flash("Debes seleccionar un paquete.", "danger")
                 return redirect(url_for('marketing.nueva_gift_card'))
                 
-            # Get package price for records (balance is tracked but display is package name)
+            # Get package details
             with db.cursor() as cursor:
-                cursor.execute("SELECT price FROM packages WHERE id = %s", (package_id,))
+                cursor.execute("SELECT name, price FROM packages WHERE id = %s", (package_id,))
                 res = cursor.fetchone()
                 if res:
-                    amount = res[0] 
+                    package_name = res[0]
+                    amount = res[1]
+                
+                # Fetch Service Names
+                cursor.execute("""
+                    SELECT s.nombre 
+                    FROM package_items pi
+                    JOIN servicios s ON pi.service_id = s.id
+                    WHERE pi.package_id = %s
+                """, (package_id,))
+                srv_rows = cursor.fetchall()
+                if srv_rows:
+                    services_text = " • ".join([r[0] for r in srv_rows])
         else:
             amount = request.form.get('amount')
             if not amount:
@@ -716,19 +731,10 @@ def nueva_gift_card():
                     VALUES (%s, %s, %s, 'activa', %s, %s, %s, %s)
                 """, (code, amount, amount, expiration, purchaser, recipient, package_id))
                 
-                if package_id:
-                     # If package, verify we get the name for the image? 
-                     # For now, generator uses amount. Ideally generator should show package name if present.
-                     # Let's verify generator call in next step if needed.
-                     pass
-
                 db.commit()
 
-                # Generate Image
-                # Warning: generate_gift_card_image current signature is (code, amount, recipient)
-                # We might want to pass package name if applicable.
-                
-                image_url = generate_gift_card_image(code, amount, recipient)
+                # Generate Image with Package details if applicable
+                image_url = generate_gift_card_image(code, amount, recipient, package_name=package_name, services_text=services_text)
                 
                 flash(f"Gift Card creada exitosamente. <a href='{image_url}' target='_blank' class='btn btn-sm btn-light ms-2'><i class='fas fa-download'></i> Descargar Tarjeta</a>", "success")
                 return redirect(url_for('marketing.listar_gift_cards'))
