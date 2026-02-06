@@ -518,8 +518,36 @@ def fix_db_schema():
                     descripcion TEXT
                 );
             """)
+
+            # 3. Create packages table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS packages (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL,
+                    price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
+            # 4. Create package_items table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS package_items (
+                    package_id INTEGER NOT NULL REFERENCES packages(id) ON DELETE CASCADE,
+                    service_id INTEGER NOT NULL REFERENCES servicios(id) ON DELETE CASCADE,
+                    quantity INTEGER NOT NULL DEFAULT 1,
+                    PRIMARY KEY (package_id, service_id)
+                );
+            """)
+
+            # 5. Add package_id to gift_cards table
+            cursor.execute("""
+                ALTER TABLE gift_cards 
+                ADD COLUMN IF NOT EXISTS package_id INTEGER REFERENCES packages(id) ON DELETE SET NULL;
+            """)
+
             db.commit()
-            return "Schema fixed successfully: puntos_acumulados added and puntos_historial created.", 200
+            return "Schema fixed successfully: puntos_acumulados, puntos_historial, packages, and package_items created/updated. <a href='/marketing/paquetes'>Go to Packages</a>", 200
     except Exception as e:
         db.rollback()
         return f"Error: {e}", 500
