@@ -605,6 +605,90 @@ def nuevo_paquete():
         
     return render_template('marketing/crear_paquete.html', servicios=servicios)
 
+@marketing_bp.route('/paquetes/editar/<int:package_id>', methods=['GET', 'POST'])
+@login_required
+def editar_paquete(package_id):
+    db = get_db()
+    
+    # Check existence
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+        cursor.execute("SELECT * FROM packages WHERE id = %s", (package_id,))
+        package = cursor.fetchone()
+        
+    if not package:
+        flash("Paquete no encontrado.", "danger")
+        return redirect(url_for('marketing.listar_paquetes'))
+
+    if request.method == 'POST':
+        name = request.form.get('name')
+        price = request.form.get('price')
+        service_ids = request.form.getlist('service_ids')
+        
+        try:
+            with db.cursor() as cursor:
+                # 1. Update Package
+                cursor.execute("""
+                    UPDATE packages SET name = %s, price = %s WHERE id = %s
+                """, (name, price, package_id))
+                
+                # 2. Update Items (Delete all and re-insert)
+                cursor.execute("DELETE FROM package_items WHERE package_id = %s", (package_id,))
+                
+                for sid in service_ids:
+                    cursor.execute("""
+                        INSERT INTO package_items (package_id, service_id, quantity)
+                        VALUES (%s, %s, 1)
+                    """, (package_id, sid))
+                    
+                db.commit()
+                flash("Paquete actualizado exitosamente.", "success")
+                return redirect(url_for('marketing.listar_paquetes'))
+        except Exception as e:
+            db.rollback()
+            flash(f"Error actualizando paquete: {e}", "danger")
+    
+    # GET: Load services and current items
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+        cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY nombre")
+        servicios = cursor.fetchall()
+        
+        cursor.execute("SELECT service_id FROM package_items WHERE package_id = %s", (package_id,))
+        current_items = [row['service_id'] for row in cursor.fetchall()]
+        
+    return render_template('marketing/crear_paquete.html', 
+                           package=package, 
+                           servicios=servicios, 
+                           selected_service_ids=current_items)
+
+@marketing_bp.route('/paquetes/toggle-activo/<int:package_id>', methods=['POST'])
+@login_required
+def toggle_activo_paquete(package_id):
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            cursor.execute("UPDATE packages SET is_active = NOT is_active WHERE id = %s", (package_id,))
+            db.commit()
+            flash("Estado del paquete actualizado.", "success")
+    except Exception as e:
+        db.rollback()
+        flash(f"Error cambiando estado: {e}", "danger")
+    return redirect(url_for('marketing.listar_paquetes'))
+
+@marketing_bp.route('/paquetes/eliminar/<int:package_id>', methods=['POST'])
+@login_required
+def eliminar_paquete(package_id):
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            cursor.execute("DELETE FROM packages WHERE id = %s", (package_id,))
+            db.commit()
+            flash("Paquete eliminado permanentemente.", "success")
+    except Exception as e:
+        db.rollback()
+        # Constraint error handling helpful if linked
+        flash(f"Error eliminando paquete (puede estar en uso): {e}", "danger")
+    return redirect(url_for('marketing.listar_paquetes'))
+
 # ==============================================================================
 # 4. GESTIÓN DE GIFT CARDS
 # ==============================================================================

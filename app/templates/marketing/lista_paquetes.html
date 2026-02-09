@@ -42,8 +42,32 @@
                             {% endif %}
                         </td>
                         <td>
-                            <!-- Acciones futuras: Editar, eliminar -->
-                            <button class="btn btn-sm btn-outline-primary" disabled><i class="fas fa-edit"></i></button>
+                            <div class="d-flex gap-2">
+                                <!-- Editar -->
+                                <a href="{{ url_for('marketing.editar_paquete', package_id=p.id) }}"
+                                    class="btn btn-sm btn-outline-primary" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+
+                                <!-- Activar/Desactivar -->
+                                <form action="{{ url_for('marketing.toggle_activo_paquete', package_id=p.id) }}"
+                                    method="POST" class="d-inline">
+                                    <button type="submit"
+                                        class="btn btn-sm {{ 'btn-outline-warning' if p.is_active else 'btn-outline-success' }}"
+                                        title="{{ 'Desactivar' if p.is_active else 'Activar' }}">
+                                        <i class="fas {{ 'fa-ban' if p.is_active else 'fa-check' }}"></i>
+                                    </button>
+                                </form>
+
+                                <!-- Eliminar -->
+                                <form action="{{ url_for('marketing.eliminar_paquete', package_id=p.id) }}"
+                                    method="POST" class="d-inline"
+                                    onsubmit="return confirm('¿Estás seguro de eliminar este paquete?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                     {% else %}
