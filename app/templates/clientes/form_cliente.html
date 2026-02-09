@@ -123,6 +123,21 @@
                                             id="telefono" name="telefono" value="{{ data.telefono or '' }}">
                                     </div>
 
+                                    {% if cliente %}
+                                    <div class="mb-3">
+                                        <label class="form-label text-warning small fw-bold">Saldo Monedero
+                                            Virtual</label>
+                                        <div class="input-group">
+                                            <span
+                                                class="input-group-text bg-dark text-warning border-secondary">S/</span>
+                                            <input type="text"
+                                                class="form-control bg-dark text-warning border-secondary fw-bold"
+                                                value="{{ '%.2f'|format(data.saldo_monedero or 0) }}" readonly>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+
+
                                     <div class="mb-3">
                                         <label class="form-label text-light small">Ocupación / Notas</label>
                                         <textarea class="form-control bg-dark text-light border-secondary"

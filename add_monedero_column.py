@@ -15,8 +15,8 @@ def run_migration():
     conn = None
     try:
         conn = get_db_connection()
-        # Try LATIN1 which is common on Windows Postgres
-        conn.set_client_encoding('LATIN1')
+        # Removed encoding setting to avoid Windows crash
+
         cur = conn.cursor()
         
         # Check if column exists

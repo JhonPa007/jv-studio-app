@@ -5604,10 +5604,16 @@ def nueva_venta():
                     if not cliente_id:
                         raise ValueError("Para pagar con Monedero debe seleccionar un cliente.")
                     
+                    
                     # Verificar Saldo Actual
-                    cursor.execute("SELECT saldo_monedero FROM clientes WHERE id = %s", (cliente_id,))
-                    res_saldo = cursor.fetchone()
-                    saldo_actual = float(res_saldo['saldo_monedero'] or 0.00)
+                    try:
+                        cursor.execute("SELECT saldo_monedero FROM clientes WHERE id = %s", (cliente_id,))
+                        res_saldo = cursor.fetchone()
+                        saldo_actual = float(res_saldo['saldo_monedero'] or 0.00)
+                    except psycopg2.errors.UndefinedColumn:
+                        db_conn.rollback()
+                        raise ValueError("Error de Sistema: La función de Monedero no está disponible (Falta columna en BD). Contacte soporte.")
+
                     
                     if saldo_actual < monto_a_pagar:
                          raise ValueError(f"Saldo insuficiente en Monedero. (Disponible: S/ {saldo_actual:.2f}, Requerido: S/ {monto_a_pagar:.2f})")
@@ -5793,13 +5799,25 @@ def nueva_venta():
                     flash(f"Datos cargados desde la Reserva #{reserva_id}", "info")
 
             # 1. Clientes
-            cursor.execute("""
-                SELECT id, razon_social_nombres, apellidos, telefono, numero_documento,
-                       TO_CHAR(fecha_nacimiento, 'YYYY-MM-DD') as fecha_nac_str,
-                       cumpleanos_validado, rechazo_dato_cumpleanos,
-                       saldo_monedero
-                FROM clientes ORDER BY razon_social_nombres
-            """)
+            try:
+                cursor.execute("""
+                    SELECT id, razon_social_nombres, apellidos, telefono, numero_documento,
+                           TO_CHAR(fecha_nacimiento, 'YYYY-MM-DD') as fecha_nac_str,
+                           cumpleanos_validado, rechazo_dato_cumpleanos,
+                           saldo_monedero
+                    FROM clientes ORDER BY razon_social_nombres
+                """)
+            except psycopg2.errors.UndefinedColumn:
+                # Fallback por si la migración de columna falló
+                db_conn.rollback() # Necesario tras error
+                cursor.execute("""
+                    SELECT id, razon_social_nombres, apellidos, telefono, numero_documento,
+                           TO_CHAR(fecha_nacimiento, 'YYYY-MM-DD') as fecha_nac_str,
+                           cumpleanos_validado, rechazo_dato_cumpleanos,
+                           0.00 as saldo_monedero
+                    FROM clientes ORDER BY razon_social_nombres
+                """)
+
             clientes = cursor.fetchall()
             
             # DEBUG: Inspect wallet balance

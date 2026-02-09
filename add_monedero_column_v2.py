@@ -3,21 +3,24 @@ import psycopg2
 import os
 import sys
 
+# Force UTF-8 for stdout just in case
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding='utf-8')
+
 def run_migration():
     conn = None
     try:
-        # Force the SERVER to send us UTF-8 messages, so psycopg2 (which likes UTF-8) doesn't choke
+        print("Connecting to DB...")
         conn = psycopg2.connect(
             host=os.environ.get('DB_HOST', 'localhost'),
             user=os.environ.get('DB_USER', 'postgres'),
             password=os.environ.get('DB_PASSWORD', 'jv123'),
             database=os.environ.get('DB_NAME', 'jv_studio_pg_db'),
-            port=os.environ.get('DB_PORT', '5432'),
-            options='-c client_encoding=UTF8'
+            port=os.environ.get('DB_PORT', '5432')
         )
         cur = conn.cursor()
         
-        print("Checking column 'saldo_monedero'...")
+        print("Checking column...")
         cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='clientes' AND column_name='saldo_monedero'")
         if not cur.fetchone():
             print("Adding 'saldo_monedero' column...")
@@ -30,11 +33,10 @@ def run_migration():
     except Exception as e:
         if conn:
             conn.rollback()
-        # Handle printing safely
-        try:
-            print(f"Migration failed: {e}")
-        except:
-             print("Migration failed (cannot print specific error due to encoding)")
+        err_msg = f"Migration failed: {e}"
+        print(err_msg)
+        with open("migration_error.log", "w", encoding="utf-8") as f:
+            f.write(err_msg)
     finally:
         if conn:
             conn.close()
