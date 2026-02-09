@@ -539,6 +539,9 @@ def fix_db_schema():
                     PRIMARY KEY (package_id, service_id)
                 );
             """)
+            
+            # 4.1. Add description to packages
+            cursor.execute("ALTER TABLE packages ADD COLUMN IF NOT EXISTS description TEXT;")
 
             # 5. Add package_id to gift_cards table
             cursor.execute("""
@@ -572,15 +575,16 @@ def nuevo_paquete():
     if request.method == 'POST':
         name = request.form.get('name')
         price = request.form.get('price')
+        description = request.form.get('description')
         service_ids = request.form.getlist('service_ids') # Multi-select
         
         try:
             with db.cursor() as cursor:
                 # 1. Create Package
                 cursor.execute("""
-                    INSERT INTO packages (name, price, is_active)
-                    VALUES (%s, %s, TRUE) RETURNING id
-                """, (name, price))
+                    INSERT INTO packages (name, price, description, is_active)
+                    VALUES (%s, %s, %s, TRUE) RETURNING id
+                """, (name, price, description))
                 package_id = cursor.fetchone()[0]
                 
                 # 2. Add Items
@@ -622,14 +626,15 @@ def editar_paquete(package_id):
     if request.method == 'POST':
         name = request.form.get('name')
         price = request.form.get('price')
+        description = request.form.get('description')
         service_ids = request.form.getlist('service_ids')
         
         try:
             with db.cursor() as cursor:
                 # 1. Update Package
                 cursor.execute("""
-                    UPDATE packages SET name = %s, price = %s WHERE id = %s
-                """, (name, price, package_id))
+                    UPDATE packages SET name = %s, price = %s, description = %s WHERE id = %s
+                """, (name, price, description, package_id))
                 
                 # 2. Update Items (Delete all and re-insert)
                 cursor.execute("DELETE FROM package_items WHERE package_id = %s", (package_id,))

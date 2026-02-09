@@ -26,6 +26,13 @@
                 </div>
 
                 <div class="mb-3">
+                    <label class="form-label fw-bold">Detalle del Paquete</label>
+                    <textarea class="form-control" name="description" rows="3"
+                        placeholder="Describe el servicio, frases atractivas para el cliente...">{{ package.description if package and package.description else '' }}</textarea>
+                    <div class="form-text">Esta descripción aparecerá en la página pública.</div>
+                </div>
+
+                <div class="mb-3">
                     <label class="form-label fw-bold">Precio Final (S/)</label>
                     <div class="input-group">
                         <span class="input-group-text">S/</span>
