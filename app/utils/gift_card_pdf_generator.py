@@ -9,7 +9,7 @@ from flask import current_app
 
 def generate_gift_card_pdf(code, amount, recipient_name, from_name=None, package_name=None, services_text=None, expiration_date=None):
     """
-    Generates a Gift Card PDF.
+    Generates a Gift Card PDF with a specific business card size (85mm x 45mm).
     Returns the absolute path to the generated PDF.
     """
     try:
@@ -19,28 +19,23 @@ def generate_gift_card_pdf(code, amount, recipient_name, from_name=None, package
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, output_filename)
         
-        # Dimensions
-        width, height = landscape(letter) # Standard letter landscape
+        # Dimensions: 85mm x 45mm
+        from reportlab.lib.units import mm
+        width, height = (85 * mm, 45 * mm)
         
-        c = canvas.Canvas(output_path, pagesize=landscape(letter))
+        c = canvas.Canvas(output_path, pagesize=(width, height))
         
-        # --- Background / Design ---
-        # Very simple design: Gold border, dark background
-        c.setFillColorRGB(0.1, 0.1, 0.1) # Dark Gray
-        c.rect(0, 0, width, height, fill=1)
-        
-        # Inner Card Area (Centered)
-        card_w = 8 * inch
-        card_h = 4 * inch
-        x_start = (width - card_w) / 2
-        y_start = (height - card_h) / 2
-        
-        c.setStrokeColor(colors.gold)
-        c.setLineWidth(5)
-        c.rect(x_start, y_start, card_w, card_h, stroke=1, fill=0)
+        # --- Background ---
+        bg_image_path = os.path.join(static_folder, 'img', 'gift_card_bg.jpg')
+        if os.path.exists(bg_image_path):
+            c.drawImage(bg_image_path, 0, 0, width=width, height=height)
+        else:
+            # Fallback if image not found (shouldn't happen based on plan)
+            c.setFillColorRGB(0.1, 0.1, 0.1)
+            c.rect(0, 0, width, height, fill=1)
         
         # --- Fonts ---
-        # Register fonts if available, else use standard
+        # Register fonts
         font_main = "Helvetica-Bold"
         font_reg = "Helvetica"
         
@@ -55,50 +50,82 @@ def generate_gift_card_pdf(code, amount, recipient_name, from_name=None, package
             pdfmetrics.registerFont(TTFont('AgencyFB-Reg', font_path_reg))
             font_reg = 'AgencyFB-Reg'
 
-        # --- Content ---
+        # --- Content Layout (Scaling for 85x45mm) ---
         
-        # 1. Main Title (Value or Package)
+        # 1. Header Row
+        # "JV STUDIO" (Top Left) - simulated if not in BG, but let's assume BG has logo or we add it distinctively?
+        # The reference shows "JV STUDIO" top left.
+        c.setFillColor(colors.white) # or slightly off-white
+        c.setFont(font_main, 8) 
+        c.drawString(3 * mm, height - 6 * mm, "JV STUDIO")
+
+        # "GIFT CARD" (Top Center)
         c.setFillColor(colors.gold)
-        c.setFont(font_main, 60)
+        c.setFont(font_main, 10)
+        c.drawCentredString(width / 2, height - 6 * mm, "GIFT CARD")
+
+        # "CÓDIGO: ..." (Top Right)
+        c.setFillColor(colors.white)
+        c.setFont(font_reg, 5) # Small
+        # Draw a box?
+        # c.setStrokeColor(colors.gold)
+        # c.rect(width - 25 * mm, height - 7 * mm, 22 * mm, 5 * mm)
+        c.drawRightString(width - 3 * mm, height - 6 * mm, f"CÓDIGO: {code}")
+
+        # 2. Main Title (Service/Package) - CENTER
+        c.setFillColor(colors.gold)
+        c.setFont(font_main, 14) # Large
         
+        main_text = ""
         if package_name:
             main_text = package_name.upper()
-            if len(main_text) > 20: c.setFont(font_main, 40)
+            if len(main_text) > 20: c.setFont(font_main, 11)
         else:
             main_text = f"S/ {float(amount):.2f}"
             
-        c.drawCentredString(width / 2, y_start + card_h - 1.2 * inch, main_text)
+        c.drawCentredString(width / 2, height / 2 + 2 * mm, main_text)
         
-        # 2. Services or Subtitle
+        # 3. Description / Services - CENTER Below Title
         c.setFillColor(colors.white)
-        c.setFont(font_reg, 18)
+        c.setFont(font_reg, 6)
         
-        current_y = y_start + card_h - 2.2 * inch
+        desc_text = "Recibe un servicio de lujo, con un corte de" # Part 1
+        desc_text_2 = "cabello que combina elegancia y modernidad" # Part 2
         
         if package_name and services_text:
-            # Wrap text if needed? specific logic for now just simple
-            c.drawCentredString(width / 2, current_y, services_text)
-            current_y -= 0.5 * inch
-        
-        # 3. Recipient & From
-        c.setFont(font_reg, 24)
-        c.drawCentredString(width / 2, current_y, f"Para: {recipient_name}")
-        
-        if from_name:
-            current_y -= 0.4 * inch
-            c.setFont(font_reg, 18)
-            c.drawCentredString(width / 2, current_y, f"De: {from_name}")
+             # Very simple wrapping for now, or just limit length
+             c.drawCentredString(width / 2, height / 2 - 2 * mm, services_text)
+        else:
+             # Default text if no specific service text? Or leave empty?
+             # For now, let's just show what we have.
+             pass
 
-        # 4. Code & Expiration
+        # 4. Custom Message ("Para mi hermanito...")
+        # We don't have a specific field for this message in the function signature yet,
+        # but the reference has it. For now, we'll skip the hardcoded quote 
+        # or add a placeholder if desired. 
+        # c.setFont("Helvetica-Oblique", 6)
+        # c.setFillColor(colors.gold)
+        # c.drawString(3 * mm, height / 2 - 8 * mm, '"Para mi hermanito con mucho cariño"')
+
+        # 5. Footer Area
+        c.setFont(font_reg, 6)
         c.setFillColor(colors.white)
-        c.setFont(font_main, 20)
         
-        # Code bottom center
-        c.drawCentredString(width / 2, y_start + 0.8 * inch, f"CÓDIGO: {code}")
-        
+        # De: ...
+        if from_name:
+            c.drawString(3 * mm, 7 * mm, f"De: {from_name}")
+            
+        # Para: ...
+        c.drawString(3 * mm, 3 * mm, f"Para: {recipient_name}")
+
+        # Vence: ...
         if expiration_date:
-            c.setFont(font_reg, 12)
-            c.drawCentredString(width / 2, y_start + 0.4 * inch, f"Vence: {expiration_date}")
+            c.drawRightString(width - 3 * mm, 7 * mm, f"VENCE: {expiration_date}")
+
+        # Validation Text
+        c.setFont(font_reg, 4)
+        c.drawRightString(width - 3 * mm, 3 * mm, "VÁLIDO PARA CANJE EN JV STUDIO")
 
         c.save()
         return output_path
