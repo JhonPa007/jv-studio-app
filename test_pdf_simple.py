@@ -17,7 +17,8 @@ def test_pdf():
             from_name="Anapaula",
             package_name="Corte & Estilo",
             services_text="Corte de cabello + Lavado + Masaje Capilar",
-            expiration_date="28/11/2026"
+            expiration_date="28/11/2026",
+            description="Recibe un servicio de lujo, con un corte de cabello que combina elegancia y modernidad"
         )
         
         if pdf_path and os.path.exists(pdf_path):

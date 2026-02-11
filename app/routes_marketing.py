@@ -750,10 +750,18 @@ def download_gift_card_pdf(code):
         # Prepare data for PDF
         package_name = gc['package_name']
         services_text = None
+        description = None
         
         if package_name:
-            # Fetch services if package
+             # Fetch services if package
              with db.cursor() as cursor:
+                # Get Description
+                cursor.execute("SELECT description FROM packages WHERE id = %s", (gc['package_id'],))
+                row_desc = cursor.fetchone()
+                if row_desc:
+                    description = row_desc[0]
+
+                # Get Services (Still good to have as fallback or if user wants both later)
                 cursor.execute("""
                     SELECT s.nombre 
                     FROM package_items pi
@@ -772,7 +780,8 @@ def download_gift_card_pdf(code):
             from_name=gc['purchaser_name'], # Assuming purchaser is "From"
             package_name=package_name,
             services_text=services_text,
-            expiration_date=gc['expiration_date']
+            expiration_date=gc['expiration_date'],
+            description=description
         )
         
         if pdf_path and os.path.exists(pdf_path):

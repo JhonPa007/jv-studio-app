@@ -7,7 +7,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from flask import current_app
 
-def generate_gift_card_pdf(code, amount, recipient_name, from_name=None, package_name=None, services_text=None, expiration_date=None):
+def generate_gift_card_pdf(code, amount, recipient_name, from_name=None, package_name=None, services_text=None, expiration_date=None, description=None):
     """
     Generates a Gift Card PDF with a specific business card size (85mm x 45mm).
     Returns the absolute path to the generated PDF.
@@ -53,8 +53,7 @@ def generate_gift_card_pdf(code, amount, recipient_name, from_name=None, package
         # --- Content Layout (Scaling for 85x45mm) ---
         
         # 1. Header Row
-        # "JV STUDIO" (Top Left) - simulated if not in BG, but let's assume BG has logo or we add it distinctively?
-        # The reference shows "JV STUDIO" top left.
+        # "JV STUDIO" (Top Left)
         c.setFillColor(colors.white) # or slightly off-white
         c.setFont(font_main, 8) 
         c.drawString(3 * mm, height - 6 * mm, "JV STUDIO")
@@ -67,9 +66,6 @@ def generate_gift_card_pdf(code, amount, recipient_name, from_name=None, package
         # "CÓDIGO: ..." (Top Right)
         c.setFillColor(colors.white)
         c.setFont(font_reg, 5) # Small
-        # Draw a box?
-        # c.setStrokeColor(colors.gold)
-        # c.rect(width - 25 * mm, height - 7 * mm, 22 * mm, 5 * mm)
         c.drawRightString(width - 3 * mm, height - 6 * mm, f"CÓDIGO: {code}")
 
         # 2. Main Title (Service/Package) - CENTER
@@ -85,19 +81,26 @@ def generate_gift_card_pdf(code, amount, recipient_name, from_name=None, package
             
         c.drawCentredString(width / 2, height / 2 + 2 * mm, main_text)
         
-        # 3. Description / Services - CENTER Below Title
+        # 3. Description - CENTER Below Title
         c.setFillColor(colors.white)
         c.setFont(font_reg, 6)
         
-        desc_text = "Recibe un servicio de lujo, con un corte de" # Part 1
-        desc_text_2 = "cabello que combina elegancia y modernidad" # Part 2
+        text_to_display = description if description else services_text
         
-        if package_name and services_text:
-             # Very simple wrapping for now, or just limit length
-             c.drawCentredString(width / 2, height / 2 - 2 * mm, services_text)
+        if package_name and text_to_display:
+             # Simple wrapping logic for description
+             # Split into lines if too long? For 85mm width, maybe ~40-50 chars max per line with this font?
+             # Let's try a simple wrap
+             from reportlab.lib.utils import simpleSplit
+             # Available width roughly 80mm
+             avail_width = 75 * mm
+             lines = simpleSplit(text_to_display, font_reg, 6, avail_width)
+             
+             y_offset = height / 2 - 2 * mm
+             for line in lines[:3]: # Limit to 3 lines max
+                 c.drawCentredString(width / 2, y_offset, line)
+                 y_offset -= 2.5 * mm
         else:
-             # Default text if no specific service text? Or leave empty?
-             # For now, let's just show what we have.
              pass
 
         # 4. Custom Message ("Para mi hermanito...")
