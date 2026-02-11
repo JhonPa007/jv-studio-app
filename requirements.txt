@@ -47,3 +47,4 @@ zeep==4.3.1
 
 cloudinary
 Pillow
+reportlab

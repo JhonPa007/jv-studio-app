@@ -82,9 +82,13 @@
                         </td>
                         <td>{{ gc.created_at.strftime('%d/%m/%Y') }}</td>
                         <td>
+                            <a href="{{ url_for('marketing.download_gift_card_pdf', code=gc.code) }}"
+                                class="btn btn-sm btn-outline-danger" title="Descargar PDF">
+                                <i class="fas fa-file-pdf"></i>
+                            </a>
                             {% if gc.image_url %}
                             <a href="{{ gc.image_url }}" target="_blank" class="btn btn-sm btn-outline-warning"
-                                title="Descargar Tarjeta">
+                                title="Ver Imagen">
                                 <i class="fas fa-image"></i>
                             </a>
                             {% endif %}

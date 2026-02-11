@@ -7,6 +7,8 @@ import string
 import os
 from .db import get_db
 from .utils.gift_card_generator import generate_gift_card_image
+from .utils.gift_card_pdf_generator import generate_gift_card_pdf
+from flask import send_file
 
 marketing_bp = Blueprint('marketing', __name__, url_prefix='/marketing')
 
@@ -726,6 +728,155 @@ def listar_gift_cards():
     except Exception as e:
         flash(f"Error listando Gift Cards: {e}", "danger")
         return redirect(url_for('marketing.index_marketing_placeholder')) # Fallback or index
+
+@marketing_bp.route('/gift-cards/download-pdf/<code>')
+@login_required
+def download_gift_card_pdf(code):
+    db = get_db()
+    try:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            cursor.execute("""
+                SELECT gc.*, p.name as package_name 
+                FROM gift_cards gc
+                LEFT JOIN packages p ON gc.package_id = p.id
+                WHERE gc.code = %s
+            """, (code,))
+            gc = cursor.fetchone()
+            
+        if not gc:
+            flash("Gift Card no encontrada.", "danger")
+            return redirect(url_for('marketing.listar_gift_cards'))
+            
+        # Prepare data for PDF
+        package_name = gc['package_name']
+        services_text = None
+        
+        if package_name:
+            # Fetch services if package
+             with db.cursor() as cursor:
+                cursor.execute("""
+                    SELECT s.nombre 
+                    FROM package_items pi
+                    JOIN servicios s ON pi.service_id = s.id
+                    WHERE pi.package_id = %s
+                """, (gc['package_id'],))
+                srv_rows = cursor.fetchall()
+                if srv_rows:
+                    services_text = " • ".join([r[0] for r in srv_rows])
+
+        # Generate PDF
+        pdf_path = generate_gift_card_pdf(
+            code=gc['code'],
+            amount=gc['initial_amount'],
+            recipient_name=gc['recipient_name'],
+            from_name=gc['purchaser_name'], # Assuming purchaser is "From"
+            package_name=package_name,
+            services_text=services_text,
+            expiration_date=gc['expiration_date']
+        )
+        
+        if pdf_path and os.path.exists(pdf_path):
+            return send_file(pdf_path, as_attachment=True, download_name=f"GiftCard_{code}.pdf")
+        else:
+             flash("Error generando el PDF.", "danger")
+             return redirect(url_for('marketing.listar_gift_cards'))
+
+    except Exception as e:
+        flash(f"Error descargando PDF: {e}", "danger")
+        return redirect(url_for('marketing.listar_gift_cards'))
+
+# ==============================================================================
+# 5. EXTERNAL REQUESTS (LANDING PAGE)
+# ==============================================================================
+
+@marketing_bp.route('/api/external/gift-card-request', methods=['POST'])
+def external_gift_card_request():
+    """
+    Endpoint for Landing Page form submissions.
+    Currently creates a Gift Card in 'activa' status (or pending implementation).
+    Returns JSON with PDF download URL or status.
+    """
+    # Simple security check (CORS should be handled at app level or here)
+    # response.headers.add("Access-Control-Allow-Origin", "*") 
+    
+    data = request.form
+    
+    purchaser_name = data.get('purchaser_name')
+    recipient_name = data.get('recipient_name')
+    email = data.get('email') # Check if we have this
+    selection_type = data.get('selection_type', 'amount')
+    
+    amount = 0
+    package_id = None
+    package_name = None
+    
+    db = get_db()
+    
+    try:
+        code = generate_gift_card_code(db)
+        
+        if selection_type == 'package':
+            package_id = data.get('package_id')
+            with db.cursor() as cursor:
+                cursor.execute("SELECT name, price FROM packages WHERE id = %s", (package_id,))
+                res = cursor.fetchone()
+                if res:
+                    package_name = res[0]
+                    amount = res[1]
+                else:
+                    return jsonify({'success': False, 'message': 'Paquete inválido'}), 400
+        else:
+            amount = float(data.get('amount', 0))
+            if amount <= 0:
+                 return jsonify({'success': False, 'message': 'Monto inválido'}), 400
+
+        # Create Gift Card
+        with db.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO gift_cards (code, initial_amount, current_balance, status, purchaser_name, recipient_name, package_id)
+                VALUES (%s, %s, %s, 'activa', %s, %s, %s)
+            """, (code, amount, amount, purchaser_name, recipient_name, package_id))
+            db.commit()
+            
+        # Generate PDF immediately for response
+        # We need services text if package
+        services_text = None
+        if package_id:
+             with db.cursor() as cursor:
+                cursor.execute("""
+                    SELECT s.nombre 
+                    FROM package_items pi
+                    JOIN servicios s ON pi.service_id = s.id
+                    WHERE pi.package_id = %s
+                """, (package_id,))
+                srv_rows = cursor.fetchall()
+                if srv_rows:
+                    services_text = " • ".join([r[0] for r in srv_rows])
+
+        pdf_path = generate_gift_card_pdf(
+            code=code,
+            amount=amount,
+            recipient_name=recipient_name,
+            from_name=purchaser_name,
+            package_name=package_name,
+            services_text=services_text
+        )
+        
+        # In a real scenario, we might email this PDF to 'email'
+        
+        # Return success with download link (requires session auth usually, but we might need a public token link)
+        # For now, we will just return success and the code.
+        
+        return jsonify({
+            'success': True,
+            'message': 'Solicitud recibida correctamente.',
+            'code': code,
+            'note': 'Gift Card creada. Contacte para pago.'
+        })
+
+    except Exception as e:
+        db.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 # Helper para generar códigos
 def generate_gift_card_code(db):

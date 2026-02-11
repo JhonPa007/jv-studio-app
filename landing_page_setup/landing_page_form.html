@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solicitud Gift Card</title>
+    <style>
+        .gc-form-container {
+            max-width: 500px;
+            margin: 20px auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-family: Arial, sans-serif;
+            background-color: #fff;
+        }
+
+        .gc-form-group {
+            margin-bottom: 15px;
+        }
+
+        .gc-form-label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .gc-form-input,
+        .gc-form-select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .gc-btn {
+            background-color: #D4AF37;
+            /* Gold */
+            color: black;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .gc-btn:hover {
+            background-color: #b5952f;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="gc-form-container">
+        <h2 style="text-align: center; color: #333;">Regala una Gift Card</h2>
+        <form id="giftCardForm" action="http://localhost:5000/marketing/api/external/gift-card-request" method="POST">
+
+            <div class="gc-form-group">
+                <label class="gc-form-label">Tu Nombre (Comprador)</label>
+                <input type="text" name="purchaser_name" class="gc-form-input" required>
+            </div>
+
+            <div class="gc-form-group">
+                <label class="gc-form-label">Tu Email</label>
+                <input type="email" name="email" class="gc-form-input" required>
+            </div>
+
+            <div class="gc-form-group">
+                <label class="gc-form-label">Nombre del Destinatario (Para)</label>
+                <input type="text" name="recipient_name" class="gc-form-input" required>
+            </div>
+
+            <div class="gc-form-group">
+                <label class="gc-form-label">Tipo de Regalo</label>
+                <select name="selection_type" class="gc-form-select" id="selectionType" onchange="toggleType()">
+                    <option value="amount">Monto en Dinero</option>
+                    <option value="package">Paquete de Servicios</option>
+                </select>
+            </div>
+
+            <div class="gc-form-group" id="amountGroup">
+                <label class="gc-form-label">Monto (S/)</label>
+                <input type="number" name="amount" class="gc-form-input" placeholder="Ej. 100.00" step="0.01">
+            </div>
+
+            <div class="gc-form-group" id="packageGroup" style="display: none;">
+                <label class="gc-form-label">ID del Paquete</label>
+                <input type="number" name="package_id" class="gc-form-input" placeholder="Introduce ID de Paquete">
+                <small style="color: gray;">(En la versión final, esto sería un desplegable cargado
+                    dinámicamente)</small>
+            </div>
+
+            <button type="submit" class="gc-btn">Solicitar Gift Card</button>
+        </form>
+    </div>
+
+    <script>
+        function toggleType() {
+            const type = document.getElementById('selectionType').value;
+            const amountGroup = document.getElementById('amountGroup');
+            const packageGroup = document.getElementById('packageGroup');
+
+            if (type === 'amount') {
+                amountGroup.style.display = 'block';
+                packageGroup.style.display = 'none';
+            } else {
+                amountGroup.style.display = 'none';
+                packageGroup.style.display = 'block';
+            }
+        }
+
+        // Optional: Intercept form submission to handle via AJAX and show nice alert
+        document.getElementById('giftCardForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const form = e.target;
+            const formData = new FormData(form);
+
+            fetch(form.action, {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('¡Solicitud enviada! Código: ' + data.code);
+                        // Redirect or download logic here
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error de conexión.');
+                    console.error(error);
+                });
+        });
+    </script>
+
+</body>
+
+</html>
