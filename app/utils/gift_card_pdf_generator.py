@@ -7,7 +7,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from flask import current_app
 
-def generate_gift_card_pdf(code, amount, recipient_name, from_name=None, package_name=None, services_text=None, expiration_date=None, description=None):
+def generate_gift_card_pdf(code, amount, recipient_name, from_name=None, package_name=None, services_text=None, expiration_date=None, description=None, dedication=None):
     """
     Generates a Gift Card PDF with a specific business card size (85mm x 45mm).
     Returns the absolute path to the generated PDF.
@@ -100,11 +100,7 @@ def generate_gift_card_pdf(code, amount, recipient_name, from_name=None, package
         text_to_display = description if description else services_text
         
         if package_name and text_to_display:
-             # Simple wrapping logic for description
-             # Split into lines if too long? For 85mm width, maybe ~40-50 chars max per line with this font?
-             # Let's try a simple wrap
              from reportlab.lib.utils import simpleSplit
-             # Available width roughly 80mm
              avail_width = 75 * mm
              lines = simpleSplit(text_to_display, font_reg, 6, avail_width)
              
@@ -116,12 +112,19 @@ def generate_gift_card_pdf(code, amount, recipient_name, from_name=None, package
              pass
 
         # 4. Custom Message ("Para mi hermanito...")
-        # We don't have a specific field for this message in the function signature yet,
-        # but the reference has it. For now, we'll skip the hardcoded quote 
-        # or add a placeholder if desired. 
-        # c.setFont("Helvetica-Oblique", 6)
-        # c.setFillColor(colors.gold)
-        # c.drawString(3 * mm, height / 2 - 8 * mm, '"Para mi hermanito con mucho cariño"')
+        if dedication:
+             # Golden, Italic/Script-like if possible, else just FontReg
+             # If we want italic we need to register it or use standard standard fonts
+             # Let's use Helvetica-Oblique for standard italic
+             c.setFont("Helvetica-Oblique", 7)
+             c.setFillColor(colors.gold)
+             # Draw centered but slightly to the left/right? 
+             # Reference has it leftish but centered looks safer.
+             # Reference: "Para mi hermanito..." is yellowish and scripty.
+             
+             # Calculate position - below description
+             dedication_y = 11 * mm # Just above footer area
+             c.drawCentredString(width / 2, dedication_y, f'"{dedication}"')
 
         # 5. Footer Area
         c.setFont(font_reg, 6)

@@ -751,6 +751,7 @@ def download_gift_card_pdf(code):
         package_name = gc['package_name']
         services_text = None
         description = None
+        dedication = gc.get('dedicatoria')
         
         if package_name:
              # Fetch services if package
@@ -781,7 +782,8 @@ def download_gift_card_pdf(code):
             package_name=package_name,
             services_text=services_text,
             expiration_date=gc['expiration_date'],
-            description=description
+            description=description,
+            dedication=dedication
         )
         
         if pdf_path and os.path.exists(pdf_path):
@@ -961,6 +963,7 @@ def nueva_gift_card():
                  return redirect(url_for('marketing.nueva_gift_card'))
 
         expiration = request.form.get('expiration_date') or None
+        dedication = request.form.get('dedicatoria', '').strip()
         
         # Auto-generate code if empty
         if not code:
@@ -976,13 +979,14 @@ def nueva_gift_card():
                 
                 cursor.execute("""
                     INSERT INTO gift_cards 
-                    (code, initial_amount, current_balance, status, expiration_date, purchaser_name, recipient_name, package_id)
-                    VALUES (%s, %s, %s, 'activa', %s, %s, %s, %s)
-                """, (code, amount, amount, expiration, purchaser, recipient, package_id))
+                    (code, initial_amount, current_balance, status, expiration_date, purchaser_name, recipient_name, package_id, dedicatoria)
+                    VALUES (%s, %s, %s, 'activa', %s, %s, %s, %s, %s)
+                """, (code, amount, amount, expiration, purchaser, recipient, package_id, dedication))
                 
                 db.commit()
 
                 # Generate Image with Package details if applicable
+                # Note: Generate image might typically usage 'description' logic in future too
                 image_url = generate_gift_card_image(code, amount, recipient, package_name=package_name, services_text=services_text)
                 
                 flash(f"Gift Card creada exitosamente. <a href='{image_url}' target='_blank' class='btn btn-sm btn-light ms-2'><i class='fas fa-download'></i> Descargar Tarjeta</a>", "success")
