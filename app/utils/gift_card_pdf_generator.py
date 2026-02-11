@@ -28,9 +28,21 @@ def generate_gift_card_pdf(code, amount, recipient_name, from_name=None, package
         # --- Background ---
         bg_image_path = os.path.join(static_folder, 'img', 'gift_card_bg.jpg')
         if os.path.exists(bg_image_path):
-            c.drawImage(bg_image_path, 0, 0, width=width, height=height)
+            from reportlab.lib.utils import ImageReader
+            img = ImageReader(bg_image_path)
+            img_w, img_h = img.getSize()
+            aspect = img_h / float(img_w)
+            
+            # Target Width = Card Width (85mm)
+            draw_w = width
+            draw_h = width * aspect
+            
+            # Center Vertically: (Card Height - Image Height) / 2
+            draw_y = (height - draw_h) / 2
+            
+            c.drawImage(bg_image_path, 0, draw_y, width=draw_w, height=draw_h)
         else:
-            # Fallback if image not found (shouldn't happen based on plan)
+            # Fallback
             c.setFillColorRGB(0.1, 0.1, 0.1)
             c.rect(0, 0, width, height, fill=1)
         
