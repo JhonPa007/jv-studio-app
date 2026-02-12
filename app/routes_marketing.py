@@ -922,6 +922,7 @@ def nueva_gift_card():
         code = request.form.get('code', '').strip()
         purchaser = request.form.get('purchaser_name', '').strip()
         recipient = request.form.get('recipient_name', '').strip()
+        whatsapp = request.form.get('whatsapp', '').strip()
         
         # Logic for selection type
         selection_type = request.form.get('selection_type') # 'amount' or 'package'
@@ -979,9 +980,9 @@ def nueva_gift_card():
                 
                 cursor.execute("""
                     INSERT INTO gift_cards 
-                    (code, initial_amount, current_balance, status, expiration_date, purchaser_name, recipient_name, package_id, dedicatoria)
-                    VALUES (%s, %s, %s, 'activa', %s, %s, %s, %s, %s)
-                """, (code, amount, amount, expiration, purchaser, recipient, package_id, dedication))
+                    (code, initial_amount, current_balance, status, expiration_date, purchaser_name, recipient_name, package_id, dedicatoria, whatsapp)
+                    VALUES (%s, %s, %s, 'activa', %s, %s, %s, %s, %s, %s)
+                """, (code, amount, amount, expiration, purchaser, recipient, package_id, dedication, whatsapp))
                 
                 db.commit()
 
