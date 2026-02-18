@@ -132,6 +132,9 @@ def create_app():
     from .routes_marketing import marketing_bp
     app.register_blueprint(marketing_bp)
 
+    from .routes_school import school_bp
+    app.register_blueprint(school_bp)
+
     # 4. AUTO-MIGRACIÓN DE BASE DE DATOS (Producción Friendly)
     from .db import check_schema_updates
     check_schema_updates(app)

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recibo de Pago - JV School</title>
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            width: 80mm;
+            /* Ancho ticket termico */
+            margin: 0;
+            padding: 5px;
+            color: #000;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+
+        .header h2 {
+            margin: 5px 0;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .concept-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+
+        .concept-table th {
+            text-align: left;
+            border-bottom: 1px solid #000;
+        }
+
+        .concept-table td {
+            text-align: right;
+        }
+
+        .concept-table td:first-child {
+            text-align: left;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            border-top: 1px dashed #000;
+            padding-top: 10px;
+        }
+
+        @media print {
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="no-print">
+        <button onclick="window.print()">IMPRIMIR</button>
+        <button onclick="window.close()">CERRAR</button>
+    </div>
+
+    <div class="header">
+        <h2>JV STUDIO SCHOOL</h2>
+        <p>RUC: 20XXXXXXXXX</p>
+        <p>Dirección de la Escuela</p>
+        <p>--------------------------------</p>
+        <h3>RECIBO: {{ pago.codigo_recibo }}</h3>
+        <p>Fecha: {{ pago.fecha_pago.strftime('%d/%m/%Y %H:%M') }}</p>
+    </div>
+
+    <div class="info-row">
+        <strong>Alumno:</strong> <span>{{ pago.nombres }} {{ pago.apellidos }}</span>
+    </div>
+    <div class="info-row">
+        <strong>Código:</strong> <span>{{ pago.codigo_alumno or '-' }}</span>
+    </div>
+    <div class="info-row">
+        <strong>Curso:</strong> <span>{{ pago.curso_nombre or '-' }}</span>
+    </div>
+
+    <table class="concept-table">
+        <thead>
+            <tr>
+                <th>Concepto</th>
+                <th>Monto (S/)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in detalles %}
+            <tr>
+                <td>{{ item.concepto }}</td>
+                <td>{{ "%.2f"|format(item.monto_aplicado) }}</td>
+            </tr>
+            {% endfor %}
+            <!-- Si hay remanente o saldo a favor, se podría mostrar aquí -->
+        </tbody>
+        <tfoot>
+            <tr>
+                <td style="border-top: 1px solid #000;"><strong>TOTAL PAGADO</strong></td>
+                <td style="border-top: 1px solid #000;"><strong>S/ {{ "%.2f"|format(pago.monto) }}</strong></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="info-row">
+        <strong>Método:</strong> <span>{{ pago.metodo_pago }}</span>
+    </div>
+    {% if pago.observaciones %}
+    <div class="info-row">
+        <small>Obs: {{ pago.observaciones }}</small>
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        <p>¡Gracias por estudiar con los mejores!</p>
+        <p>Conserve este voucher como sustento.</p>
+    </div>
+</body>
+
+</html>

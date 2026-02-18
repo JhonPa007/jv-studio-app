@@ -1,5 +1,5 @@
 
--- Script de Creación de Tablas para el Módulo JV School
+-- Script de Creación de Tablas para el Módulo JV School (Actualizado)
 -- Ejecutar en la base de datos PostgreSQL
 
 -- 1. Tabla Cursos
@@ -29,13 +29,13 @@ CREATE TABLE IF NOT EXISTS escuela_alumnos (
     apellidos VARCHAR(100),
     dni VARCHAR(20),
     telefono VARCHAR(20),
-    curso_id INTEGER REFERENCES escuela_cursos(id) ON DELETE SET NULL, -- Referencia rápida (opcional pero útil)
+    curso_id INTEGER REFERENCES escuela_cursos(id) ON DELETE SET NULL, 
     grupo_id INTEGER REFERENCES escuela_grupos(id) ON DELETE SET NULL,
     fecha_inscripcion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     fecha_inicio_clases DATE,
-    costo_matricula_acordado DECIMAL(10, 2), -- Por si difiere del default del curso
-    costo_mensualidad_acordada DECIMAL(10, 2), -- Por si difiere del default del curso
-    estado VARCHAR(20) DEFAULT 'Activo' -- Activo, Retirado, Egresado
+    costo_matricula_acordado DECIMAL(10, 2), 
+    costo_mensualidad_acordada DECIMAL(10, 2), 
+    estado VARCHAR(20) DEFAULT 'Activo'
 );
 
 -- 4. Tabla Pagos (Historial)
@@ -44,8 +44,9 @@ CREATE TABLE IF NOT EXISTS escuela_pagos (
     alumno_id INTEGER REFERENCES escuela_alumnos(id) ON DELETE CASCADE,
     monto DECIMAL(10, 2) NOT NULL,
     fecha_pago TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    metodo_pago VARCHAR(50), -- Efectivo, Yape, Plin, Tarjeta
-    usuario_id INTEGER, -- ID del empleado que registró el pago
+    metodo_pago VARCHAR(50), 
+    codigo_recibo VARCHAR(50) UNIQUE, -- Nuevo: Para imprimir en el comprobante (ej: REC-001)
+    usuario_id INTEGER, 
     observaciones TEXT
 );
 
@@ -53,16 +54,26 @@ CREATE TABLE IF NOT EXISTS escuela_pagos (
 CREATE TABLE IF NOT EXISTS escuela_cuotas (
     id SERIAL PRIMARY KEY,
     alumno_id INTEGER REFERENCES escuela_alumnos(id) ON DELETE CASCADE,
-    concepto VARCHAR(100) NOT NULL, -- Ej: 'Matrícula', 'Mensualidad 1', 'Mensualidad 2'
+    concepto VARCHAR(100) NOT NULL, 
     monto_original DECIMAL(10, 2) NOT NULL,
     monto_pagado DECIMAL(10, 2) DEFAULT 0.00,
-    saldo DECIMAL(10, 2) DEFAULT 0.00, -- Se calcula en app o trigger: monto_original - monto_pagado
+    saldo DECIMAL(10, 2) DEFAULT 0.00, 
     fecha_vencimiento DATE,
-    estado VARCHAR(20) DEFAULT 'Pendiente', -- Pendiente, Parcial, Completo
-    orden_pago INTEGER DEFAULT 0 -- 0=Matrícula, 1=Mes 1, 2=Mes 2... para orden de pago en cascada
+    estado VARCHAR(20) DEFAULT 'Pendiente', 
+    orden_pago INTEGER DEFAULT 0 
+);
+
+-- 6. Tabla Detalle de Pagos (Para Desglose en Comprobantes)
+CREATE TABLE IF NOT EXISTS escuela_pagos_detalle (
+    id SERIAL PRIMARY KEY,
+    pago_id INTEGER REFERENCES escuela_pagos(id) ON DELETE CASCADE,
+    cuota_id INTEGER REFERENCES escuela_cuotas(id) ON DELETE CASCADE,
+    monto_aplicado DECIMAL(10, 2) NOT NULL, -- Cuánto de este pago se usó para esta cuota
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Índices Recomendados
 CREATE INDEX IF NOT EXISTS idx_alumnos_dni ON escuela_alumnos(dni);
 CREATE INDEX IF NOT EXISTS idx_cuotas_alumno ON escuela_cuotas(alumno_id);
 CREATE INDEX IF NOT EXISTS idx_pagos_alumno ON escuela_pagos(alumno_id);
+CREATE INDEX IF NOT EXISTS idx_pagos_detalle_pago ON escuela_pagos_detalle(pago_id);
