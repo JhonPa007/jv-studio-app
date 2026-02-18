@@ -1,0 +1,5 @@
+Error creando esquema: permiso denegado al esquema public
+LINE 2:             CREATE TABLE IF NOT EXISTS escuela_cursos (
+                                               ^
+
+Tipo de error: <class 'psycopg2.errors.InsufficientPrivilege'>
