@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Cursos - JV School{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-accent"><i class="fas fa-book me-2"></i>Gestión de Cursos y Grupos</h2>
+        <button class="btn btn-warning fw-bold" data-bs-toggle="modal" data-bs-target="#modalNuevoCurso">
+            <i class="fas fa-plus me-2"></i>Nuevo Curso
+        </button>
+    </div>
+
+    <!-- LISTA DE CURSOS -->
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4" id="listaCursos">
+        <!-- JS RENDER -->
+        <div class="col text-center py-5">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo Curso -->
+<div class="modal fade" id="modalNuevoCurso" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-accent">Crear Nuevo Curso</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formCurso">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">Nombre del Curso</label>
+                        <input type="text" class="form-control bg-secondary text-light border-0" name="nombre" required
+                            placeholder="Ej: Barbería Profesional">
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label text-muted small">Matrícula (S/)</label>
+                            <input type="number" step="0.01" class="form-control bg-secondary text-light border-0"
+                                name="costo_matricula" placeholder="0.00">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label text-muted small">Mensualidad (S/)</label>
+                            <input type="number" step="0.01" class="form-control bg-secondary text-light border-0"
+                                name="costo_mensualidad" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">Duración (Meses)</label>
+                        <input type="number" class="form-control bg-secondary text-light border-0" name="duracion_meses"
+                            value="1" min="1">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-accent" onclick="guardarCurso()">Guardar Curso</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo Grupo -->
+<div class="modal fade" id="modalNuevoGrupo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-accent">Nuevo Grupo</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formGrupo">
+                    <input type="hidden" name="curso_id" id="hiddenCursoId">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">Código de Grupo</label>
+                        <input type="text" class="form-control bg-secondary text-light border-0" name="codigo_grupo"
+                            required placeholder="Ej: BARBER-2024-I">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">Fecha de Inicio</label>
+                        <input type="date" class="form-control bg-secondary text-light border-0" name="fecha_inicio"
+                            required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="guardarGrupo()">Crear Grupo</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', cargarCursos);
+
+    async function cargarCursos() {
+        const container = document.getElementById('listaCursos');
+        try {
+            const res = await fetch('/school/api/courses');
+            const courses = await res.json();
+
+            container.innerHTML = '';
+
+            if (courses.length === 0) {
+                container.innerHTML = '<div class="col-12 text-center text-muted p-5">No hay cursos registrados.</div>';
+                return;
+            }
+
+            for (const c of courses) {
+                // Fetch groups for this course
+                const resG = await fetch(`/school/api/groups?curso_id=${c.id}`);
+                const groups = await resG.json();
+
+                let groupsHtml = '<ul class="list-group list-group-flush small">';
+                if (groups.length > 0) {
+                    groups.forEach(g => {
+                        groupsHtml += `<li class="list-group-item bg-transparent text-light border-secondary d-flex justify-content-between">
+                            <span>${g.codigo_grupo}</span>
+                            <span class="text-muted text-end">${g.fecha_inicio}</span>
+                        </li>`;
+                    });
+                } else {
+                    groupsHtml += '<li class="list-group-item bg-transparent text-muted small fst-italic">Sin grupos activos</li>';
+                }
+                groupsHtml += '</ul>';
+
+                const card = document.createElement('div');
+                card.className = 'col';
+                card.innerHTML = `
+                    <div class="card bg-dark text-light border-secondary h-100 shadow-sm hover-shadow">
+                        <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                            <h5 class="card-title text-white mb-0">${c.nombre}</h5>
+                            <span class="badge bg-secondary">${c.duracion_meses} Meses</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between mb-3 text-small">
+                                <div><small class="text-muted d-block">Matrícula</small><span class="text-warning fw-bold">S/ ${parseFloat(c.costo_matricula).toFixed(2)}</span></div>
+                                <div><small class="text-muted d-block">Mensualidad</small><span class="text-info fw-bold">S/ ${parseFloat(c.costo_mensualidad).toFixed(2)}</span></div>
+                            </div>
+                            <hr class="border-secondary opacity-25">
+                            <h6 class="text-muted small text-uppercase">Grupos Activos</h6>
+                            ${groupsHtml}
+                        </div>
+                        <div class="card-footer border-secondary bg-transparent text-end">
+                            <button class="btn btn-sm btn-outline-success" onclick="abrirModalGrupo(${c.id})">
+                                <i class="fas fa-plus me-1"></i>Grupo
+                            </button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            }
+
+        } catch (e) {
+            console.error(e);
+            container.innerHTML = '<div class="alert alert-danger">Error cargando cursos</div>';
+        }
+    }
+
+    async function guardarCurso() {
+        const form = document.getElementById('formCurso');
+        const data = Object.fromEntries(new FormData(form));
+
+        try {
+            const res = await fetch('/school/api/courses', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (res.ok) {
+                await Swal.fire('Creado', 'Curso creado correctamente', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('modalNuevoCurso')).hide();
+                form.reset();
+                cargarCursos();
+            } else {
+                const err = await res.json();
+                Swal.fire('Error', err.error, 'error');
+            }
+        } catch (e) { Swal.fire('Error', 'Fallo de red', 'error'); }
+    }
+
+    function abrirModalGrupo(cursoId) {
+        document.getElementById('hiddenCursoId').value = cursoId;
+        document.getElementById('formGrupo').reset();
+        // Set date default today
+        const f = document.querySelector('#formGrupo input[name="fecha_inicio"]');
+        if (f) f.valueAsDate = new Date();
+
+        const modal = new bootstrap.Modal(document.getElementById('modalNuevoGrupo'));
+        modal.show();
+    }
+
+    async function guardarGrupo() {
+        const form = document.getElementById('formGrupo');
+        const data = Object.fromEntries(new FormData(form));
+
+        try {
+            const res = await fetch('/school/api/groups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (res.ok) {
+                await Swal.fire('Creado', 'Grupo creado correctamente', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('modalNuevoGrupo')).hide();
+                cargarCursos();
+            } else {
+                const err = await res.json();
+                Swal.fire('Error', err.error, 'error');
+            }
+        } catch (e) { Swal.fire('Error', 'Fallo de red', 'error'); }
+    }
+</script>
+{% endblock %}
