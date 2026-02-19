@@ -5471,6 +5471,11 @@ def nueva_venta():
             monto_total_bruto = subtotal_servicios + subtotal_productos
             monto_final = monto_total_bruto - descuento_global
 
+            # 🟢 VALIDACIÓN DE MONTO EXACTO (BACKEND)
+            total_pagado = sum(float(p.get('monto', 0)) for p in pagos)
+            if abs(total_pagado - monto_final) > 0.10: # Tolerancia 0.10
+                 raise ValueError(f"El monto pagado (S/ {total_pagado:.2f}) no coincide con el total de la venta (S/ {monto_final:.2f}). Ajuste los pagos.")
+
             cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
             if tipo_comprobante == 'Factura Electrónica':

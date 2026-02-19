@@ -910,6 +910,20 @@
 
         if (pagos.length === 0 && total > 0) { alert('Ingrese el pago'); return; }
 
+        // 🟢 VALIDACIÓN DE MONTO EXACTO (NUEVO)
+        const totalPagado = pagos.reduce((acc, p) => acc + p.monto, 0);
+        const diferencia = Math.abs(total - totalPagado);
+
+        if (diferencia > 0.10) { // Tolerancia de 10 céntimos por redondeos
+            Swal.fire({
+                icon: 'error',
+                title: 'Monto Incorrecto',
+                text: `El monto pagado (S/ ${totalPagado.toFixed(2)}) no coincide con el total de la venta (S/ ${total.toFixed(2)}).`,
+                footer: 'Por favor ajuste los pagos para cubrir exactamente el total.'
+            });
+            return;
+        }
+
         document.getElementById('items_lista_json').value = JSON.stringify(listaItems);
         document.getElementById('pagos_lista_json').value = JSON.stringify(pagos);
         document.getElementById('formVenta').submit();
