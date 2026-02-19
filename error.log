@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "D:\JV_Studio\jv_studio_app\debug_create_tables.py", line 36, in create_tables
+    cur.execute("CREATE TABLE test_table (id SERIAL PRIMARY KEY)")
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.InsufficientPrivilege: permiso denegado al esquema public
+LINE 1: CREATE TABLE test_table (id SERIAL PRIMARY KEY)
+                     ^
+

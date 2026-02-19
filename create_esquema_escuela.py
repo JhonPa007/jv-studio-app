@@ -64,6 +64,9 @@ def create_schema():
                 codigo_grupo VARCHAR(50) NOT NULL UNIQUE,
                 curso_id INTEGER REFERENCES escuela_cursos(id) ON DELETE SET NULL,
                 fecha_inicio DATE,
+                dias_clase VARCHAR(200),
+                hora_inicio TIME,
+                hora_fin TIME,
                 activo BOOLEAN DEFAULT TRUE
             );
         """)

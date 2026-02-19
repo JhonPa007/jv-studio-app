@@ -147,6 +147,9 @@ def create_group():
     codigo = data.get('codigo_grupo')
     curso_id = data.get('curso_id')
     fecha = data.get('fecha_inicio')
+    dias_clase = data.get('dias_clase', '')
+    hora_inicio = data.get('hora_inicio')
+    hora_fin = data.get('hora_fin')
     
     if not codigo or not curso_id:
         return jsonify({'error': 'Faltan datos'}), 400
@@ -155,10 +158,10 @@ def create_group():
     try:
         with db.cursor() as cursor:
             cursor.execute("""
-                INSERT INTO escuela_grupos (codigo_grupo, curso_id, fecha_inicio)
-                VALUES (%s, %s, %s)
+                INSERT INTO escuela_grupos (codigo_grupo, curso_id, fecha_inicio, dias_clase, hora_inicio, hora_fin)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING id
-            """, (codigo, curso_id, fecha))
+            """, (codigo, curso_id, fecha, dias_clase, hora_inicio, hora_fin))
             new_id = cursor.fetchone()[0]
             db.commit()
             return jsonify({'message': 'Grupo creado', 'id': new_id})
