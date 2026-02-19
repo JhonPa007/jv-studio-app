@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS escuela_grupos (
     codigo_grupo VARCHAR(50) NOT NULL UNIQUE,
     curso_id INTEGER REFERENCES escuela_cursos(id) ON DELETE SET NULL,
     fecha_inicio DATE,
+    dias_clase VARCHAR(100),
+    hora_inicio VARCHAR(20),
+    hora_fin VARCHAR(20),
     activo BOOLEAN DEFAULT TRUE
 );
 
