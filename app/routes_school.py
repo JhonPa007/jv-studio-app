@@ -23,6 +23,11 @@ def view_students():
 def view_payments():
     return render_template('school/caja_pagos.html')
 
+@school_bp.route('/courses')
+@login_required
+def view_courses():
+    return render_template('school/gestion_cursos.html')
+
 # ==============================================================================
 # HELPERS
 # ==============================================================================
@@ -107,6 +112,59 @@ def list_groups():
             """)
         grupos = cursor.fetchall()
     return jsonify(grupos)
+
+@school_bp.route('/api/courses', methods=['POST'])
+@login_required
+def create_course():
+    data = request.json
+    nombre = data.get('nombre')
+    matricula = data.get('costo_matricula', 0)
+    mensualidad = data.get('costo_mensualidad', 0)
+    duracion = data.get('duracion_meses', 1)
+    
+    if not nombre:
+        return jsonify({'error': 'Nombre es obligatorio'}), 400
+        
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO escuela_cursos (nombre, costo_matricula, costo_mensualidad, duracion_meses)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            """, (nombre, matricula, mensualidad, duracion))
+            new_id = cursor.fetchone()[0]
+            db.commit()
+            return jsonify({'message': 'Curso creado', 'id': new_id})
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@school_bp.route('/api/groups', methods=['POST'])
+@login_required
+def create_group():
+    data = request.json
+    codigo = data.get('codigo_grupo')
+    curso_id = data.get('curso_id')
+    fecha = data.get('fecha_inicio')
+    
+    if not codigo or not curso_id:
+        return jsonify({'error': 'Faltan datos'}), 400
+        
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO escuela_grupos (codigo_grupo, curso_id, fecha_inicio)
+                VALUES (%s, %s, %s)
+                RETURNING id
+            """, (codigo, curso_id, fecha))
+            new_id = cursor.fetchone()[0]
+            db.commit()
+            return jsonify({'message': 'Grupo creado', 'id': new_id})
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
 
 # ==============================================================================
 # ENDPOINT: REGISTRO DE ALUMNO (NUCLEO)
