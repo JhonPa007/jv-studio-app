@@ -334,6 +334,22 @@
             </li>
             {% endif %}
 
+            <!-- SCHOOL MODULE -->
+            {% if current_user.rol_nombre == 'Administrador' or current_user.rol_nombre == 'Caja' %}
+            <li class="nav-item">
+                <a class="nav-link dropdown-toggle" href="#schoolSubmenu" data-bs-toggle="collapse" role="button"
+                    title="Escuela">
+                    <i class="fas fa-graduation-cap fa-fw me-2"></i> <span class="link-text">Escuela</span>
+                </a>
+                <div class="collapse" id="schoolSubmenu">
+                    <ul class="nav flex-column ms-3">
+                        <li><a class="nav-link small" href="{{ url_for('school.view_students') }}">Alumnos</a></li>
+                        <li><a class="nav-link small" href="{{ url_for('school.view_payments') }}">Caja Escolar</a></li>
+                    </ul>
+                </div>
+            </li>
+            {% endif %}
+
         </ul>
     </nav>
 

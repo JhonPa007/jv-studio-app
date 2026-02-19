@@ -10,6 +10,20 @@ from .db import get_db
 school_bp = Blueprint('school', __name__, url_prefix='/school')
 
 # ==============================================================================
+# VISTAS (HTML)
+# ==============================================================================
+
+@school_bp.route('/students')
+@login_required
+def view_students():
+    return render_template('school/panel_alumno.html')
+
+@school_bp.route('/payments/manage')
+@login_required
+def view_payments():
+    return render_template('school/caja_pagos.html')
+
+# ==============================================================================
 # HELPERS
 # ==============================================================================
 
