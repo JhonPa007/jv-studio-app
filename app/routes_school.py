@@ -257,6 +257,27 @@ def register_student():
         print(f"Error registrando alumno: {e}")
         return jsonify({'error': str(e)}), 500
 
+@school_bp.route('/api/students', methods=['GET'])
+@login_required
+def list_students():
+    db = get_db()
+    try:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Join with courses and groups to get names/codes instead of just IDs
+            cursor.execute("""
+                SELECT a.id, a.codigo_alumno, a.nombres, a.apellidos, a.dni, a.estado,
+                       c.nombre as curso_nombre, g.codigo_grupo
+                FROM escuela_alumnos a
+                LEFT JOIN escuela_cursos c ON a.curso_id = c.id
+                LEFT JOIN escuela_grupos g ON a.grupo_id = g.id
+                ORDER BY a.fecha_inscripcion DESC
+            """)
+            alumnos = cursor.fetchall()
+            return jsonify([dict(a) for a in alumnos])
+    except Exception as e:
+        print(f"Error listing students: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # ==============================================================================
 # ENDPOINT: ESTADO DE CUENTA
 # ==============================================================================

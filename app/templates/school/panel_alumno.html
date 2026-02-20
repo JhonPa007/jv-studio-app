@@ -189,9 +189,49 @@
     // POR AHORA: Simularé con datos vacíos hasta que se busque.
 
     async function cargarAlumnos() {
-        // TODO: Implementar endpoint GET /api/students real.
-        // Por ahora dejo la tabla vacía.
-        document.getElementById('tbodyAlumnos').innerHTML = '<tr><td colspan="6" class="text-center text-muted">Use el buscador o registre un nuevo alumno.</td></tr>';
+        const tbody = document.getElementById('tbodyAlumnos');
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i> Cargando alumnos...</td></tr>';
+
+        try {
+            const res = await fetch('/school/api/students');
+            const alumnos = await res.json();
+
+            if (alumnos.error || alumnos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Aún no hay alumnos registrados.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+            alumnos.forEach(a => {
+                const tr = document.createElement('tr');
+                const nombreCompleto = `${a.nombres || ''} ${a.apellidos || ''}`.trim();
+                const badgeColor = a.estado === 'Activo' ? 'success' : 'secondary';
+
+                // Formatear Curso / Grupo
+                let cursoGrupoInfo = '';
+                if (a.curso_nombre) cursoGrupoInfo += `<span class="badge bg-secondary me-1">${a.curso_nombre}</span>`;
+                if (a.codigo_grupo) cursoGrupoInfo += `<span class="badge bg-primary">${a.codigo_grupo}</span>`;
+
+                tr.innerHTML = `
+                    <td class="align-middle fw-bold text-accent">${a.codigo_alumno || ''}</td>
+                    <td class="align-middle fw-bold">${nombreCompleto}</td>
+                    <td class="align-middle">${a.dni || '-'}</td>
+                    <td class="align-middle">${cursoGrupoInfo}</td>
+                    <td class="align-middle"><span class="badge bg-${badgeColor}">${a.estado || 'Activo'}</span></td>
+                    <td class="align-middle text-end">
+                        <div class="btn-group">
+                            <a href="/school/students/${a.id}/statement" class="btn btn-sm btn-outline-info" title="Estado de Cuenta"><i class="fas fa-file-invoice-dollar"></i></a>
+                            <!-- Agregar más acciones aquí si es necesario -->
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+        } catch (e) {
+            console.error("Error cargando alumnos", e);
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error al cargar datos.</td></tr>';
+        }
     }
 
     async function registrarAlumno() {
