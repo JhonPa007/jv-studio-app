@@ -289,15 +289,16 @@ def search_student():
     db = get_db()
     try:
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # Buscar coincidencia exacta por DNI o Código, o LIKE por nombres/apellidos
+            # Buscar coincidencia exacta por DNI o Código, o LIKE por nombres/apellidos/teléfono
             cursor.execute("""
                 SELECT id 
                 FROM escuela_alumnos 
                 WHERE codigo_alumno ILIKE %s 
                    OR dni = %s 
+                   OR telefono = %s
                    OR (nombres || ' ' || apellidos) ILIKE %s
                 ORDER BY id DESC LIMIT 1
-            """, (f"%{query}%", query, f"%{query}%"))
+            """, (f"%{query}%", query, query, f"%{query}%"))
             result = cursor.fetchone()
             
             if result:
@@ -375,6 +376,17 @@ def register_payment():
     metodo_pago = data.get('metodo_pago', 'Efectivo')
     observaciones = data.get('observaciones', '')
     
+    # Custom Date handling
+    fecha_pago_str = data.get('fecha_pago')
+    if fecha_pago_str:
+        try:
+            # Parse datetime-local format: YYYY-MM-DDTHH:MM
+            fecha_pago_real = datetime.strptime(fecha_pago_str, '%Y-%m-%dT%H:%M')
+        except ValueError:
+            fecha_pago_real = datetime.now()
+    else:
+        fecha_pago_real = datetime.now()
+    
     if not alumno_id or monto <= 0:
         return jsonify({'error': 'Datos inválidos'}), 400
         
@@ -386,10 +398,10 @@ def register_payment():
             
             cursor.execute("""
                 INSERT INTO escuela_pagos 
-                (alumno_id, monto, metodo_pago, codigo_recibo, usuario_id, observaciones)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                (alumno_id, monto, fecha_pago, metodo_pago, codigo_recibo, usuario_id, observaciones)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            """, (alumno_id, monto, metodo_pago, codigo_recibo, current_user.id, observaciones))
+            """, (alumno_id, monto, fecha_pago_real, metodo_pago, codigo_recibo, current_user.id, observaciones))
             pago_id = cursor.fetchone()['id']
             
             # 2. LÓGICA DE CASCADA (WATERFALL)

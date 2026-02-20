@@ -98,6 +98,12 @@
                     </div>
 
                     <div class="mb-3">
+                        <label class="form-label text-muted small">Fecha de Pago</label>
+                        <input type="datetime-local" class="form-control bg-secondary text-light border-0"
+                            id="inputFechaPago" disabled>
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label text-muted small">Método de Pago</label>
                         <select class="form-select bg-secondary text-light border-0" id="selMetodo" disabled>
                             <option value="Efectivo">Efectivo (Soles)</option>
@@ -198,6 +204,13 @@
         document.getElementById('infoAlumno').classList.remove('d-none');
         document.getElementById('inputMonto').disabled = false;
         document.getElementById('selMetodo').disabled = false;
+        document.getElementById('inputFechaPago').disabled = false;
+
+        // Formatear fecha actual para el input datetime-local
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        document.getElementById('inputFechaPago').value = now.toISOString().slice(0, 16);
+
         document.getElementById('txtObs').disabled = false;
         document.getElementById('btnProcesar').disabled = false;
 
@@ -265,6 +278,9 @@
         document.getElementById('tbodyCuotas').innerHTML = '';
         document.getElementById('listaUltimosPagos').innerHTML = '';
         document.getElementById('inputMonto').disabled = true;
+        document.getElementById('selMetodo').disabled = true;
+        document.getElementById('inputFechaPago').disabled = true;
+        document.getElementById('inputFechaPago').value = '';
         document.getElementById('btnProcesar').disabled = true;
     }
 
@@ -293,6 +309,7 @@
                     body: JSON.stringify({
                         alumno_id: ALUMNO_ACTUAL_ID,
                         monto: monto,
+                        fecha_pago: document.getElementById('inputFechaPago').value,
                         metodo_pago: document.getElementById('selMetodo').value,
                         observaciones: document.getElementById('txtObs').value
                     })
