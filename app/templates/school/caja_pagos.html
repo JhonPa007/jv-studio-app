@@ -153,28 +153,24 @@
         const query = document.getElementById('inputBusqueda').value.trim();
         if (!query) return;
 
-        // NOTA: Como no tengo endpoint de búsqueda por DNI, esto es un problema.
-        // Voy a asumir que puedo listar todos y filtrar en cliente (malo para performance pero sirve para prototipo)
-        // O mejor: Agregaré un endpoint pequeño en routes_school.py rápidamente?
-        // NO, usaré el endpoint de lista de alumnos si existiera, pero no existe.
-        // VOy a usar /school/api/students/{id}/statement asumiendo que el usuario mete el ID por ahora.
-        // Para hacerlo bien, debería editar routes_school.py.
-        // FIX: Voy a intentar usar la lista de TODOS los alumnos de una llamada anterior si pudiera, pero no.
-        // DECISIÓN: Implementar búsqueda cruda simulada iterando IDs O pedir al user que meta ID.
-        // CORRECTO: Editaré routes_school una vez más para agregar búsqueda, es lo profesional.
-        // Pero primero termino este archivo. Asumamos que existe: /school/api/student-lookup?q=...
-
         try {
-            // Placeholder: Intentamos buscar directo por ID si es número
-            let idToFetch = query;
+            // 1. Buscar alumno para obtener su ID numérico
+            const searchRes = await fetch(`/school/api/students/search?q=${encodeURIComponent(query)}`);
+            if (!searchRes.ok) {
+                Swal.fire('No encontrado', 'No existe un alumno con ese Código, DNI o Nombre.', 'warning');
+                resetUI();
+                return;
+            }
 
-            // Si no es número, asumimos que necesito buscar (simulado)
-            // En producción: fetch(`/school/api/lookup?q=${query}`)
+            const searchData = await searchRes.json();
+            const idToFetch = searchData.id;
 
-            cargarEstadoCuenta(idToFetch);
+            // 2. Cargar Estado de Cuenta usando el ID numérico
+            await cargarEstadoCuenta(idToFetch);
 
         } catch (e) {
-            Swal.fire('Error', 'No se pudo buscar', 'error');
+            Swal.fire('Error', 'Error de conexión al buscar.', 'error');
+            resetUI();
         }
     }
 

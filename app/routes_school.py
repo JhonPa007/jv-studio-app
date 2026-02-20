@@ -278,6 +278,36 @@ def list_students():
         print(f"Error listing students: {e}")
         return jsonify({'error': str(e)}), 500
 
+@school_bp.route('/api/students/search', methods=['GET'])
+@login_required
+def search_student():
+    """Busca un alumno por código, DNI o Nombres"""
+    query = request.args.get('q', '').strip()
+    if not query:
+        return jsonify({'error': 'Parámetro de búsqueda vacío'}), 400
+        
+    db = get_db()
+    try:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Buscar coincidencia exacta por DNI o Código, o LIKE por nombres/apellidos
+            cursor.execute("""
+                SELECT id 
+                FROM escuela_alumnos 
+                WHERE codigo_alumno ILIKE %s 
+                   OR dni = %s 
+                   OR (nombres || ' ' || apellidos) ILIKE %s
+                ORDER BY id DESC LIMIT 1
+            """, (f"%{query}%", query, f"%{query}%"))
+            result = cursor.fetchone()
+            
+            if result:
+                return jsonify({'id': result['id']})
+            else:
+                return jsonify({'error': 'Alumno no encontrado'}), 404
+    except Exception as e:
+        print(f"Error searching student: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # ==============================================================================
 # ENDPOINT: ESTADO DE CUENTA
 # ==============================================================================
