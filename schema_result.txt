@@ -1,0 +1,4 @@
+ERROR: permiso denegado al esquema public
+LINE 6: CREATE TABLE IF NOT EXISTS escuela_cursos (
+                                   ^
+
