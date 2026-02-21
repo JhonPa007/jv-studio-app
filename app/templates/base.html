@@ -367,7 +367,13 @@
                     <div class="d-none d-md-block text-muted"></div>
 
                     <div class="collapse navbar-collapse">
-                        <ul class="navbar-nav ms-auto align-items-center">
+                        <div class="navbar-nav ms-auto align-items-center">
+
+                            <!-- Botoń de Agente Virtual en Top Nav -->
+                            <a href="/ia/docs" class="btn btn-outline-info btn-sm me-3 d-flex align-items-center"
+                                title="Entrenamiento IA">
+                                <i class="fas fa-robot me-2"></i> Agente Virtual
+                            </a>
 
                             <!-- THEME SWITCHER -->
                             <li class="nav-item dropdown me-2">
@@ -478,9 +484,9 @@
                                 </ul>
                             </li>
                             {% endif %}
-                        </ul>
-                    </div>
-                </div>
+                        </div> <!-- End navbar-nav ms-auto -->
+                    </div> <!-- End collapse navbar-collapse -->
+                </div> <!-- End container-fluid -->
             </nav>
         </header>
 
