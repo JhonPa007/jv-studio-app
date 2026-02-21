@@ -231,12 +231,11 @@ def register_student():
             f_inicio_dt = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
             
             for i in range(1, duracion + 1):
-                # Calcular vencimiento (simple: +30 días por mes, o mismo día del siguiente mes)
-                # Aproximación simple: sumar 30 días * i
-                # Mejor aproximación: Mismo día del mes siguiente
+                # Mensualidad 1 (i=1) se paga junto con la matrícula (mes 0 de diferencia)
+                # Mensualidad 2 (i=2) un mes después, etc.
+                meses_a_sumar = i - 1
                 
-                # Logic to add months
-                mes_venc = f_inicio_dt.month + i
+                mes_venc = f_inicio_dt.month + meses_a_sumar
                 anio_venc = f_inicio_dt.year + (mes_venc - 1) // 12
                 mes_venc = (mes_venc - 1) % 12 + 1
                 dia_venc = min(f_inicio_dt.day, 28) # Simplificación para no romper feb
