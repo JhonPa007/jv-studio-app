@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}Agente Virtual - Base de Conocimiento{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="text-accent fw-bold mb-1"><i class="fas fa-robot me-2"></i>Agente Virtual (N8N)</h2>
+            <p class="text-muted mb-0">Gestiona y exporta la base de datos de conocimiento para tu Asistente Virtual.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- PESTAÑAS (TABS) LADO IZQUIERDO -->
+    <div class="col-md-3">
+        <div class="card bg-dark text-light border-secondary shadow">
+            <div class="card-header border-secondary">
+                <h5 class="mb-0 fs-6"><i class="fas fa-book me-2"></i>Módulos de Entrenamiento</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush rounded-0" id="modulos_list" role="tablist">
+                    <a class="list-group-item list-group-item-action bg-transparent text-light border-secondary list-group-item-accent active"
+                        id="list-reservas-list" data-bs-toggle="list" href="#list-reservas" role="tab"
+                        onclick="cargarModulo('reservas')">
+                        <i class="fas fa-calendar-check fa-fw me-2"></i>Reservas
+                    </a>
+
+                    <a class="list-group-item list-group-item-action bg-transparent text-light border-secondary"
+                        id="list-servicios-list" data-bs-toggle="list" href="#list-servicios" role="tab"
+                        onclick="cargarModulo('servicios')">
+                        <i class="fas fa-cut fa-fw me-2"></i>Servicios Profesionales
+                    </a>
+
+                    <a class="list-group-item list-group-item-action bg-transparent text-light border-secondary"
+                        id="list-productos-list" data-bs-toggle="list" href="#list-productos" role="tab"
+                        onclick="cargarModulo('productos')">
+                        <i class="fas fa-box-open fa-fw me-2"></i>Productos Especializados
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-info bg-dark border-info text-info mt-3 shadow">
+            <h6 class="fw-bold"><i class="fas fa-info-circle me-1"></i> Buenas Prácticas</h6>
+            <ul class="mb-0 small ps-3">
+                <li>Usa textos claros y directos.</li>
+                <li>Emplea formato de **Preguntas y Respuestas**.</li>
+                <li>Define reglas estrictas (Ej: "Mencionar SIEMPRE el pago adelantado").</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- ÁREA DE EDICIÓN LADO DERECHO -->
+    <div class="col-md-9">
+        <div class="card bg-dark text-light h-100 border-secondary shadow">
+            <div class="card-header border-secondary d-flex justify-content-between align-items-center bg-black">
+                <h5 class="mb-0 text-white" id="title_editor">Edición: <span class="text-accent"
+                        id="current_module_label">Reservas</span></h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-danger me-2" onclick="exportarPDF()">
+                        <i class="fas fa-file-pdf me-1"></i> Exportar a PDF (N8N)
+                    </button>
+                    <button class="btn btn-sm btn-success" onclick="guardarCambios()" id="btnGuardar">
+                        <i class="fas fa-save me-1"></i> Guardar Cambios
+                    </button>
+                </div>
+            </div>
+
+            <div class="card-body p-0 d-flex flex-column" style="min-height: 500px;">
+                <!-- El textarea tomará todo el espacio disponible -->
+                <textarea id="editorConocimiento"
+                    class="form-control bg-secondary text-light border-0 w-100 h-100 p-3 rounded-0"
+                    style="resize: none; font-family: 'Courier New', Courier, monospace; min-height: 500px;"
+                    placeholder="Cargando conocimiento neural..."></textarea>
+            </div>
+            <div class="card-footer border-secondary text-muted small py-2 d-flex justify-content-between">
+                <span id="txtModificado">Estado: Sincronizado</span>
+                <span>Usa formato Markdown (## Títulos, - Listas, **Negritas**)</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Div oculto clonado para PDF Export (Limpio para la librería) -->
+<div id="pdfContainer" class="d-none bg-white text-dark p-5" style="width: 800px; font-family: Arial, sans-serif;">
+    <h1 style="color: #000; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
+        Documento de Entrenamiento IA
+    </h1>
+    <h3 style="color: #666;" id="pdfModuloTitle">Modulo: Reservas</h3>
+    <hr>
+    <!-- Se usará la etiqueta 'pre' para conservar el formato del texto pero en PDF -->
+    <pre id="pdfContent"
+        style="font-family: inherit; font-size: 14px; white-space: pre-wrap; word-wrap: break-word;"></pre>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<!-- Librería para generar PDFs desde HTML en el cliente -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+    let MODULO_ACTUAL = 'reservas';
+    const editor = document.getElementById('editorConocimiento');
+
+    // Al cargar la página
+    document.addEventListener("DOMContentLoaded", function () {
+        cargarModulo(MODULO_ACTUAL);
+    });
+
+    // Detectar cambios no guardados
+    editor.addEventListener("input", function () {
+        document.getElementById('txtModificado').innerHTML = '<span class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i> Modificado (Sin guardar)</span>';
+    });
+
+    async function cargarModulo(modulo) {
+        MODULO_ACTUAL = modulo;
+        editor.disabled = true;
+        editor.value = "Cargando datos desde la base de conocimiento...";
+
+        // Actualizar título UI
+        const labelMap = {
+            'reservas': 'Reservas',
+            'servicios': 'Servicios Profesionales',
+            'productos': 'Productos Especializados'
+        };
+        document.getElementById('current_module_label').textContent = labelMap[modulo];
+        document.getElementById('txtModificado').innerHTML = 'Estado: Sincronizado';
+
+        try {
+            const res = await fetch(`/ia/api/docs/${modulo}`);
+            if (res.ok) {
+                const data = await res.json();
+                editor.value = data.content;
+                editor.disabled = false;
+            } else {
+                throw new Error("No se pudo cargar");
+            }
+        } catch (e) {
+            console.error(e);
+            editor.value = "Error conectando con la base de datos. Verifique su conexión.";
+            Swal.fire('Error', 'No se pudo cargar el conocimiento', 'error');
+        }
+    }
+
+    async function guardarCambios() {
+        const btn = document.getElementById('btnGuardar');
+        const contenidoOriginal = btn.innerHTML;
+
+        if (!editor.value.trim()) {
+            Swal.fire('Atención', 'El documento no puede estar vacío.', 'warning');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Guardando...';
+
+        try {
+            const res = await fetch(`/ia/api/docs/${MODULO_ACTUAL}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: editor.value })
+            });
+
+            if (res.ok) {
+                document.getElementById('txtModificado').innerHTML = '<span class="text-success"><i class="fas fa-check-circle me-1"></i> Guardado exitosamente</span>';
+
+                // Pequeño Toast de éxito
+                const Toast = Swal.mixin({
+                    toast: true,
+                    position: "top-end",
+                    showConfirmButton: false,
+                    timer: 2000,
+                    timerProgressBar: true,
+                });
+                Toast.fire({
+                    icon: "success",
+                    title: "Base de conocimiento actualizada"
+                });
+            } else {
+                throw new Error("Error del servidor");
+            }
+        } catch (e) {
+            Swal.fire('Error', 'No se pudieron guardar los cambios', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = contenidoOriginal;
+        }
+    }
+
+    function exportarPDF() {
+        // 1. Preparar el div oculto con los datos actuales
+        const labelMap = {
+            'reservas': 'Reservas',
+            'servicios': 'Servicios Profesionales',
+            'productos': 'Productos Especializados'
+        };
+        document.getElementById('pdfModuloTitle').textContent = `Módulo: ${labelMap[MODULO_ACTUAL]}`;
+        document.getElementById('pdfContent').textContent = editor.value; // Importante usar textContent para sanitize y \n
+
+        // 2. Elemento a renderizar
+        const element = document.getElementById('pdfContainer');
+        element.classList.remove('d-none'); // Mostrar temporalmente (render lo exige a veces)
+
+        // 3. Opciones de PDF
+        const opt = {
+            margin: 15,
+            filename: `IA_Training_${MODULO_ACTUAL.toUpperCase()}_v${new Date().getTime().toString().slice(-4)}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        // 4. Iniciar Toast (procesando)
+        Swal.fire({
+            title: 'Generando Documento...',
+            text: 'Preparando el PDF para la Inteligencia Artificial.',
+            icon: 'info',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+
+        // 5. Ejecutar Render
+        html2pdf().set(opt).from(element).save().then(() => {
+            element.classList.add('d-none'); // Volver a ocultar
+            Swal.fire('PDF Generado', 'El archivo ha sido descargado. Ya puedes subirlo a N8N.', 'success');
+        }).catch(err => {
+            console.error(err);
+            element.classList.add('d-none');
+            Swal.fire('Error', 'Ocurrió un error al generar el PDF.', 'error');
+        });
+    }
+
+</script>
+{% endblock %}
