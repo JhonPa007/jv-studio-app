@@ -79,12 +79,11 @@ Aquí tienes un resumen de nuestros principales servicios. Si el cliente pregunt
 def ver_documentacion():
     return render_template('ia/gestion_conocimiento.html')
 
-@ia_bp.route('/api/docs/<modulo>', methods=['GET'])
+@ia_bp.route('/api/modules', methods=['GET'])
 @login_required
-def obtener_documento(modulo):
+def listar_modulos():
     filepath = get_data_filepath()
     if not os.path.exists(filepath):
-        # Si no existe, crearlo con el contenido por defecto
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(DEFAULT_CONTENT, f, ensure_ascii=False, indent=4)
         data = DEFAULT_CONTENT
@@ -92,8 +91,24 @@ def obtener_documento(modulo):
         with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
             
-    # Asegurarnos que el modulo exista, si no, crearle una entrada vacía
-    content = data.get(modulo, f"# 🤖 Base de Conocimiento - {modulo.capitalize()}\n\nEscribe aquí la documentación para este módulo.")
+    # Return a list of module names (keys)
+    return jsonify({'modulos': list(data.keys())})
+
+@ia_bp.route('/api/docs/<modulo>', methods=['GET'])
+@login_required
+def obtener_documento(modulo):
+    filepath = get_data_filepath()
+    if not os.path.exists(filepath):
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(DEFAULT_CONTENT, f, ensure_ascii=False, indent=4)
+        data = DEFAULT_CONTENT
+    else:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            
+    # Asegurarnos que el modulo exista, si no, devolver una plantilla vacía para que lo edite
+    default_text = f"# 🤖 Base de Conocimiento - {modulo.replace('_', ' ').capitalize()}\n\n## 📌 Reglas de Negocio\n- Escribe aquí las reglas...\n\n## 💬 Preguntas Frecuentes (FAQ)\n**Pregunta:** \n**Respuesta:** "
+    content = data.get(modulo, default_text)
     
     return jsonify({'content': content})
 

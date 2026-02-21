@@ -22,24 +22,14 @@
             </div>
             <div class="card-body p-0">
                 <div class="list-group list-group-flush rounded-0" id="modulos_list" role="tablist">
-                    <a class="list-group-item list-group-item-action bg-transparent text-light border-secondary list-group-item-accent active"
-                        id="list-reservas-list" data-bs-toggle="list" href="#list-reservas" role="tab"
-                        onclick="cargarModulo('reservas')">
-                        <i class="fas fa-calendar-check fa-fw me-2"></i>Reservas
-                    </a>
-
-                    <a class="list-group-item list-group-item-action bg-transparent text-light border-secondary"
-                        id="list-servicios-list" data-bs-toggle="list" href="#list-servicios" role="tab"
-                        onclick="cargarModulo('servicios')">
-                        <i class="fas fa-cut fa-fw me-2"></i>Servicios Profesionales
-                    </a>
-
-                    <a class="list-group-item list-group-item-action bg-transparent text-light border-secondary"
-                        id="list-productos-list" data-bs-toggle="list" href="#list-productos" role="tab"
-                        onclick="cargarModulo('productos')">
-                        <i class="fas fa-box-open fa-fw me-2"></i>Productos Especializados
-                    </a>
+                    <!-- Dinámico vía JS -->
+                    <div class="text-center p-3 text-muted small">Cargando módulos...</div>
                 </div>
+            </div>
+            <div class="card-footer border-secondary p-2 text-center bg-black">
+                <button class="btn btn-outline-warning btn-sm w-100" onclick="crearNuevoModulo()">
+                    <i class="fas fa-plus me-1"></i> Añadir Módulo
+                </button>
             </div>
         </div>
 
@@ -48,7 +38,7 @@
             <ul class="mb-0 small ps-3">
                 <li>Usa textos claros y directos.</li>
                 <li>Emplea formato de **Preguntas y Respuestas**.</li>
-                <li>Define reglas estrictas (Ej: "Mencionar SIEMPRE el pago adelantado").</li>
+                <li>Define reglas estrictas (Ej: "Mencionar SIEMPRE el pago").</li>
             </ul>
         </div>
     </div>
@@ -57,8 +47,8 @@
     <div class="col-md-9">
         <div class="card bg-dark text-light h-100 border-secondary shadow">
             <div class="card-header border-secondary d-flex justify-content-between align-items-center bg-black">
-                <h5 class="mb-0 text-white" id="title_editor">Edición: <span class="text-accent"
-                        id="current_module_label">Reservas</span></h5>
+                <h5 class="mb-0 text-white" id="title_editor">Edición: <span class="text-accent text-capitalize"
+                        id="current_module_label">...</span></h5>
                 <div>
                     <button class="btn btn-sm btn-outline-danger me-2" onclick="exportarPDF()">
                         <i class="fas fa-file-pdf me-1"></i> Exportar a PDF (N8N)
@@ -89,7 +79,7 @@
     <h1 style="color: #000; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
         Documento de Entrenamiento IA
     </h1>
-    <h3 style="color: #666;" id="pdfModuloTitle">Modulo: Reservas</h3>
+    <h3 style="color: #666; text-transform: capitalize;" id="pdfModuloTitle">Modulo: ...</h3>
     <hr>
     <!-- Se usará la etiqueta 'pre' para conservar el formato del texto pero en PDF -->
     <pre id="pdfContent"
@@ -105,12 +95,12 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
-    let MODULO_ACTUAL = 'reservas';
+    let MODULO_ACTUAL = '';
     const editor = document.getElementById('editorConocimiento');
 
     // Al cargar la página
     document.addEventListener("DOMContentLoaded", function () {
-        cargarModulo(MODULO_ACTUAL);
+        refrescarModulos();
     });
 
     // Detectar cambios no guardados
@@ -118,18 +108,84 @@
         document.getElementById('txtModificado').innerHTML = '<span class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i> Modificado (Sin guardar)</span>';
     });
 
+    // Cargar la lista de módulos de la API
+    async function refrescarModulos() {
+        try {
+            const res = await fetch('/ia/api/modules');
+            if (res.ok) {
+                const data = await res.json();
+                renderSidebar(data.modulos);
+                // Si no hay MODULO_ACTUAL, cargar el primero
+                if (data.modulos.length > 0 && !MODULO_ACTUAL) {
+                    cargarModulo(data.modulos[0]);
+                } else if (MODULO_ACTUAL) {
+                    // If MODULO_ACTUAL is set, ensure it's still in the list and re-load it
+                    if (data.modulos.includes(MODULO_ACTUAL)) {
+                        cargarModulo(MODULO_ACTUAL);
+                    } else if (data.modulos.length > 0) {
+                        // If current module was deleted, load the first available
+                        cargarModulo(data.modulos[0]);
+                    } else {
+                        // No modules left
+                        MODULO_ACTUAL = '';
+                        editor.value = "No hay módulos disponibles. Crea uno nuevo.";
+                        editor.disabled = true;
+                        document.getElementById('current_module_label').textContent = '...';
+                    }
+                }
+            } else {
+                throw new Error("No se pudieron cargar los módulos");
+            }
+        } catch (e) {
+            console.error(e);
+            const listDiv = document.getElementById('modulos_list');
+            listDiv.innerHTML = '<div class="text-center p-3 text-danger small">Error al cargar módulos.</div>';
+            editor.value = "Error conectando con la base de datos. Verifique su conexión.";
+            editor.disabled = true;
+            Swal.fire('Error', 'No se pudieron cargar los módulos', 'error');
+        }
+    }
+
+    function renderSidebar(modulos) {
+        const listDiv = document.getElementById('modulos_list');
+        listDiv.innerHTML = '';
+
+        // Iconos comunes si el key coincide, sino icono por defecto
+        const icons = {
+            'reservas': 'fa-calendar-check',
+            'servicios': 'fa-cut',
+            'productos': 'fa-box-open',
+            'default': 'fa-brain'
+        };
+
+        if (modulos.length === 0) {
+            listDiv.innerHTML = '<div class="text-center p-3 text-muted small">No hay módulos. Crea uno nuevo.</div>';
+            return;
+        }
+
+        modulos.forEach(mod => {
+            const iconClass = icons[mod] || icons['default'];
+            const isActive = (mod === MODULO_ACTUAL) ? 'active bg-secondary text-accent list-group-item-accent' : '';
+
+            const a = document.createElement('a');
+            a.className = `list-group-item list-group-item-action bg-transparent text-light border-secondary text-capitalize ${isActive}`;
+            a.href = "javascript:void(0)";
+            a.onclick = () => cargarModulo(mod);
+            a.innerHTML = `<i class="fas ${iconClass} fa-fw me-2"></i>${mod.replace(/_/g, ' ')}`;
+
+            listDiv.appendChild(a);
+        });
+    }
+
     async function cargarModulo(modulo) {
         MODULO_ACTUAL = modulo;
+        // Re-render sidebar to update the "active" visual state
+        refrescarModulos(); // This will also handle setting MODULO_ACTUAL correctly
+
         editor.disabled = true;
         editor.value = "Cargando datos desde la base de conocimiento...";
 
-        // Actualizar título UI
-        const labelMap = {
-            'reservas': 'Reservas',
-            'servicios': 'Servicios Profesionales',
-            'productos': 'Productos Especializados'
-        };
-        document.getElementById('current_module_label').textContent = labelMap[modulo];
+        document.getElementById('current_module_label').textContent = modulo.replace(/_/g, ' ');
         document.getElementById('txtModificado').innerHTML = 'Estado: Sincronizado';
 
         try {
@@ -143,8 +199,50 @@
             }
         } catch (e) {
             console.error(e);
-            editor.value = "Error conectando con la base de datos. Verifique su conexión.";
+            editor.value = "Error conectando con la base de datos.";
             Swal.fire('Error', 'No se pudo cargar el conocimiento', 'error');
+        }
+    }
+
+    // Crear nuevo modulo
+    async function crearNuevoModulo() {
+        const { value: nombreModulo } = await Swal.fire({
+            title: 'Nuevo Módulo de IA',
+            input: 'text',
+            inputLabel: 'Nombre del módulo (Ej: Politicas Empresa)',
+            inputPlaceholder: 'Escribe el nombre aquí',
+            showCancelButton: true,
+            confirmButtonText: 'Crear',
+            cancelButtonText: 'Cancelar',
+            inputValidator: (value) => {
+                if (!value) {
+                    return 'Debes escribir un nombre!'
+                }
+            }
+        });
+
+        if (nombreModulo) {
+            // Convertir "Politicas Empresa" a "politicas_empresa" para la clave API
+            const key = nombreModulo.toLowerCase().replace(/\s+/g, '_');
+            const default_text = `# 🤖 Base de Conocimiento - ${nombreModulo}\n\nEscribe aquí tus reglas.`;
+
+            try {
+                const res = await fetch(`/ia/api/docs/${key}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: default_text })
+                });
+
+                if (res.ok) {
+                    MODULO_ACTUAL = key;
+                    refrescarModulos();
+                    Swal.fire('Creado!', 'Módulo creado exitosamente.', 'success');
+                } else {
+                    throw new Error("Error en servidor");
+                }
+            } catch (e) {
+                Swal.fire('Error', 'No se pudo crear el módulo', 'error');
+            }
         }
     }
 
