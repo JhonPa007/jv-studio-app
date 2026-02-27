@@ -6196,14 +6196,14 @@ def api_reservas_pendientes(cliente_id):
             cursor.execute("""
                 SELECT 
                     r.id,
-                    TO_CHAR(r.fecha_reserva, 'DD/MM/YYYY') as fecha_corta,
-                    TO_CHAR(r.hora_reserva, 'HH24:MI') as hora,
+                    TO_CHAR(r.fecha_hora_inicio, 'DD/MM/YYYY') as fecha_corta,
+                    TO_CHAR(r.fecha_hora_inicio, 'HH24:MI') as hora,
                     s.nombre as servicio
                 FROM reservas r
                 LEFT JOIN servicios s ON r.servicio_id = s.id
                 WHERE r.cliente_id = %s 
                   AND r.estado IN ('Programada', 'Confirmada')
-                ORDER BY r.fecha_reserva DESC, r.hora_reserva DESC
+                ORDER BY r.fecha_hora_inicio DESC
             """, (cliente_id,))
             reservas = cursor.fetchall()
             return jsonify({'success': True, 'reservas': reservas})
