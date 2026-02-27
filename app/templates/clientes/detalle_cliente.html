@@ -4,13 +4,148 @@
 
 {% block head_extra %}
 <style>
-    .info-card { background-color: #3a3a3a; padding: 20px; border-radius: 8px; }
-    .info-card dt { font-weight: bold; color: var(--color-secundario-gris); }
-    .info-card dd { margin-bottom: .5rem; color: #f8f9fa; }
-    .timeline { list-style: none; padding: 0; position: relative; }
-    .timeline:before { content: ''; position: absolute; top: 0; bottom: 0; width: 4px; background: #4f4f4f; left: 20px; margin-left: -2px; }
-    .timeline-item { position: relative; margin-bottom: 20px; padding-left: 40px; }
-    .timeline-icon { position: absolute; left: 20px; top: 0; width: 24px; height: 24px; line-height: 24px; text-align: center; color: white; background-color: var(--color-acento-dorado); border-radius: 50%; margin-left: -12px; }
+    .info-card {
+        background-color: #3a3a3a;
+        padding: 20px;
+        border-radius: 8px;
+    }
+
+    .info-card dt {
+        font-weight: bold;
+        color: var(--color-secundario-gris);
+    }
+
+    .info-card dd {
+        margin-bottom: .5rem;
+        color: #f8f9fa;
+    }
+
+    .timeline {
+        list-style: none;
+        padding: 0;
+        position: relative;
+    }
+
+    .timeline:before {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: #4f4f4f;
+        left: 20px;
+        margin-left: -2px;
+    }
+
+    .timeline-item {
+        position: relative;
+        margin-bottom: 20px;
+        padding-left: 40px;
+    }
+
+    .timeline-icon {
+        position: absolute;
+        left: 20px;
+        top: 0;
+        width: 24px;
+        height: 24px;
+        line-height: 24px;
+        text-align: center;
+        color: white;
+        background-color: var(--color-acento-dorado);
+        border-radius: 50%;
+        margin-left: -12px;
+    }
+
+    /* Estilos adiciones para Historial Clínico (Timeline Nuevo) */
+    .timeline-cl {
+        position: relative;
+        padding-left: 30px;
+        margin-top: 20px;
+    }
+
+    .timeline-cl::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 15px;
+        height: 100%;
+        width: 2px;
+        background: var(--color-secundario-gris);
+    }
+
+    .timeline-item-cl {
+        position: relative;
+        margin-bottom: 30px;
+    }
+
+    .timeline-icon-cl {
+        position: absolute;
+        left: -38px;
+        top: 0;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background-color: var(--color-acento-dorado);
+        color: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        z-index: 1;
+        box-shadow: 0 0 0 4px #2c2c2c;
+    }
+
+    .timeline-content-cl {
+        background-color: #333;
+        border-radius: 8px;
+        padding: 20px;
+        border-left: 3px solid var(--color-acento-dorado);
+    }
+
+    .timeline-gallery img {
+        width: 100px;
+        height: 100px;
+        object-fit: cover;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: transform 0.2s;
+        border: 2px solid #555;
+    }
+
+    .timeline-gallery img:hover {
+        transform: scale(1.05);
+        border-color: var(--color-acento-dorado);
+    }
+
+    /* Upload Box */
+    .photo-upload-box {
+        width: 100px;
+        height: 100px;
+        border: 2px dashed #666;
+        border-radius: 8px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        background-color: #222;
+        transition: all 0.3s;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .photo-upload-box img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 4px;
+    }
+
+    .photo-upload-box:hover {
+        border-color: var(--color-acento-dorado);
+        background-color: #333;
+    }
 </style>
 {% endblock %}
 
@@ -19,74 +154,409 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-user-tag me-2"></i>Ficha de Cliente</h2>
-            <p class="text-muted mb-0"><strong>{{ cliente.razon_social_nombres }} {{ cliente.apellidos or '' }}</strong></p>
+            <p class="text-muted mb-0"><strong>{{ cliente.razon_social_nombres }} {{ cliente.apellidos or '' }}</strong>
+            </p>
         </div>
         <div>
-            <a href="{{ url_for('main.listar_clientes') }}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>Volver a la Lista</a>
-            <a href="{{ url_for('main.editar_cliente', cliente_id=cliente.id) }}" class="btn btn-warning ms-2"><i class="fas fa-edit me-1"></i>Editar Cliente</a>
+            <a href="{{ url_for('main.listar_clientes') }}" class="btn btn-outline-secondary"><i
+                    class="fas fa-arrow-left me-1"></i>Volver a la Lista</a>
+            <a href="{{ url_for('main.editar_cliente', cliente_id=cliente.id) }}" class="btn btn-warning ms-2"><i
+                    class="fas fa-edit me-1"></i>Editar Cliente</a>
         </div>
     </div>
 
-   
+    <!-- Navegación por Pestañas -->
+    <ul class="nav nav-tabs custom-tabs mb-4" id="clienteTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="datos-tab" data-bs-toggle="tab" data-bs-target="#datos" type="button"
+                role="tab" aria-controls="datos" aria-selected="true">
+                <i class="fas fa-id-card me-2"></i>Datos Personales
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="historial-cl-tab" data-bs-toggle="tab" data-bs-target="#historial-cl"
+                type="button" role="tab" aria-controls="historial-cl" aria-selected="false">
+                <i class="fas fa-camera-retro me-2"></i>Historial Clínico/Fotográfico
+            </button>
+        </li>
+    </ul>
 
-    <div class="row">
-        <div class="col-lg-4 mb-4">
-            <div class="info-card">
-                <h4><i class="fas fa-id-card me-2"></i>Información de Contacto</h4>
-                <hr>
-                <dl>
-                    <dt>Documento:</dt>
-                    <dd>{{ cliente.tipo_documento or 'N/A' }} - {{ cliente.numero_documento or 'No registrado' }}</dd>
-                    <dt>Teléfono:</dt>
-                    <dd>{{ cliente.telefono or '-' }}</dd>
-                    <dt>Email:</dt>
-                    <dd>{{ cliente.email or '-' }}</dd>
-                    <dt>Dirección:</dt>
-                    <dd>{{ cliente.direccion or '-' }}</dd>
-                    <dt>Fecha de Nacimiento:</dt>
-                    <dd>{{ cliente.fecha_nacimiento.strftime('%d de %B') if cliente.fecha_nacimiento else '-' }}</dd>
-                </dl>
+    <!-- Contenido de las Pestañas -->
+    <div class="tab-content" id="clienteTabsContent">
 
-                <h4 class="mt-4"><i class="fas fa-star me-2"></i>Fidelización</h4>
-                <hr>
-                <dl>
-                    <dt>JV Puntos:</dt>
-                    <dd>{{ cliente.puntos_fidelidad or 0 }} Puntos</dd>
-                    <dt>Membresías:</dt>
-                    {% for m in historial_membresias %}
-                        <dd>{{ m.plan_nombre }} (Vence: {{ m.fecha_fin.strftime('%d/%m/%Y') }})</dd>
-                    {% else %}
-                        <dd>Sin membresías activas.</dd>
-                    {% endfor %}
-                </dl>
+        <!-- Pestaña 1: Datos Personales (Original) -->
+        <div class="tab-pane fade show active" id="datos" role="tabpanel" aria-labelledby="datos-tab">
+            <div class="row">
+                <div class="col-lg-4 mb-4">
+                    <div class="info-card">
+                        <h4><i class="fas fa-id-card me-2"></i>Información de Contacto</h4>
+                        <hr>
+                        <dl>
+                            <dt>Documento:</dt>
+                            <dd>{{ cliente.tipo_documento or 'N/A' }} - {{ cliente.numero_documento or 'No registrado'
+                                }}</dd>
+                            <dt>Teléfono:</dt>
+                            <dd>{{ cliente.telefono or '-' }}</dd>
+                            <dt>Email:</dt>
+                            <dd>{{ cliente.email or '-' }}</dd>
+                            <dt>Dirección:</dt>
+                            <dd>{{ cliente.direccion or '-' }}</dd>
+                            <dt>Fecha de Nacimiento:</dt>
+                            <dd>{{ cliente.fecha_nacimiento.strftime('%d de %B') if cliente.fecha_nacimiento else '-' }}
+                            </dd>
+                        </dl>
+
+                        <h4 class="mt-4"><i class="fas fa-star me-2"></i>Fidelización</h4>
+                        <hr>
+                        <dl>
+                            <dt>JV Puntos:</dt>
+                            <dd>{{ cliente.puntos_fidelidad or 0 }} Puntos</dd>
+                            <dt>Membresías:</dt>
+                            {% for m in historial_membresias %}
+                            <dd>{{ m.plan_nombre }} (Vence: {{ m.fecha_fin.strftime('%d/%m/%Y') }})</dd>
+                            {% else %}
+                            <dd>Sin membresías activas.</dd>
+                            {% endfor %}
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="col-lg-8">
+                    <div class="info-card">
+                        <h4><i class="fas fa-history me-2"></i>Historial de Visitas</h4>
+                        <hr>
+                        <ul class="timeline">
+                            {% for venta in historial_ventas %}
+                            <li class="timeline-item">
+                                <div class="timeline-icon"><i class="fas fa-shopping-cart"></i></div>
+                                <div class="card bg-dark">
+                                    <div class="card-header d-flex justify-content-between">
+                                        <strong>Venta #{{ venta.id }}</strong>
+                                        <small>{{ venta.fecha_venta.strftime('%d/%m/%Y a las %H:%M') }}</small>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="mb-1"><strong class="text-muted">Atendido por:</strong> {{
+                                            venta.colaborador_nombre }}</p>
+                                        <a href="{{ url_for('main.ver_detalle_venta', venta_id=venta.id) }}"
+                                            class="btn btn-outline-info btn-sm mt-2">Ver Detalle Completo</a>
+                                    </div>
+                                </div>
+                            </li>
+                            {% else %}
+                            <p class="text-muted fst-italic">Este cliente aún no tiene un historial de visitas.</p>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="col-lg-8">
-            <div class="info-card">
-                <h4><i class="fas fa-history me-2"></i>Historial de Visitas</h4>
-                <hr>
-                <ul class="timeline">
-                    {% for venta in historial_ventas %}
-                    <li class="timeline-item">
-                        <div class="timeline-icon"><i class="fas fa-shopping-cart"></i></div>
-                        <div class="card bg-dark">
-                            <div class="card-header d-flex justify-content-between">
-                                <strong>Venta #{{ venta.id }}</strong>
-                                <small>{{ venta.fecha_venta.strftime('%d/%m/%Y a las %H:%M') }}</small>
-                            </div>
-                            <div class="card-body">
-                                <p class="mb-1"><strong class="text-muted">Atendido por:</strong> {{ venta.colaborador_nombre }}</p>
-                                <a href="{{ url_for('main.ver_detalle_venta', venta_id=venta.id) }}" class="btn btn-outline-info btn-sm mt-2">Ver Detalle Completo</a>
-                            </div>
-                        </div>
-                    </li>
-                    {% else %}
-                    <p class="text-muted fst-italic">Este cliente aún no tiene un historial de visitas.</p>
-                    {% endfor %}
-                </ul>
+        <!-- Pestaña 2: Historial Clínico (Timeline Nuevo) -->
+        <div class="tab-pane fade" id="historial-cl" role="tabpanel" aria-labelledby="historial-cl-tab">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="text-white m-0">Registro Fotográfico y Clínico</h4>
+                <button type="button" class="btn btn-success" data-bs-toggle="modal"
+                    data-bs-target="#modalNuevoHistorial">
+                    <i class="fas fa-plus me-1"></i> Agregar Registro
+                </button>
+            </div>
+
+            <div id="timeline-container" class="position-relative mt-4">
+                <div class="text-center text-muted" id="timeline-loading">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div> Cargando historial...
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Modal para Agregar Nuevo Registro al Historial -->
+<div class="modal fade" id="modalNuevoHistorial" tabindex="-1" aria-labelledby="modalNuevoHistorialLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background-color: #2c2c2c; color: white;">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title text-warning" id="modalNuevoHistorialLabel">
+                    <i class="fas fa-file-medical me-2"></i>Nuevo Registro Clínico/Fotográfico
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formNuevoHistorial" enctype="multipart/form-data">
+                    <input type="hidden" id="historial_cliente_id" value="{{ cliente.id }}">
+
+                    <div class="row mb-3">
+                        <div class="col-md-6 form-group">
+                            <label>Fecha y Hora <span class="text-danger">*</span></label>
+                            <input type="datetime-local" class="form-control bg-dark text-white border-secondary"
+                                id="historial_fecha" name="fecha" required>
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label>Profesional (Opcional)</label>
+                            <select class="form-select bg-dark text-white border-secondary" id="historial_empleado"
+                                name="empleado_id">
+                                <option value="">Seleccione Profesional...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 form-group">
+                        <label>Servicios Realizados / Tratamiento <span class="text-danger">*</span></label>
+                        <textarea class="form-control bg-dark text-white border-secondary" id="historial_servicios"
+                            name="servicios_realizados" rows="2" placeholder="Ej: Balayage, Tratamiento capilar..."
+                            required></textarea>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6 form-group">
+                            <label>Monto Cobrado (S/)</label>
+                            <input type="number" step="0.01" class="form-control bg-dark text-white border-secondary"
+                                id="historial_monto" name="monto_pagado" value="0.00">
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label>Notas Adicionales / Fórmulas</label>
+                            <input type="text" class="form-control bg-dark text-white border-secondary"
+                                id="historial_notas" name="notas" placeholder="Ej: Tinte marca X, volumen Y">
+                        </div>
+                    </div>
+
+                    <hr class="border-secondary my-4">
+                    <h6 class="text-info mb-3"><i class="fas fa-camera me-2"></i>Evidencias Fotográficas (Opcional)</h6>
+
+                    <div class="row">
+                        <div class="col-md-3 text-center mb-3">
+                            <label class="d-block mb-1 small text-muted">Frente</label>
+                            <div class="photo-upload-box" onclick="document.getElementById('foto_frente').click()">
+                                <img id="preview_frente" src="" style="display:none;">
+                                <i class="fas fa-plus fa-2x text-secondary" id="icon_frente"></i>
+                            </div>
+                            <input type="file" id="foto_frente" name="foto_frente" accept="image/*" class="d-none"
+                                onchange="previewImage(this, 'preview_frente', 'icon_frente')">
+                        </div>
+                        <div class="col-md-3 text-center mb-3">
+                            <label class="d-block mb-1 small text-muted">Lateral Izquierdo</label>
+                            <div class="photo-upload-box" onclick="document.getElementById('foto_izq').click()">
+                                <img id="preview_izq" src="" style="display:none;">
+                                <i class="fas fa-plus fa-2x text-secondary" id="icon_izq"></i>
+                            </div>
+                            <input type="file" id="foto_izq" name="foto_lateral_izq" accept="image/*" class="d-none"
+                                onchange="previewImage(this, 'preview_izq', 'icon_izq')">
+                        </div>
+                        <div class="col-md-3 text-center mb-3">
+                            <label class="d-block mb-1 small text-muted">Lateral Derecho</label>
+                            <div class="photo-upload-box" onclick="document.getElementById('foto_der').click()">
+                                <img id="preview_der" src="" style="display:none;">
+                                <i class="fas fa-plus fa-2x text-secondary" id="icon_der"></i>
+                            </div>
+                            <input type="file" id="foto_der" name="foto_lateral_der" accept="image/*" class="d-none"
+                                onchange="previewImage(this, 'preview_der', 'icon_der')">
+                        </div>
+                        <div class="col-md-3 text-center mb-3">
+                            <label class="d-block mb-1 small text-muted">Atrás / Posterior</label>
+                            <div class="photo-upload-box" onclick="document.getElementById('foto_atras').click()">
+                                <img id="preview_atras" src="" style="display:none;">
+                                <i class="fas fa-plus fa-2x text-secondary" id="icon_atras"></i>
+                            </div>
+                            <input type="file" id="foto_atras" name="foto_atras" accept="image/*" class="d-none"
+                                onchange="previewImage(this, 'preview_atras', 'icon_atras')">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-top-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning fw-bold" id="btnGuardarHistorial"
+                    onclick="guardarHistorial()">
+                    <i class="fas fa-save me-1"></i> Guardar Registro
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    const elId = document.getElementById('historial_cliente_id');
+    const clienteId = elId ? elId.value : null;
+
+    document.addEventListener("DOMContentLoaded", function () {
+        if (clienteId) {
+            // Cargar empleados para el Select
+            fetch("{{ url_for('main.api_agenda_dia_data') }}")
+                .then(res => res.json())
+                .then(data => {
+                    const select = document.getElementById('historial_empleado');
+                    if (data.resources && data.resources.length > 0) {
+                        data.resources.forEach(emp => {
+                            let opt = document.createElement('option');
+                            opt.value = emp.id;
+                            opt.textContent = emp.title;
+                            select.appendChild(opt);
+                        });
+                    }
+                }).catch(e => console.error("Error cargando empleados:", e));
+
+            // Cargar historial al iniciar
+            cargarHistorial();
+        }
+    });
+
+    // Función para manejar la previsualización de imágenes seleccionadas
+    function previewImage(input, imgId, iconId) {
+        if (input.files && input.files[0]) {
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                document.getElementById(imgId).src = e.target.result;
+                document.getElementById(imgId).style.display = 'block';
+                document.getElementById(iconId).style.display = 'none';
+            }
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    // Cargar Historial
+    function cargarHistorial() {
+        const container = document.getElementById("timeline-container");
+
+        // Petición al endpoint
+        fetch(`/clientes/historial/${clienteId}`)
+            .then(res => res.json())
+            .then(data => {
+                const loader = document.getElementById("timeline-loading");
+                if (loader) loader.style.display = "none";
+
+                if (!data.success) {
+                    container.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+                    return;
+                }
+
+                if (data.historial.length === 0) {
+                    container.innerHTML = `<div class="text-center text-muted p-4 border border-secondary rounded border-dashed">
+                        <i class="fas fa-history fa-3x mb-3 text-secondary"></i><br>
+                        Aún no hay registros clínicos ni fotografías para este cliente.
+                    </div>`;
+                    return;
+                }
+
+                // Generar Timeline HTML
+                let html = `<div class="timeline-cl">`;
+
+                data.historial.forEach(item => {
+                    const empleado = item.empleado_id ? item.empleado_nombre : 'Profesional sin registrar';
+                    const montoFormat = parseFloat(item.monto_pagado).toFixed(2);
+
+                    // Solo renderizar las imágenes que existan
+                    let galleryHtml = '';
+                    const fotos = [
+                        { url: item.foto_frente, label: 'Frente' },
+                        { url: item.foto_lateral_izq, label: 'Lateral Izq.' },
+                        { url: item.foto_lateral_der, label: 'Lateral Der.' },
+                        { url: item.foto_atras, label: 'Atrás' }
+                    ];
+
+                    fotos.forEach(foto => {
+                        if (foto.url) {
+                            galleryHtml += `<img src="${foto.url}" title="${foto.label}" alt="${foto.label}" onclick="window.open(this.src, '_blank')" class="me-2 mb-2 img-thumbnail bg-dark border-secondary">`;
+                        }
+                    });
+
+                    if (galleryHtml !== '') {
+                        galleryHtml = `<div class="timeline-gallery mt-3">${galleryHtml}</div>`;
+                    }
+
+                    html += `
+                        <div class="timeline-item-cl">
+                            <div class="timeline-icon-cl"><i class="fas fa-cut"></i></div>
+                            <div class="timeline-content-cl">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h5 class="text-warning m-0">${item.fecha_corta} - S/ ${montoFormat}</h5>
+                                    <small class="text-muted"><i class="fas fa-clock me-1"></i>${item.fecha_str.split(' ')[1]}</small>
+                                </div>
+                                
+                                <p class="mb-1 text-white"><i class="fas fa-concierge-bell me-2 text-secondary"></i><strong>Servicios:</strong> ${item.servicios_realizados}</p>
+                                <p class="mb-2 text-white"><i class="fas fa-user-tie me-2 text-secondary"></i><strong>Atendido por:</strong> ${empleado}</p>
+                                
+                                ${item.notas ? `<p class="mb-0 text-info small"><i class="fas fa-sticky-note me-1"></i>Notas: ${item.notas}</p>` : ''}
+                                
+                                ${galleryHtml}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `</div>`;
+                container.innerHTML = html;
+            })
+            .catch(e => {
+                const loader = document.getElementById("timeline-loading");
+                if (loader) loader.innerHTML = "Error cargando datos.";
+                console.error("Error", e);
+            });
+    }
+
+    // Enviar Historial (Guardar)
+    function guardarHistorial() {
+        const form = document.getElementById('formNuevoHistorial');
+
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        const btn = document.getElementById('btnGuardarHistorial');
+        const defaultText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Subiendo y Guardando...`;
+
+        const formData = new FormData(form);
+
+        fetch(`/clientes/historial/${clienteId}`, {
+            method: 'POST',
+            body: formData
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Cerrar Modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoHistorial'));
+                    modal.hide();
+
+                    // Limpiar formulario y fotos
+                    form.reset();
+                    ['frente', 'izq', 'der', 'atras'].forEach(id => {
+                        document.getElementById(`preview_${id}`).style.display = 'none';
+                        document.getElementById(`preview_${id}`).src = '';
+                        document.getElementById(`icon_${id}`).style.display = 'block';
+                    });
+
+                    // Alerta bonita
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Registrado!',
+                        text: 'El historial y las fotos han sido guardadas.',
+                        background: '#2c2c2c',
+                        color: '#fff',
+                        confirmButtonColor: '#ffc107'
+                    });
+
+                    // Recargar Linea de tiempo
+                    document.getElementById("timeline-container").innerHTML = `<div class="text-center text-muted"><div class="spinner-border spinner-border-sm" role="status"></div></div>`;
+                    cargarHistorial();
+                } else {
+                    Swal.fire('Error', data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire('Error', 'Hubo un problema de conexión al guardar el registro.', 'error');
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = defaultText;
+            });
+    }
+</script>
 {% endblock %}
