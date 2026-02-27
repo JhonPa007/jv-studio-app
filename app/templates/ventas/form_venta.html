@@ -317,6 +317,8 @@
 
             <input type="hidden" name="items_lista" id="items_lista_json">
             <input type="hidden" name="pagos_lista" id="pagos_lista_json">
+            <!-- NUEVO: Campo para guardar la reserva vinculada al crear la venta -->
+            <input type="hidden" name="reserva_id" id="reserva_id_form" value="">
     </form>
 </div>
 
@@ -421,6 +423,11 @@
         // 🟢 AUTOMATIZACIÓN: Si hay datos pre-cargados (Desde Agenda)
         if (datosPreCargados) {
             console.log("Cargando datos de reserva:", datosPreCargados);
+
+            // 0. Capturar ID Reserva (NUEVO)
+            if (datosPreCargados.reserva_id) {
+                document.getElementById('reserva_id_form').value = datosPreCargados.reserva_id;
+            }
 
             // 1. Seleccionar Cliente
             if (datosPreCargados.cliente_id) {

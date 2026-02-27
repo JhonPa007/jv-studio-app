@@ -4,16 +4,32 @@
 
 {% block head_extra %}
 <style>
-    .info-card { background-color: #3a3a3a; padding: 20px; border-radius: 8px; }
-    .info-card dt { font-weight: bold; color: var(--color-secundario-gris); }
-    .info-card dd { margin-bottom: .5rem; color: #f8f9fa; }
-    .items-table th { color: var(--color-acento-dorado); }
-    
+    .info-card {
+        background-color: #3a3a3a;
+        padding: 20px;
+        border-radius: 8px;
+    }
+
+    .info-card dt {
+        font-weight: bold;
+        color: var(--color-secundario-gris);
+    }
+
+    .info-card dd {
+        margin-bottom: .5rem;
+        color: #f8f9fa;
+    }
+
+    .items-table th {
+        color: var(--color-acento-dorado);
+    }
+
     /* Estilos para el Modal Oscuro */
     .modal-content.bg-dark {
         border: 1px solid var(--color-acento-dorado);
         color: #fff;
     }
+
     .btn-print-option {
         width: 100%;
         margin-bottom: 10px;
@@ -25,11 +41,13 @@
         color: #fff;
         transition: all 0.2s;
     }
+
     .btn-print-option:hover {
         background-color: #444;
         border-color: var(--color-acento-dorado);
         color: var(--color-acento-dorado);
     }
+
     .btn-print-option i {
         font-size: 1.5rem;
         margin-right: 15px;
@@ -43,49 +61,59 @@
 <div class="container-fluid mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
         <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-file-invoice me-2"></i>{{ titulo_pagina }}</h2>
-        
+
         <div class="ms-auto">
             <a href="{{ url_for('main.listar_ventas') }}" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-arrow-left me-1"></i>Volver
             </a>
-            
-            <button type="button" class="btn btn-warning btn-sm ms-2 fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#modalImpresion">
+
+            <button type="button" class="btn btn-warning btn-sm ms-2 fw-bold text-dark" data-bs-toggle="modal"
+                data-bs-target="#modalImpresion">
                 <i class="fas fa-print me-1"></i> Imprimir
             </button>
-            
+
             {# --- Lógica de botones de SUNAT --- #}
             {% if venta.tipo_comprobante != 'Nota de Venta' %}
-                
-                <a href="{{ url_for('main.generar_xml_venta', venta_id=venta.id) }}" class="btn btn-outline-info btn-sm ms-2">
-                    <i class="fas fa-code me-1"></i> XML
-                </a>
 
-                {% if venta.estado_sunat == 'Aceptada' %}
-                    <a href="{{ url_for('main.descargar_cdr', venta_id=venta.id) }}" class="btn btn-info btn-sm ms-2 text-white">
-                        <i class="fas fa-download me-1"></i> Descargar CDR
-                    </a>
-                {% else %}
-                    <form class="d-inline" method="POST" action="{{ url_for('main.enviar_sunat', venta_id=venta.id) }}" onsubmit="return confirm('¿Confirmas el envío a SUNAT?');">
-                        <button type="submit" class="btn btn-primary btn-sm ms-2">
-                            <i class="fas fa-paper-plane me-1"></i> Enviar a SUNAT
-                        </button>
-                    </form>
-                {% endif %}
+            <a href="{{ url_for('main.generar_xml_venta', venta_id=venta.id) }}"
+                class="btn btn-outline-info btn-sm ms-2">
+                <i class="fas fa-code me-1"></i> XML
+            </a>
 
-                <!-- Botón de Consulta de Estado Siempre Disponible para verificar -->
-                <form class="d-inline" method="POST" action="{{ url_for('main.consultar_estado_sunat', venta_id=venta.id) }}">
-                    <button type="submit" class="btn btn-outline-light btn-sm ms-2" title="Consultar estado actual en SUNAT">
-                        <i class="fas fa-sync-alt"></i> Estado
-                    </button>
-                </form>
+            {% if venta.estado_sunat == 'Aceptada' %}
+            <a href="{{ url_for('main.descargar_cdr', venta_id=venta.id) }}"
+                class="btn btn-info btn-sm ms-2 text-white">
+                <i class="fas fa-download me-1"></i> Descargar CDR
+            </a>
+            {% else %}
+            <form class="d-inline" method="POST" action="{{ url_for('main.enviar_sunat', venta_id=venta.id) }}"
+                onsubmit="return confirm('¿Confirmas el envío a SUNAT?');">
+                <button type="submit" class="btn btn-primary btn-sm ms-2">
+                    <i class="fas fa-paper-plane me-1"></i> Enviar a SUNAT
+                </button>
+            </form>
+            {% endif %}
+
+            <!-- Botón de Consulta de Estado Siempre Disponible para verificar -->
+            <form class="d-inline" method="POST"
+                action="{{ url_for('main.consultar_estado_sunat', venta_id=venta.id) }}">
+                <button type="submit" class="btn btn-outline-light btn-sm ms-2"
+                    title="Consultar estado actual en SUNAT">
+                    <i class="fas fa-sync-alt"></i> Estado
+                </button>
+            </form>
 
             {% endif %}
-            
+
             {% if venta.estado_pago != 'Anulado' %}
-                <a href="{{ url_for('main.editar_venta', venta_id=venta.id) }}" class="btn btn-secondary btn-sm ms-2">
-                    <i class="fas fa-edit me-1"></i> Editar
-                </a>
-                {% endif %}
+            <button type="button" class="btn btn-outline-warning btn-sm ms-2" data-bs-toggle="modal"
+                data-bs-target="#modalVincularReserva">
+                <i class="fas fa-link me-1"></i> Vincular Reserva
+            </button>
+            <a href="{{ url_for('main.editar_venta', venta_id=venta.id) }}" class="btn btn-secondary btn-sm ms-2">
+                <i class="fas fa-edit me-1"></i> Editar
+            </a>
+            {% endif %}
         </div>
     </div>
 
@@ -97,14 +125,14 @@
                 <dl class="row">
                     <dt class="col-sm-4">Comprobante:</dt>
                     <dd class="col-sm-8">
-                        {{ venta.tipo_comprobante or 'N/A' }} - 
+                        {{ venta.tipo_comprobante or 'N/A' }} -
                         <strong>{{ venta.serie_comprobante }}-{{ venta.numero_comprobante }}</strong>
                     </dd>
 
                     <dt class="col-sm-4">Fecha:</dt>
                     <dd class="col-sm-8">
                         {% if venta.fecha_venta %}
-                            {{ venta.fecha_venta.strftime('%d/%m/%Y %H:%M') }}
+                        {{ venta.fecha_venta.strftime('%d/%m/%Y %H:%M') }}
                         {% else %} - {% endif %}
                     </dd>
 
@@ -115,20 +143,21 @@
                     <dd class="col-sm-8">{{ venta.empleado_nombre or venta.colaborador_nombre }}</dd>
 
                     <dt class="col-sm-4">Cliente Atendido:</dt>
-                    <dd class="col-sm-8">{{ venta.cliente_nombre or venta.cliente_receptor_nombre or 'Cliente Varios' }}</dd>
+                    <dd class="col-sm-8">{{ venta.cliente_nombre or venta.cliente_receptor_nombre or 'Cliente Varios' }}
+                    </dd>
 
                     <dt class="col-sm-4">Estado SUNAT:</dt>
                     <dd class="col-sm-8">
                         {% if venta.tipo_comprobante == 'Nota de Venta' %}
-                            <span class="badge bg-secondary">INTERNO</span>
+                        <span class="badge bg-secondary">INTERNO</span>
                         {% else %}
-                             {% if venta.estado_sunat == 'Aceptada' %}
-                                <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Aceptada</span>
-                            {% elif 'Rechazada' in (venta.estado_sunat or '') %}
-                                <span class="badge bg-danger"><i class="fas fa-times-circle me-1"></i> Rechazada</span>
-                            {% else %}
-                                <span class="badge bg-warning text-dark">Por Enviar</span>
-                            {% endif %}
+                        {% if venta.estado_sunat == 'Aceptada' %}
+                        <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Aceptada</span>
+                        {% elif 'Rechazada' in (venta.estado_sunat or '') %}
+                        <span class="badge bg-danger"><i class="fas fa-times-circle me-1"></i> Rechazada</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">Por Enviar</span>
+                        {% endif %}
                         {% endif %}
                     </dd>
                 </dl>
@@ -146,18 +175,19 @@
                     <dt class="col-sm-6">Descuento:</dt>
                     <dd class="col-sm-6 text-end">- S/ {{ "%.2f"|format(venta.descuento_monto or 0) }}</dd>
                     <dt class="col-sm-6 border-top pt-2">Total Venta:</dt>
-                    <dd class="col-sm-6 text-end border-top pt-2"><strong>S/ {{ "%.2f"|format(venta.monto_final_venta) }}</strong></dd>
+                    <dd class="col-sm-6 text-end border-top pt-2"><strong>S/ {{ "%.2f"|format(venta.monto_final_venta)
+                            }}</strong></dd>
                 </dl>
                 <h5 class="mt-3">Pagos Realizados</h5>
                 <ul class="list-group list-group-flush">
-                {% for pago in pagos %}
+                    {% for pago in pagos %}
                     <li class="list-group-item bg-transparent text-light d-flex justify-content-between px-0">
                         <span>{{ pago.metodo_pago }}</span>
                         <span>S/ {{ "%.2f"|format(pago.monto) }}</span>
                     </li>
-                {% else %}
+                    {% else %}
                     <li class="list-group-item bg-transparent text-muted px-0">No se registraron pagos detallados.</li>
-                {% endfor %}
+                    {% endfor %}
                 </ul>
             </div>
         </div>
@@ -182,7 +212,7 @@
                         <td>
                             {{ item.descripcion_item_venta }}
                             {% if item.notas_item %}
-                                <br><small class="text-muted fst-italic">Nota: {{ item.notas_item }}</small>
+                            <br><small class="text-muted fst-italic">Nota: {{ item.notas_item }}</small>
                             {% endif %}
                         </td>
                         <td class="text-end">S/ {{ "%.2f"|format(item.precio_unitario_venta) }}</td>
@@ -202,12 +232,14 @@
                 <h5 class="modal-title text-warning" id="modalImpresionLabel">
                     <i class="fas fa-print me-2"></i>Seleccione Formato
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
                 <p class="text-muted mb-3">¿Qué formato desea imprimir para este comprobante?</p>
-                
-                <a href="{{ url_for('main.ver_ticket', venta_id=venta.id) }}" target="_blank" class="btn btn-print-option text-decoration-none d-flex align-items-center">
+
+                <a href="{{ url_for('main.ver_ticket', venta_id=venta.id) }}" target="_blank"
+                    class="btn btn-print-option text-decoration-none d-flex align-items-center">
                     <i class="fas fa-receipt text-info"></i>
                     <div>
                         <div class="fw-bold">Ticket / Voucher (80mm)</div>
@@ -215,7 +247,8 @@
                     </div>
                 </a>
 
-                <a href="{{ url_for('main.ver_ticket', venta_id=venta.id) }}?formato=a4" target="_blank" class="btn btn-print-option text-decoration-none d-flex align-items-center">
+                <a href="{{ url_for('main.ver_ticket', venta_id=venta.id) }}?formato=a4" target="_blank"
+                    class="btn btn-print-option text-decoration-none d-flex align-items-center">
                     <i class="fas fa-file-pdf text-danger"></i>
                     <div>
                         <div class="fw-bold">Hoja Completa (A4)</div>
@@ -225,5 +258,123 @@
             </div>
         </div>
     </div>
-</div>
-{% endblock %}
+
+    <!-- NUEVO MODAL: Vincular Reserva Omitida -->
+    <div class="modal fade" id="modalVincularReserva" tabindex="-1" aria-labelledby="modalVincularReservaLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content bg-dark">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-warning" id="modalVincularReservaLabel">
+                        <i class="fas fa-link me-2"></i>Vincular a Reserva Pasada
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4 text-light">
+                    <p class="mb-3 text-muted">A veces creamos la venta directamente y olvidamos cambiar el estado de la
+                        cita en la agenda a <strong>Completada</strong>. Selecciona aquí si deseas enlazar esta Venta
+                        #{{ venta.serie_comprobante }}-{{ venta.numero_comprobante }} con una Reserva pendiente del
+                        cliente.</p>
+
+                    <div class="mb-3">
+                        <label class="form-label" style="color:var(--color-acento-dorado);">Reservas Pendientes del
+                            Cliente:</label>
+                        <select id="select_reserva_pendiente" class="form-select bg-dark text-white border-secondary">
+                            <option value="">-- Cargando o No hay reservas --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning fw-bold text-dark" onclick="enviarVinculacionReserva()"
+                        id="btnVincularConf">Vincular y Completar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% endblock %}
+
+    {% block scripts %}
+    {{ super() }}
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modalEl = document.getElementById('modalVincularReserva');
+            if (modalEl) {
+                modalEl.addEventListener('show.bs.modal', function () {
+                    // El cliente de esta venta: usamos fallback en caso el id sea cero (Clientes Varios)
+                    const clienteId = parseInt("{{ venta.cliente_id or venta.cliente_receptor_id or 0 }}", 10);
+
+                    if (clienteId === 0) {
+                        $('#select_reserva_pendiente').html('<option value="">El cliente de esta venta es genérico, no posee reservas.</option>');
+                        return;
+                    }
+
+                    $('#select_reserva_pendiente').html('<option value="">Cargando reservas...</option>');
+
+                    fetch(`/api/ventas/reservas_pendientes/${clienteId}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success && data.reservas.length > 0) {
+                                let options = '<option value="">-- Seleccione la Reserva a Completar --</option>';
+                                data.reservas.forEach(r => {
+                                    options += `<option value="${r.id}">Cita #${r.id} - ${r.fecha_corta} ${r.hora} - ${r.servicio}</option>`;
+                                });
+                                $('#select_reserva_pendiente').html(options);
+                            } else {
+                                $('#select_reserva_pendiente').html('<option value="">No hay reservas pendientes o programadas para este cliente.</option>');
+                            }
+                        })
+                        .catch(err => {
+                            $('#select_reserva_pendiente').html('<option value="">Error cargando las reservas</option>');
+                        });
+                });
+            }
+        });
+
+        function enviarVinculacionReserva() {
+            const reservaId = document.getElementById('select_reserva_pendiente').value;
+            if (!reservaId) {
+                Swal.fire('Atención', 'Selecciona una reserva de la lista para proceder.', 'warning');
+                return;
+            }
+
+            const btnConf = document.getElementById('btnVincularConf');
+            btnConf.disabled = true;
+            btnConf.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...';
+
+            fetch(`/ventas/vincular_reserva/{{ venta.id }}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reserva_id: reservaId })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Vinculación Exitosa',
+                            text: data.message,
+                            confirmButtonColor: '#ffc107',
+                            background: '#2c2c2c',
+                            color: '#fff'
+                        }).then(() => {
+                            // Cerrar el modal o recargar la página (En este caso lo cerramos, pues el status de la vista de venta no sufre gran cambio visual por la reserva por ahora).
+                            bootstrap.Modal.getInstance(document.getElementById('modalVincularReserva')).hide();
+                        });
+                    } else {
+                        Swal.fire('Error', data.message || 'Error al vincular.', 'error');
+                    }
+                })
+                .catch(err => {
+                    Swal.fire('Error', 'Fallo de conexión al enviar.', 'error');
+                })
+                .finally(() => {
+                    btnConf.disabled = false;
+                    btnConf.innerText = 'Vincular y Completar';
+                });
+        }
+    </script>
+    {% endblock %}

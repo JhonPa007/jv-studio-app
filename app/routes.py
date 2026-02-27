@@ -5861,6 +5861,16 @@ def nueva_venta():
                 except Exception as e:
                     print(f"Error acumulando puntos: {e}") 
 
+            # 11. (NUEVO) VINCULACIÓN AUTOMÁTICA CON RESERVAS (AGENDA)
+            reserva_id_form = request.form.get('reserva_id')
+            if reserva_id_form and reserva_id_form.strip():
+                try:
+                    res_id_int = int(reserva_id_form)
+                    # Cambiar estado a Completada (y opcionalmente vincular el ID de la venta si existiera la columna)
+                    cursor.execute("UPDATE reservas SET estado = 'Completada' WHERE id = %s", (res_id_int,))
+                except Exception as e:
+                    print(f"Error actualizando estado de reserva {reserva_id_form}: {e}")
+
             db_conn.commit()
             flash(f'Venta registrada: {serie_comprobante}-{numero_comprobante_str}', 'success')
             return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
@@ -6174,6 +6184,64 @@ def anular_venta(venta_id):
         current_app.logger.error(f"Error en anular_venta (ID: {venta_id}): {e}")
 
     return redirect(url_for('main.ver_detalle_venta', venta_id=venta_id))
+
+@main_bp.route('/api/ventas/reservas_pendientes/<int:cliente_id>')
+@login_required
+def api_reservas_pendientes(cliente_id):
+    """Devuelve las reservas programadas o confirmadas de un cliente, que sean omitidas (menores/iguales a hoy o sin completar)"""
+    db_conn = get_db()
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Buscaremos reservas Programadas o Confirmadas
+            cursor.execute("""
+                SELECT 
+                    r.id,
+                    TO_CHAR(r.fecha_reserva, 'DD/MM/YYYY') as fecha_corta,
+                    TO_CHAR(r.hora_reserva, 'HH24:MI') as hora,
+                    s.nombre as servicio
+                FROM reservas r
+                LEFT JOIN servicios s ON r.servicio_id = s.id
+                WHERE r.cliente_id = %s 
+                  AND r.estado IN ('Programada', 'Confirmada')
+                ORDER BY r.fecha_reserva DESC, r.hora_reserva DESC
+            """, (cliente_id,))
+            reservas = cursor.fetchall()
+            return jsonify({'success': True, 'reservas': reservas})
+    except Exception as e:
+        current_app.logger.error(f"Error obteniendo reservas pendientes para cliente {cliente_id}: {e}")
+        return jsonify({'success': False, 'message': 'Error en el servidor.'}), 500
+
+@main_bp.route('/ventas/vincular_reserva/<int:venta_id>', methods=['POST'])
+@login_required
+def vincular_reserva_a_venta(venta_id):
+    """Vincula una venta ya generada con una reserva que se omitió completar."""
+    data = request.get_json()
+    reserva_id = data.get('reserva_id')
+    if not reserva_id:
+        return jsonify({'success': False, 'message': 'Falta el ID de la reserva'}), 400
+
+    db_conn = get_db()
+    try:
+        with db_conn.cursor() as cursor:
+            # Primero validamos que la venta exista
+            cursor.execute("SELECT id FROM ventas WHERE id = %s", (venta_id,))
+            if not cursor.fetchone():
+                return jsonify({'success': False, 'message': 'La venta no existe'}), 404
+                
+            # Validamos que la reserva exista
+            cursor.execute("SELECT id FROM reservas WHERE id = %s", (reserva_id,))
+            if not cursor.fetchone():
+                return jsonify({'success': False, 'message': 'La reserva original no existe'}), 404
+            
+            # Procedemos a actualizar la reserva
+            cursor.execute("UPDATE reservas SET estado = 'Completada' WHERE id = %s", (reserva_id,))
+        db_conn.commit()
+        return jsonify({'success': True, 'message': f'La reserva #{reserva_id} fue marcada como Completada.'})
+    except Exception as e:
+        if db_conn:
+            db_conn.rollback()
+        current_app.logger.error(f"Error vinculando reserva {reserva_id} a venta {venta_id}: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @main_bp.route('/ventas/detalle/<int:venta_id>')
 @login_required
