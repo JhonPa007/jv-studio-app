@@ -6208,6 +6208,9 @@ def api_reservas_pendientes(cliente_id):
             reservas = cursor.fetchall()
             return jsonify({'success': True, 'reservas': reservas})
     except Exception as e:
+        import traceback
+        with open('error_api_reservas.txt', 'w') as f:
+            f.write(traceback.format_exc())
         current_app.logger.error(f"Error obteniendo reservas pendientes para cliente {cliente_id}: {e}")
         return jsonify({'success': False, 'message': 'Error en el servidor.'}), 500
 
