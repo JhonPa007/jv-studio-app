@@ -1030,6 +1030,115 @@ def api_buscar_cliente_por_documento():
         return jsonify({"error": "Error interno al buscar el cliente."}), 500
 
 
+# --- RUTAS PARA EL HISTORIAL DE CLIENTES (CLÍNICO/FOTOGRÁFICO) ---
+
+@main_bp.route('/clientes/historial/<int:cliente_id>', methods=['GET'])
+@login_required
+def obtener_historial_cliente(cliente_id):
+    """
+    Obtiene el historial clínico y fotográfico de un cliente en formato JSON.
+    """
+    try:
+        db = get_db()
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Seleccionar el historial junto con el nombre del profesional
+            sql = """
+                SELECT h.*, 
+                       COALESCE(e.nombres, '...') || ' ' || COALESCE(e.apellidos, '') AS empleado_nombre
+                FROM cliente_historial h
+                LEFT JOIN empleados e ON h.empleado_id = e.id
+                WHERE h.cliente_id = %s
+                ORDER BY h.fecha DESC
+            """
+            cursor.execute(sql, (cliente_id,))
+            historial = cursor.fetchall()
+
+            # Formatear la fecha para JSON
+            for item in historial:
+                if item['fecha']:
+                    item['fecha_str'] = item['fecha'].strftime('%Y-%m-%d %H:%M')
+                    item['fecha_corta'] = item['fecha'].strftime('%d/%m/%Y')
+
+            return jsonify({"success": True, "historial": historial})
+    except Exception as err:
+        current_app.logger.error(f"Error obteniendo historial: {err}")
+        return jsonify({"success": False, "message": "Error al obtener historial."}), 500
+
+
+@main_bp.route('/clientes/historial/<int:cliente_id>', methods=['POST'])
+@login_required
+def guardar_historial_cliente(cliente_id):
+    """
+    Recibe los datos del formulario y sube las 4 fotos a Cloudinary.
+    Luego, guarda el registro en cliente_historial.
+    """
+    try:
+        # 1. Obtener Datos del Formulario
+        servicios_realizados = request.form.get('servicios_realizados', '').strip()
+        empleado_id = request.form.get('empleado_id')
+        monto_pagado = request.form.get('monto_pagado', 0, type=float)
+        fecha_str = request.form.get('fecha')
+        notas = request.form.get('notas', '').strip()
+
+        if not servicios_realizados:
+            return jsonify({"success": False, "message": "Los servicios realizados son obligatorios."}), 400
+
+        fecha = datetime.now()
+        if fecha_str:
+            try:
+                # Si viene del <input type="datetime-local"> el formato es YYYY-MM-DDTHH:MM
+                fecha = datetime.strptime(fecha_str, '%Y-%m-%dT%H:%M')
+            except ValueError:
+                # Opcional: intentar solo con fecha y agregar hora actual
+                pass
+
+        # 2. Subir Imágenes a Cloudinary
+        from app.services.image_service import subir_imagen # Garantizar import
+        
+        carpeta_cloudinary = f"jv_studio_historial/cliente_{cliente_id}"
+        
+        # Helper para subir archivo seguro
+        def subir_foto(key_name):
+            archivo = request.files.get(key_name)
+            if archivo and archivo.filename != '':
+                return subir_imagen(archivo, carpeta=carpeta_cloudinary, public_id_prefix=key_name)
+            return None
+
+        foto_frente = subir_foto('foto_frente')
+        foto_lateral_izq = subir_foto('foto_lateral_izq')
+        foto_lateral_der = subir_foto('foto_lateral_der')
+        foto_atras = subir_foto('foto_atras')
+
+        # 3. Guardar en Base de Datos
+        db = get_db()
+        with db.cursor() as cursor:
+            sql = """
+                INSERT INTO cliente_historial
+                (cliente_id, empleado_id, fecha, servicios_realizados, monto_pagado, 
+                 foto_frente, foto_lateral_izq, foto_lateral_der, foto_atras, notas)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (
+                cliente_id, 
+                empleado_id if empleado_id else None,
+                fecha, 
+                servicios_realizados, 
+                monto_pagado, 
+                foto_frente, 
+                foto_lateral_izq, 
+                foto_lateral_der, 
+                foto_atras, 
+                notas
+            ))
+            db.commit()
+
+        return jsonify({"success": True, "message": "Historial guardado exitosamente."})
+
+    except Exception as err:
+        current_app.logger.error(f"Error guardando historial: {err}")
+        return jsonify({"success": False, "message": f"Error interno: {str(err)}"}), 500
+
+
 # --- RUTAS PARA LA GESTIÓN DE CATEGORÍAS DE SERVICIOS ---
 
 @main_bp.route('/servicios/categorias')

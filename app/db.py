@@ -153,6 +153,24 @@ def check_schema_updates(app):
                     );
                 """)
 
+                # Tabla Historial de Clientes (con fotos de Cloudinary)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS cliente_historial (
+                        id SERIAL PRIMARY KEY,
+                        cliente_id INTEGER REFERENCES clientes(id) ON DELETE CASCADE,
+                        venta_id INTEGER REFERENCES ventas(id) ON DELETE SET NULL,
+                        empleado_id INTEGER REFERENCES empleados(id) ON DELETE SET NULL,
+                        fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        servicios_realizados TEXT NOT NULL,
+                        monto_pagado DECIMAL(10, 2) DEFAULT 0.00,
+                        foto_frente TEXT,
+                        foto_lateral_izq TEXT,
+                        foto_lateral_der TEXT,
+                        foto_atras TEXT,
+                        notas TEXT
+                    );
+                """)
+
                 # -------------------------
                 # PAQUETES DE SERVICIOS
                 # -------------------------
