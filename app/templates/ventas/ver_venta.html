@@ -308,11 +308,11 @@
                     const clienteId = parseInt("{{ venta.cliente_id or venta.cliente_receptor_id or 0 }}", 10);
 
                     if (clienteId === 0) {
-                        $('#select_reserva_pendiente').html('<option value="">El cliente de esta venta es genérico, no posee reservas.</option>');
+                        document.getElementById('select_reserva_pendiente').innerHTML = '<option value="">El cliente de esta venta es genérico, no posee reservas.</option>';
                         return;
                     }
 
-                    $('#select_reserva_pendiente').html('<option value="">Cargando reservas...</option>');
+                    document.getElementById('select_reserva_pendiente').innerHTML = '<option value="">Cargando reservas...</option>';
 
                     fetch(`/api/ventas/reservas_pendientes/${clienteId}`)
                         .then(res => res.json())
@@ -322,13 +322,13 @@
                                 data.reservas.forEach(r => {
                                     options += `<option value="${r.id}">Cita #${r.id} - ${r.fecha_corta} ${r.hora} - ${r.servicio}</option>`;
                                 });
-                                $('#select_reserva_pendiente').html(options);
+                                document.getElementById('select_reserva_pendiente').innerHTML = options;
                             } else {
-                                $('#select_reserva_pendiente').html('<option value="">No hay reservas pendientes o programadas para este cliente.</option>');
+                                document.getElementById('select_reserva_pendiente').innerHTML = '<option value="">No hay reservas pendientes o programadas para este cliente.</option>';
                             }
                         })
                         .catch(err => {
-                            $('#select_reserva_pendiente').html('<option value="">Error cargando las reservas</option>');
+                            document.getElementById('select_reserva_pendiente').innerHTML = '<option value="">Error cargando las reservas</option>';
                         });
                 });
             }
