@@ -79,6 +79,9 @@
                                 <li><a class="dropdown-item text-danger" href="#"
                                         onclick="abrirModalPenalidad({{ emp.id }}, '{{ emp.nombres }} {{ emp.apellidos }}')"><i
                                             class="fas fa-gavel fa-fw me-2"></i>Registrar Penalidad</a></li>
+                                <li><a class="dropdown-item text-success" href="#"
+                                        onclick="abrirModalBono({{ emp.id }}, '{{ emp.nombres }} {{ emp.apellidos }}')"><i
+                                            class="fas fa-gift fa-fw me-2"></i>Registrar Bono/Incentivo</a></li>
                                 <li>
                                     <hr class="dropdown-divider">
                                 </li>
@@ -142,7 +145,8 @@
         <div class="modal-content text-dark">
             <div class="modal-header bg-danger text-white">
                 <h5 class="modal-title" id="modalPenalidadLabel"><i class="fas fa-gavel me-2"></i>Registrar Penalidad a
-                    <span id="nombreEmpPenalidad"></span></h5>
+                    <span id="nombreEmpPenalidad"></span>
+                </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                     aria-label="Close"></button>
             </div>
@@ -169,14 +173,50 @@
         </div>
     </div>
 </div>
+</div>
+
+<!-- Modal Registrar Bono/Incentivo -->
+<div class="modal fade" id="modalBono" tabindex="-1" aria-labelledby="modalBonoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content text-dark">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalBonoLabel"><i class="fas fa-gift me-2"></i>Registrar Bono a
+                    <span id="nombreEmpBono"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formBono">
+                    <input type="hidden" id="empIdBono">
+                    <div class="mb-3">
+                        <label class="form-label">Motivo del Bono</label>
+                        <input type="text" class="form-control" id="motivoBono"
+                            placeholder="Ej: Meta alcanzada, Puntualidad..." required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Monto del Bono (S/)</label>
+                        <input type="number" step="0.01" class="form-control" id="montoBono" required>
+                        <small class="text-muted">Se sumará directamente en el cálculo de planilla bruto.</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success fw-bold" onclick="guardarBono()">Registrar Bono</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
     // Variables modales (Bootstrap 5)
-    let modalDeudaActual, modalPenalidadActual;
+    let modalDeudaActual, modalPenalidadActual, modalBonoActual;
 
     document.addEventListener("DOMContentLoaded", function () {
         modalDeudaActual = new bootstrap.Modal(document.getElementById('modalDeuda'));
         modalPenalidadActual = new bootstrap.Modal(document.getElementById('modalPenalidad'));
+        modalBonoActual = new bootstrap.Modal(document.getElementById('modalBono'));
     });
 
     function abrirModalDeuda(id, nombre) {
@@ -193,6 +233,14 @@
         document.getElementById('motivoPenalidad').value = '';
         document.getElementById('montoPenalidad').value = '';
         modalPenalidadActual.show();
+    }
+
+    function abrirModalBono(id, nombre) {
+        document.getElementById('empIdBono').value = id;
+        document.getElementById('nombreEmpBono').innerText = nombre;
+        document.getElementById('motivoBono').value = '';
+        document.getElementById('montoBono').value = '';
+        modalBonoActual.show();
     }
 
     async function guardarDeuda() {
@@ -230,6 +278,25 @@
             const data = await res.json();
             if (data.error) alert(data.error);
             else { alert("Penalidad Registrada con éxito"); modalPenalidadActual.hide(); }
+        } catch (error) { alert("Error de servidor."); }
+    }
+
+    async function guardarBono() {
+        const id = document.getElementById('empIdBono').value;
+        const motivo = document.getElementById('motivoBono').value;
+        const monto = document.getElementById('montoBono').value;
+
+        if (!motivo || !monto) { alert("Llena todos los campos."); return; }
+
+        try {
+            const res = await fetch(`/finanzas/api/empleado/${id}/bono/nuevo`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ motivo: motivo, monto: parseFloat(monto) })
+            });
+            const data = await res.json();
+            if (data.error) alert(data.error);
+            else { alert("Bono Registrado con éxito"); modalBonoActual.hide(); }
         } catch (error) { alert("Error de servidor."); }
     }
 </script>

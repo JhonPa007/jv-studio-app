@@ -717,11 +717,22 @@ def calcular_planilla_preliminar():
                 else:
                     sueldo_base_prorrateado = round((sueldo_base_mensual / 30.0) * dias_rango, 2)
 
+            # G2. BONOS E INCENTIVOS
+            cursor.execute("""
+                SELECT id, motivo, monto, fecha_registro as fecha
+                FROM empleado_bonos
+                WHERE empleado_id = %s
+                  AND fecha_registro::date BETWEEN %s AND %s
+                  AND deducido_en_planilla_id IS NULL
+            """, (empleado_id, f_inicio, f_fin))
+            bonos = cursor.fetchall()
+            total_bonos = sum(float(b['monto']) for b in bonos) if bonos else 0.0
+
             # CALCULAR AMORTIZACIÓN (Deuda)
-            # Verificamos si podemos cobrar toda la deuda con el sueldo actual + comisiones
+            # Verificamos si podemos cobrar toda la deuda con el sueldo actual + comisiones + bonos
             total_deuda_a_amortizar = 0.0
             # Bruto inicial antes de deducir deudas (sí restamos adelantos y penalidades por ser del mes)
-            bruto_previo_deuda = total_comisiones_periodo + reintegro_smv_total + sueldo_base_prorrateado - total_adelantos - total_penalidades
+            bruto_previo_deuda = total_comisiones_periodo + reintegro_smv_total + sueldo_base_prorrateado + total_bonos - total_adelantos - total_penalidades
             
             deudas_amortizadas = []
             for d in deudas:
@@ -738,7 +749,7 @@ def calcular_planilla_preliminar():
                     bruto_previo_deuda -= cobro
 
             # H. TOTAL FINAL
-            total_bruto = total_comisiones_periodo + reintegro_smv_total + sueldo_base_prorrateado
+            total_bruto = total_comisiones_periodo + reintegro_smv_total + sueldo_base_prorrateado + total_bonos
             total_neto_pagar = total_bruto - total_adelantos - total_penalidades - total_deuda_a_amortizar
 
             # Convertir fechas a string para el JSON
@@ -755,6 +766,7 @@ def calcular_planilla_preliminar():
                     'sueldo_base_prorrateado': sueldo_base_prorrateado,
                     'bruto_comisiones': total_comisiones_periodo,
                     'reintegro_smv': reintegro_smv_total,
+                    'total_bonos': total_bonos,
                     'total_bruto': round(total_bruto, 2),
                     
                     'descuento_adelantos': total_adelantos,
@@ -767,6 +779,7 @@ def calcular_planilla_preliminar():
                 'listado_adelantos': format_list(adelantos),
                 'listado_penalidades': format_list(penalidades),
                 'listado_deudas': deudas_amortizadas,
+                'listado_bonos': format_list(bonos),
                 'mensajes': mensajes_alerta
             })
 
@@ -1141,8 +1154,17 @@ def confirmar_pago_planilla():
                         WHERE id = %s
                     """, (m_deducido, m_deducido, d_id))
 
+            # 6. MARCAR BONOS COMO DEDUCIDOS (Sumados a esta planilla)
+            cursor.execute("""
+                UPDATE empleado_bonos
+                SET deducido_en_planilla_id = %s
+                WHERE empleado_id = %s
+                  AND fecha_registro::date BETWEEN %s AND %s
+                  AND deducido_en_planilla_id IS NULL
+            """, (planilla_id, empleado_id, f_inicio, f_fin))
+
             db.commit()
-            return jsonify({'mensaje': 'Pago registrado correctamente. Ventas cerradas.', 'planilla_id': planilla_id})
+            return jsonify({'mensaje': 'Pago registrado correctamente. Ventas, Bonos y deducciones cerradas.', 'planilla_id': planilla_id})
 
     except Exception as e:
         if db: db.rollback()
@@ -1306,6 +1328,32 @@ def nueva_penalidad_empleado(empleado_id):
             """, (empleado_id, motivo, float(monto)))
             db.commit()
             return jsonify({'mensaje': 'Penalidad registrada correctamente'})
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@finanzas_bp.route('/api/empleado/<int:empleado_id>/bono/nuevo', methods=['POST'])
+@login_required
+def nuevo_bono_empleado(empleado_id):
+    if getattr(current_user, 'rol_nombre', '') != 'Administrador':
+        return jsonify({'error': 'Acceso denegado'}), 403
+        
+    data = request.json
+    motivo = data.get('motivo')
+    monto = data.get('monto')
+    
+    if not motivo or not monto:
+        return jsonify({'error': 'Motivo y monto son requeridos'}), 400
+        
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO empleado_bonos (empleado_id, motivo, monto)
+                VALUES (%s, %s, %s)
+            """, (empleado_id, motivo, float(monto)))
+            db.commit()
+            return jsonify({'mensaje': 'Bono registrado correctamente'})
     except Exception as e:
         db.rollback()
         return jsonify({'error': str(e)}), 500

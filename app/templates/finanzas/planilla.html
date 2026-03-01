@@ -194,6 +194,21 @@
         `;
         }
 
+        // Bonos e Incentivos
+        if (data.listado_bonos && data.listado_bonos.length > 0) {
+            let htmlBonos = ``;
+            data.listado_bonos.forEach(b => {
+                htmlBonos += `
+                <tr class="text-success fw-bold">
+                    <td class="ps-3"><i class="fas fa-gift me-1"></i> Bono: ${b.motivo} <small class="text-muted fw-normal">(${b.fecha})</small></td>
+                    <td class="text-end text-muted">-</td>
+                    <td class="text-end">S/ ${parseFloat(b.monto).toFixed(2)}</td>
+                </tr>
+                `;
+            });
+            tbodyIng.innerHTML += htmlBonos;
+        }
+
         // Reintegro SMV
         if (data.resumen_financiero.reintegro_smv > 0) {
             tbodyIng.innerHTML += `
