@@ -12,7 +12,7 @@
         </a>
     </div>
 
-    
+
     {% if empleados %}
     <div class="table-responsive">
         <table class="table table-hover table-custom table-sm">
@@ -31,7 +31,8 @@
                 {% for emp in empleados %}
                 <tr>
                     <td>
-                        <strong>{{ emp.nombre_display if emp.nombre_display else (emp.nombres.split(' ')[0] + ' ' + emp.apellidos.split(' ')[0]) }}</strong>
+                        <strong>{{ emp.nombre_display if emp.nombre_display else (emp.nombres.split(' ')[0] + ' ' +
+                            emp.apellidos.split(' ')[0]) }}</strong>
                         <small class="d-block text-muted">{{ emp.nombres }} {{ emp.apellidos }}</small>
                     </td>
                     <td>{{ emp.dni if emp.dni else '-' }}</td>
@@ -40,30 +41,54 @@
                     <td>{{ "%.2f"|format(emp.sueldo_base) if emp.sueldo_base is not none else '-' }}</td>
                     <td>
                         {% if emp.activo %}
-                            <span class="badge bg-success">Sí</span>
+                        <span class="badge bg-success">Sí</span>
                         {% else %}
-                            <span class="badge bg-danger">No</span>
+                        <span class="badge bg-danger">No</span>
                         {% endif %}
                     </td>
                     <td class="text-center">
                         <div class="dropdown">
-                            <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="dropdownMenuButton-{{ emp.id }}" data-bs-toggle="dropdown" aria-expanded="false">
+                            <button class="btn btn-secondary btn-sm dropdown-toggle" type="button"
+                                id="dropdownMenuButton-{{ emp.id }}" data-bs-toggle="dropdown" aria-expanded="false">
                                 Acciones
                             </button>
-                            <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="dropdownMenuButton-{{ emp.id }}">
-                                <li><a class="dropdown-item" href="{{ url_for('main.editar_empleado', empleado_id=emp.id) }}"><i class="fas fa-edit fa-fw me-2"></i>Editar</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('main.gestionar_horarios_empleado', empleado_id=emp.id) }}"><i class="fas fa-clock fa-fw me-2"></i>Gestionar Horarios</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('main.gestionar_ausencias_empleado', empleado_id=emp.id) }}"><i class="fas fa-calendar-times fa-fw me-2"></i>Gestionar Ausencias</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('main.gestionar_cuotas', colaborador_id=emp.id) }}"><i class="fas fa-bullseye fa-fw me-2"></i>Gestionar Cuotas</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('main.gestionar_ajustes', colaborador_id=emp.id) }}"><i class="fas fa-file-invoice-dollar fa-fw me-2"></i>Gestionar Ajustes</a></li>
-                                <li><hr class="dropdown-divider"></li>
+                            <ul class="dropdown-menu dropdown-menu-dark"
+                                aria-labelledby="dropdownMenuButton-{{ emp.id }}">
+                                <li><a class="dropdown-item"
+                                        href="{{ url_for('main.editar_empleado', empleado_id=emp.id) }}"><i
+                                            class="fas fa-edit fa-fw me-2"></i>Editar</a></li>
+                                <li><a class="dropdown-item"
+                                        href="{{ url_for('main.gestionar_horarios_empleado', empleado_id=emp.id) }}"><i
+                                            class="fas fa-clock fa-fw me-2"></i>Gestionar Horarios</a></li>
+                                <li><a class="dropdown-item"
+                                        href="{{ url_for('main.gestionar_ausencias_empleado', empleado_id=emp.id) }}"><i
+                                            class="fas fa-calendar-times fa-fw me-2"></i>Gestionar Ausencias</a></li>
                                 <li>
-                                    <a class="dropdown-item {% if emp.activo %}text-danger{% else %}text-success{% endif %}" href="{{ url_for('main.toggle_activo_empleado', empleado_id=emp.id) }}">
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li><a class="dropdown-item"
+                                        href="{{ url_for('main.gestionar_cuotas', colaborador_id=emp.id) }}"><i
+                                            class="fas fa-bullseye fa-fw me-2"></i>Gestionar Cuotas</a></li>
+                                <li><a class="dropdown-item"
+                                        href="{{ url_for('main.gestionar_ajustes', colaborador_id=emp.id) }}"><i
+                                            class="fas fa-file-invoice-dollar fa-fw me-2"></i>Gestionar Ajustes</a></li>
+                                <li><a class="dropdown-item text-warning" href="#"
+                                        onclick="abrirModalDeuda({{ emp.id }}, '{{ emp.nombres }} {{ emp.apellidos }}')"><i
+                                            class="fas fa-hand-holding-usd fa-fw me-2"></i>Registrar Deuda/Préstamo</a>
+                                </li>
+                                <li><a class="dropdown-item text-danger" href="#"
+                                        onclick="abrirModalPenalidad({{ emp.id }}, '{{ emp.nombres }} {{ emp.apellidos }}')"><i
+                                            class="fas fa-gavel fa-fw me-2"></i>Registrar Penalidad</a></li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li>
+                                    <a class="dropdown-item {% if emp.activo %}text-danger{% else %}text-success{% endif %}"
+                                        href="{{ url_for('main.toggle_activo_empleado', empleado_id=emp.id) }}">
                                         {% if emp.activo %}
-                                            <i class="fas fa-user-slash fa-fw me-2"></i>Desactivar
+                                        <i class="fas fa-user-slash fa-fw me-2"></i>Desactivar
                                         {% else %}
-                                            <i class="fas fa-user-check fa-fw me-2"></i>Activar
+                                        <i class="fas fa-user-check fa-fw me-2"></i>Activar
                                         {% endif %}
                                     </a>
                                 </li>
@@ -75,8 +100,137 @@
             </tbody>
         </table>
     </div>
-    {% else %}
-    <div class="alert alert-info-custom"><i class="fas fa-info-circle me-2"></i>No hay colaboradores registrados todavía.</div>
     {% endif %}
 </div>
+
+<!-- Modal Registrar Deuda/Préstamo -->
+<div class="modal fade" id="modalDeuda" tabindex="-1" aria-labelledby="modalDeudaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content text-dark">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="modalDeudaLabel"><i class="fas fa-hand-holding-usd me-2"></i>Registrar Deuda
+                    a <span id="nombreEmpDeuda"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formDeuda">
+                    <input type="hidden" id="empIdDeuda">
+                    <div class="mb-3">
+                        <label class="form-label">Concepto</label>
+                        <input type="text" class="form-control" id="conceptoDeuda"
+                            placeholder="Ej: Préstamo personal, Fiado de máquina..." required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Monto Total (S/)</label>
+                        <input type="number" step="0.01" class="form-control" id="montoDeuda" required>
+                        <small class="text-muted">La deuda se amortizará automáticamente en la liquidación de
+                            planilla.</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning fw-bold" onclick="guardarDeuda()">Registrar Deuda</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Registrar Penalidad -->
+<div class="modal fade" id="modalPenalidad" tabindex="-1" aria-labelledby="modalPenalidadLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content text-dark">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalPenalidadLabel"><i class="fas fa-gavel me-2"></i>Registrar Penalidad a
+                    <span id="nombreEmpPenalidad"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formPenalidad">
+                    <input type="hidden" id="empIdPenalidad">
+                    <div class="mb-3">
+                        <label class="form-label">Motivo de Penalidad</label>
+                        <input type="text" class="form-control" id="motivoPenalidad"
+                            placeholder="Ej: Falta injustificada, Tardanza..." required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Monto Penalidad (S/)</label>
+                        <input type="number" step="0.01" class="form-control" id="montoPenalidad" required>
+                        <small class="text-muted">Se restará directamente en el cálculo de planilla bruto.</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger fw-bold" onclick="guardarPenalidad()">Registrar
+                    Penalidad</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Variables modales (Bootstrap 5)
+    let modalDeudaActual, modalPenalidadActual;
+
+    document.addEventListener("DOMContentLoaded", function () {
+        modalDeudaActual = new bootstrap.Modal(document.getElementById('modalDeuda'));
+        modalPenalidadActual = new bootstrap.Modal(document.getElementById('modalPenalidad'));
+    });
+
+    function abrirModalDeuda(id, nombre) {
+        document.getElementById('empIdDeuda').value = id;
+        document.getElementById('nombreEmpDeuda').innerText = nombre;
+        document.getElementById('conceptoDeuda').value = '';
+        document.getElementById('montoDeuda').value = '';
+        modalDeudaActual.show();
+    }
+
+    function abrirModalPenalidad(id, nombre) {
+        document.getElementById('empIdPenalidad').value = id;
+        document.getElementById('nombreEmpPenalidad').innerText = nombre;
+        document.getElementById('motivoPenalidad').value = '';
+        document.getElementById('montoPenalidad').value = '';
+        modalPenalidadActual.show();
+    }
+
+    async function guardarDeuda() {
+        const id = document.getElementById('empIdDeuda').value;
+        const concepto = document.getElementById('conceptoDeuda').value;
+        const monto = document.getElementById('montoDeuda').value;
+
+        if (!concepto || !monto) { alert("Llena todos los campos."); return; }
+
+        try {
+            const res = await fetch(`/finanzas/api/empleado/${id}/deuda/nueva`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ concepto: concepto, monto_total: parseFloat(monto) })
+            });
+            const data = await res.json();
+            if (data.error) alert(data.error);
+            else { alert("Deuda Registrada con éxito"); modalDeudaActual.hide(); }
+        } catch (error) { alert("Error de servidor."); }
+    }
+
+    async function guardarPenalidad() {
+        const id = document.getElementById('empIdPenalidad').value;
+        const motivo = document.getElementById('motivoPenalidad').value;
+        const monto = document.getElementById('montoPenalidad').value;
+
+        if (!motivo || !monto) { alert("Llena todos los campos."); return; }
+
+        try {
+            const res = await fetch(`/finanzas/api/empleado/${id}/penalidad/nueva`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ motivo: motivo, monto: parseFloat(monto) })
+            });
+            const data = await res.json();
+            if (data.error) alert(data.error);
+            else { alert("Penalidad Registrada con éxito"); modalPenalidadActual.hide(); }
+        } catch (error) { alert("Error de servidor."); }
+    }
+</script>
 {% endblock %}

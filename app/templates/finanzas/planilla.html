@@ -3,7 +3,7 @@
 {% block content %}
 <div class="container-fluid mt-4">
     <div class="row">
-        
+
         <div class="col-md-4 mb-4">
             <div class="card shadow border-0">
                 <div class="card-header bg-primary text-white">
@@ -19,7 +19,7 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        
+
                         <div class="row mb-4">
                             <div class="col-6">
                                 <label class="small text-muted">Desde</label>
@@ -35,9 +35,10 @@
                             <i class="fas fa-search-dollar me-2"></i> CALCULAR PLANILLA
                         </button>
                     </form>
-                    
+
                     <div class="alert alert-info mt-3 small">
-                        <i class="fas fa-info-circle"></i> El sistema filtrará automáticamente las ventas que ya fueron pagadas en planillas anteriores.
+                        <i class="fas fa-info-circle"></i> El sistema filtrará automáticamente las ventas que ya fueron
+                        pagadas en planillas anteriores.
                     </div>
                 </div>
             </div>
@@ -51,7 +52,7 @@
 
             <div class="card shadow border-0" id="cardBoleta" style="display:none;">
                 <div class="card-body p-4 p-md-5" style="background-color: #fcfcfc;">
-                    
+
                     <div class="d-flex justify-content-between border-bottom pb-3 mb-4">
                         <div>
                             <h4 class="fw-bold text-dark mb-0">BOLETA DE PAGO</h4>
@@ -74,7 +75,7 @@
                                 </tr>
                             </thead>
                             <tbody id="listaIngresos">
-                                </tbody>
+                            </tbody>
                             <tfoot class="border-top">
                                 <tr>
                                     <td colspan="2" class="text-end fw-bold pt-2">Total Bruto</td>
@@ -88,7 +89,7 @@
                     <div class="table-responsive mb-4">
                         <table class="table table-sm table-borderless">
                             <tbody id="listaDescuentos">
-                                </tbody>
+                            </tbody>
                         </table>
                     </div>
 
@@ -99,7 +100,7 @@
                         </div>
                         <h2 class="mb-0 fw-bold" id="valNeto">S/ 0.00</h2>
                     </div>
-                    
+
                     <div id="listaAvisos" class="mb-3"></div>
 
                     <div class="text-end mt-4">
@@ -116,151 +117,199 @@
 </div>
 
 <script>
-// ==========================
-// LÓGICA DE JAVASCRIPT
-// ==========================
+    // ==========================
+    // LÓGICA DE JAVASCRIPT
+    // ==========================
 
-// 1. Calcular y Previsualizar
-async function consultarPlanilla() {
-    const data = {
-        empleado_id: document.getElementById('empleado_id').value,
-        fecha_inicio: document.getElementById('fecha_inicio').value,
-        fecha_fin: document.getElementById('fecha_fin').value
-    };
+    // 1. Calcular y Previsualizar
+    async function consultarPlanilla() {
+        const data = {
+            empleado_id: document.getElementById('empleado_id').value,
+            fecha_inicio: document.getElementById('fecha_inicio').value,
+            fecha_fin: document.getElementById('fecha_fin').value
+        };
 
-    if(!data.fecha_inicio || !data.fecha_fin) {
-        alert("Por favor selecciona las fechas de inicio y fin.");
-        return;
-    }
-
-    try {
-        const response = await fetch('/finanzas/api/calcular-planilla-empleado', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
-        const resultado = await response.json();
-
-        if(resultado.error) {
-            alert("Error: " + resultado.error);
-        } else {
-            renderizarBoleta(resultado, data.fecha_inicio, data.fecha_fin);
+        if (!data.fecha_inicio || !data.fecha_fin) {
+            alert("Por favor selecciona las fechas de inicio y fin.");
+            return;
         }
-    } catch (e) {
-        alert("Error de conexión con el servidor.");
+
+        try {
+            const response = await fetch('/finanzas/api/calcular-planilla-empleado', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const resultado = await response.json();
+
+            if (resultado.error) {
+                alert("Error: " + resultado.error);
+            } else {
+                renderizarBoleta(resultado, data.fecha_inicio, data.fecha_fin);
+            }
+        } catch (e) {
+            alert("Error de conexión con el servidor.");
+        }
     }
-}
 
-// 2. Dibujar la boleta en pantalla
-function renderizarBoleta(data, f_ini, f_fin) {
-    document.getElementById('msgInicial').style.display = 'none';
-    document.getElementById('cardBoleta').style.display = 'block';
+    // 2. Dibujar la boleta en pantalla
+    function renderizarBoleta(data, f_ini, f_fin) {
+        document.getElementById('msgInicial').style.display = 'none';
+        document.getElementById('cardBoleta').style.display = 'block';
 
-    document.getElementById('lblEmpleado').innerText = data.empleado;
-    document.getElementById('lblPeriodo').innerText = `Periodo: ${f_ini} al ${f_fin}`;
-    
-    // Ingresos
-    const tbodyIng = document.getElementById('listaIngresos');
-    tbodyIng.innerHTML = '';
-    
-    if (data.detalle_calculo.length === 0 && data.resumen_financiero.reintegro_smv === 0) {
-        tbodyIng.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">No hay ventas pendientes de pago en este periodo.</td></tr>';
-    } else {
-        data.detalle_calculo.forEach(bloque => {
-            let htmlBloque = `<tr class="table-light"><td colspan="3" class="small fw-bold text-dark"><i class="far fa-calendar-alt me-1"></i> Semana: ${bloque.fechas} (Acumulado previo: S/ ${bloque.acumulado_previo.toFixed(2)})</td></tr>`;
-            
-            bloque.desglose.forEach(item => {
-                htmlBloque += `
+        document.getElementById('lblEmpleado').innerText = data.empleado;
+        document.getElementById('lblPeriodo').innerText = `Periodo: ${f_ini} al ${f_fin}`;
+
+        // Ingresos
+        const tbodyIng = document.getElementById('listaIngresos');
+        tbodyIng.innerHTML = '';
+
+        if (data.detalle_calculo.length === 0 && data.resumen_financiero.reintegro_smv === 0) {
+            tbodyIng.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">No hay ventas pendientes de pago en este periodo.</td></tr>';
+        } else {
+            data.detalle_calculo.forEach(bloque => {
+                let htmlBloque = `<tr class="table-light"><td colspan="3" class="small fw-bold text-dark"><i class="far fa-calendar-alt me-1"></i> Semana: ${bloque.fechas} (Acumulado previo: S/ ${bloque.acumulado_previo.toFixed(2)})</td></tr>`;
+
+                bloque.desglose.forEach(item => {
+                    htmlBloque += `
                     <tr>
                         <td class="ps-3"><span class="badge bg-light text-dark border">Nivel ${item.nivel} (${item.tasa}%)</span></td>
                         <td class="text-end text-muted">S/ ${item.venta_base.toFixed(2)}</td>
                         <td class="text-end">S/ ${item.comision.toFixed(2)}</td>
                     </tr>
                 `;
+                });
+                tbodyIng.innerHTML += htmlBloque;
             });
-            tbodyIng.innerHTML += htmlBloque;
-        });
-    }
+        }
 
-    // Reintegro SMV
-    if(data.resumen_financiero.reintegro_smv > 0) {
-        tbodyIng.innerHTML += `
+        // Sueldo Base (Prorrateado si aplica)
+        if (data.resumen_financiero.sueldo_base_prorrateado > 0) {
+            tbodyIng.innerHTML += `
+            <tr class="text-success fw-bold bg-light">
+                <td class="ps-3"><i class="fas fa-money-bill-wave me-1"></i> Sueldo Base (Fijo/Prorrateado)</td>
+                <td class="text-end text-muted">-</td>
+                <td class="text-end">S/ ${data.resumen_financiero.sueldo_base_prorrateado.toFixed(2)}</td>
+            </tr>
+        `;
+        }
+
+        // Reintegro SMV
+        if (data.resumen_financiero.reintegro_smv > 0) {
+            tbodyIng.innerHTML += `
             <tr class="text-primary fw-bold">
                 <td><i class="fas fa-balance-scale"></i> Reintegro Ley (Sueldo Mínimo)</td>
                 <td class="text-end">-</td>
                 <td class="text-end">S/ ${data.resumen_financiero.reintegro_smv.toFixed(2)}</td>
             </tr>
         `;
-    }
-
-    document.getElementById('valBruto').innerText = `S/ ${data.resumen_financiero.bruto_comisiones.toFixed(2)}`;
-
-    // Descuentos (Adelantos)
-    const tbodyDesc = document.getElementById('listaDescuentos');
-    tbodyDesc.innerHTML = '';
-    
-    if(data.resumen_financiero.descuento_adelantos > 0) {
-        tbodyDesc.innerHTML += `
-            <tr>
-                <td class="text-danger"><i class="fas fa-hand-holding-usd me-2"></i> Adelantos / Préstamos</td>
-                <td class="text-end text-danger fw-bold">- S/ ${data.resumen_financiero.descuento_adelantos.toFixed(2)}</td>
-            </tr>
-        `;
-    } else {
-        tbodyDesc.innerHTML = '<tr><td colspan="2" class="text-muted text-center fst-italic"><small>Sin descuentos registrados</small></td></tr>';
-    }
-
-    // Total Neto
-    document.getElementById('valNeto').innerText = `S/ ${data.resumen_financiero.neto_a_pagar.toFixed(2)}`;
-
-    // Alertas
-    const divAvisos = document.getElementById('listaAvisos');
-    divAvisos.innerHTML = '';
-    data.mensajes.forEach(msg => {
-        divAvisos.innerHTML += `<div class="alert alert-warning py-2 mb-1"><small>${msg}</small></div>`;
-    });
-}
-
-// 3. Confirmar y guardar en BD (Bloqueando ventas)
-async function procesarPagoReal() {
-    const empleado_id = document.getElementById('empleado_id').value;
-    const f_inicio = document.getElementById('fecha_inicio').value;
-    const f_fin = document.getElementById('fecha_fin').value;
-    const textoNeto = document.getElementById('valNeto').innerText;
-    const monto_total = parseFloat(textoNeto.replace('S/', '').trim());
-
-    if(!empleado_id || !f_inicio) { alert("Datos incompletos"); return; }
-    
-    if(monto_total <= 0) {
-        if(!confirm("El monto a pagar es S/ 0.00. ¿Deseas registrar esta planilla de todas formas para cerrar el periodo?")) return;
-    } else {
-        if(!confirm(`¿CONFIRMAR PAGO POR ${textoNeto}?\n\n⚠️ Acción irreversible: Las ventas de este periodo se marcarán como 'PAGADAS' y no aparecerán en futuros cálculos.`)) return;
-    }
-
-    try {
-        const response = await fetch('/finanzas/api/confirmar-pago-planilla', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                empleado_id: empleado_id,
-                fecha_inicio: f_inicio,
-                fecha_fin: f_fin,
-                monto_total: monto_total
-            })
-        });
-
-        const result = await response.json();
-
-        if(result.error) {
-            alert("Error: " + result.error);
-        } else {
-            alert("✅ ¡Pago registrado con éxito! El recibo se ha guardado en el historial.");
-            window.location.reload(); // Recargar para limpiar pantalla
         }
-    } catch (error) {
-        console.error(error);
-        alert("Error de conexión al procesar el pago.");
+
+        document.getElementById('valBruto').innerText = `S/ ${data.resumen_financiero.total_bruto.toFixed(2)}`;
+
+        // Descuentos (Adelantos, Penalidades y Deudas)
+        const tbodyDesc = document.getElementById('listaDescuentos');
+        tbodyDesc.innerHTML = '';
+        let hasDescuentos = false;
+
+        // 1. Adelantos
+        if (data.listado_adelantos && data.listado_adelantos.length > 0) {
+            hasDescuentos = true;
+            let htmlDesc = `<tr><td colspan="2" class="fw-bold text-dark bg-light py-1 small">Adelantos y Caja</td></tr>`;
+            data.listado_adelantos.forEach(a => {
+                htmlDesc += `<tr>
+                <td class="text-secondary ps-3"><i class="fas fa-money-check me-2"></i>${a.descripcion} <small class="text-muted">(${a.fecha})</small></td>
+                <td class="text-end text-danger">- S/ ${parseFloat(a.monto).toFixed(2)}</td>
+            </tr>`;
+            });
+            tbodyDesc.innerHTML += htmlDesc;
+        }
+
+        // 2. Penalidades
+        if (data.listado_penalidades && data.listado_penalidades.length > 0) {
+            hasDescuentos = true;
+            let htmlPen = `<tr><td colspan="2" class="fw-bold text-dark bg-light py-1 small mt-2">Penalidades / Faltas</td></tr>`;
+            data.listado_penalidades.forEach(p => {
+                htmlPen += `<tr>
+                <td class="text-secondary ps-3"><i class="fas fa-gavel me-2"></i>${p.motivo} <small class="text-muted">(${p.fecha})</small></td>
+                <td class="text-end text-danger">- S/ ${parseFloat(p.monto).toFixed(2)}</td>
+            </tr>`;
+            });
+            tbodyDesc.innerHTML += htmlPen;
+        }
+
+        // 3. Deudas y Préstamos
+        if (data.listado_deudas && data.listado_deudas.length > 0) {
+            hasDescuentos = true;
+            let htmlDeu = `<tr><td colspan="2" class="fw-bold text-dark bg-light py-1 small mt-2">Amortización de Préstamos/Fiados</td></tr>`;
+            data.listado_deudas.forEach(d => {
+                htmlDeu += `<tr>
+                <td class="text-secondary ps-3"><i class="fas fa-hand-holding-usd me-2"></i>${d.concepto} <small class="text-muted">(Saldo previo: S/ ${d.saldo_anterior.toFixed(2)})</small></td>
+                <td class="text-end text-danger">- S/ ${d.monto_deducido.toFixed(2)}</td>
+            </tr>`;
+            });
+            tbodyDesc.innerHTML += htmlDeu;
+        }
+
+        if (!hasDescuentos) {
+            tbodyDesc.innerHTML = '<tr><td colspan="2" class="text-muted text-center fst-italic"><small>Sin descuentos registrados en este periodo</small></td></tr>';
+        }
+
+        // Guardamos en un variable glocal las amortizaciones para enviarlas al guardar
+        window.listaDeudasAmortizadasActivas = data.listado_deudas || [];
+
+        // Total Neto
+        document.getElementById('valNeto').innerText = `S/ ${data.resumen_financiero.neto_a_pagar.toFixed(2)}`;
+
+        // Alertas
+        const divAvisos = document.getElementById('listaAvisos');
+        divAvisos.innerHTML = '';
+        data.mensajes.forEach(msg => {
+            divAvisos.innerHTML += `<div class="alert alert-warning py-2 mb-1"><small>${msg}</small></div>`;
+        });
     }
-}
+
+    // 3. Confirmar y guardar en BD (Bloqueando ventas)
+    async function procesarPagoReal() {
+        const empleado_id = document.getElementById('empleado_id').value;
+        const f_inicio = document.getElementById('fecha_inicio').value;
+        const f_fin = document.getElementById('fecha_fin').value;
+        const textoNeto = document.getElementById('valNeto').innerText;
+        const monto_total = parseFloat(textoNeto.replace('S/', '').trim());
+
+        if (!empleado_id || !f_inicio) { alert("Datos incompletos"); return; }
+
+        if (monto_total <= 0) {
+            if (!confirm("El monto a pagar es S/ 0.00. ¿Deseas registrar esta planilla de todas formas para cerrar el periodo?")) return;
+        } else {
+            if (!confirm(`¿CONFIRMAR PAGO POR ${textoNeto}?\n\n⚠️ Acción irreversible: Las ventas de este periodo se marcarán como 'PAGADAS' y no aparecerán en futuros cálculos.`)) return;
+        }
+
+        try {
+            const response = await fetch('/finanzas/api/confirmar-pago-planilla', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    empleado_id: empleado_id,
+                    fecha_inicio: f_inicio,
+                    fecha_fin: f_fin,
+                    monto_total: monto_total,
+                    deudas_amortizadas: window.listaDeudasAmortizadasActivas || []
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.error) {
+                alert("Error: " + result.error);
+            } else {
+                alert("✅ ¡Pago registrado con éxito! El recibo se ha guardado en el historial.");
+                window.location.reload(); // Recargar para limpiar pantalla
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error de conexión al procesar el pago.");
+        }
+    }
 </script>
 {% endblock %}

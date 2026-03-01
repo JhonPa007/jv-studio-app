@@ -671,30 +671,102 @@ def calcular_planilla_preliminar():
                             reintegro_smv_total += diferencia
                             mensajes_alerta.append(f"⚠️ Reintegro SMV ({p_ini.strftime('%B')}): S/ {diferencia:.2f} (Comisión Real: {comision_teorica_total_mes:.2f} vs Mínimo {smv})")
 
-            # D. DEDUCCIÓN DE ADELANTOS (Solo los NO deducidos)
+            # D. DEDUCCIÓN DE ADELANTOS (Lista detallada)
             cursor.execute("""
-                SELECT COALESCE(SUM(monto), 0) as total_adelantos
+                SELECT id, concepto as descripcion, monto, fecha 
                 FROM gastos 
                 WHERE empleado_beneficiario_id = %s 
                   AND fecha BETWEEN %s AND %s
                   AND deducido_en_planilla_id IS NULL 
             """, (empleado_id, f_inicio, f_fin))
-            total_adelantos = float(cursor.fetchone()['total_adelantos'])
+            adelantos = cursor.fetchall()
+            total_adelantos = sum(float(a['monto']) for a in adelantos) if adelantos else 0.0
+
+            # E. PENALIDADES
+            cursor.execute("""
+                SELECT id, motivo, monto, fecha_registro as fecha
+                FROM empleado_penalidades
+                WHERE empleado_id = %s
+                  AND fecha_registro::date BETWEEN %s AND %s
+                  AND deducido_en_planilla_id IS NULL
+            """, (empleado_id, f_inicio, f_fin))
+            penalidades = cursor.fetchall()
+            total_penalidades = sum(float(p['monto']) for p in penalidades) if penalidades else 0.0
+
+            # F. DEUDAS / PRÉSTAMOS
+            # Traemos las deudas pendientes, sin filtro de fecha porque se cobran hasta que se paguen.
+            cursor.execute("""
+                SELECT id, concepto, (monto_total - monto_pagado) as saldo_restante, fecha_registro as fecha
+                FROM empleado_deudas
+                WHERE empleado_id = %s
+                  AND estado = 'Pendiente'
+            """, (empleado_id,))
+            deudas = cursor.fetchall()
+
+            # G. CÁLCULO DE SUELDO BASE (Prorrateado)
+            # Días en el rango consultado (inclusivo)
+            dias_rango = (f_fin - f_inicio).days + 1
+            sueldo_base_mensual = float(empleado.get('sueldo_base') or 0.0)
             
-            # E. TOTAL FINAL
-            total_bruto = total_comisiones_periodo + reintegro_smv_total
-            total_neto_pagar = total_bruto - total_adelantos
+            sueldo_base_prorrateado = 0.0
+            if tipo_contrato in ('FIJO', 'MIXTO', 'FIJO_ESCALONADA') and sueldo_base_mensual > 0:
+                # Usamos 30 días como mes comercial para el prorrateo estándar
+                # Si el rango consulta 30 o 31 días, se paga el mes completo
+                if dias_rango >= 30:
+                    sueldo_base_prorrateado = sueldo_base_mensual
+                else:
+                    sueldo_base_prorrateado = round((sueldo_base_mensual / 30.0) * dias_rango, 2)
+
+            # CALCULAR AMORTIZACIÓN (Deuda)
+            # Verificamos si podemos cobrar toda la deuda con el sueldo actual + comisiones
+            total_deuda_a_amortizar = 0.0
+            # Bruto inicial antes de deducir deudas (sí restamos adelantos y penalidades por ser del mes)
+            bruto_previo_deuda = total_comisiones_periodo + reintegro_smv_total + sueldo_base_prorrateado - total_adelantos - total_penalidades
+            
+            deudas_amortizadas = []
+            for d in deudas:
+                saldo = float(d['saldo_restante'])
+                cobro = min(saldo, bruto_previo_deuda) if bruto_previo_deuda > 0 else 0
+                if cobro > 0:
+                    deudas_amortizadas.append({
+                        'id': d['id'],
+                        'concepto': d['concepto'],
+                        'monto_deducido': cobro,
+                        'saldo_anterior': saldo
+                    })
+                    total_deuda_a_amortizar += cobro
+                    bruto_previo_deuda -= cobro
+
+            # H. TOTAL FINAL
+            total_bruto = total_comisiones_periodo + reintegro_smv_total + sueldo_base_prorrateado
+            total_neto_pagar = total_bruto - total_adelantos - total_penalidades - total_deuda_a_amortizar
+
+            # Convertir fechas a string para el JSON
+            def format_list(lst):
+                for item in lst:
+                    if 'fecha' in item and hasattr(item['fecha'], 'strftime'):
+                        item['fecha'] = item['fecha'].strftime('%Y-%m-%d')
+                return lst
 
             return jsonify({
                 'empleado': f"{empleado['nombres']} {empleado['apellidos']}",
-                'total_a_pagar': total_neto_pagar,
+                'total_a_pagar': round(total_neto_pagar, 2),
                 'resumen_financiero': {
+                    'sueldo_base_prorrateado': sueldo_base_prorrateado,
                     'bruto_comisiones': total_comisiones_periodo,
                     'reintegro_smv': reintegro_smv_total,
+                    'total_bruto': round(total_bruto, 2),
+                    
                     'descuento_adelantos': total_adelantos,
-                    'neto_a_pagar': total_neto_pagar
+                    'descuento_penalidades': total_penalidades,
+                    'amortizacion_deudas': total_deuda_a_amortizar,
+                    
+                    'neto_a_pagar': round(total_neto_pagar, 2)
                 },
                 'detalle_calculo': detalle_final,
+                'listado_adelantos': format_list(adelantos),
+                'listado_penalidades': format_list(penalidades),
+                'listado_deudas': deudas_amortizadas,
                 'mensajes': mensajes_alerta
             })
 
@@ -1043,6 +1115,32 @@ def confirmar_pago_planilla():
                   AND deducido_en_planilla_id IS NULL
             """, (planilla_id, empleado_id, f_inicio, f_fin))
 
+            # 4. MARCAR PENALIDADES COMO DEDUCIDAS (Bloquearlas)
+            cursor.execute("""
+                UPDATE empleado_penalidades
+                SET deducido_en_planilla_id = %s
+                WHERE empleado_id = %s
+                  AND fecha_registro::date BETWEEN %s AND %s
+                  AND deducido_en_planilla_id IS NULL
+            """, (planilla_id, empleado_id, f_inicio, f_fin))
+
+            # 5. APLICAR AMORTIZACIÓN A DEUDAS
+            # Recibiremos la lista de amortizaciones desde el Frontend
+            deudas_amortizadas = data.get('deudas_amortizadas', [])
+            for deuda in deudas_amortizadas:
+                d_id = deuda.get('id')
+                m_deducido = float(deuda.get('monto_deducido', 0))
+                if m_deducido > 0:
+                    cursor.execute("""
+                        UPDATE empleado_deudas
+                        SET monto_pagado = monto_pagado + %s,
+                            estado = CASE 
+                                        WHEN (monto_total - (monto_pagado + %s)) <= 0.01 THEN 'Pagado' 
+                                        ELSE 'Pendiente' 
+                                     END
+                        WHERE id = %s
+                    """, (m_deducido, m_deducido, d_id))
+
             db.commit()
             return jsonify({'mensaje': 'Pago registrado correctamente. Ventas cerradas.', 'planilla_id': planilla_id})
 
@@ -1155,3 +1253,59 @@ def pagar_propina_a_barbero():
         print(f"Error: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+# ==============================================================================
+# 5. ENDPOINTS: PENALIDADES Y DEUDAS
+# ==============================================================================
+
+@finanzas_bp.route('/api/empleado/<int:empleado_id>/deuda/nueva', methods=['POST'])
+@login_required
+def nueva_deuda_empleado(empleado_id):
+    if getattr(current_user, 'rol_nombre', '') != 'Administrador':
+        return jsonify({'error': 'Acceso denegado'}), 403
+        
+    data = request.json
+    concepto = data.get('concepto')
+    monto_total = data.get('monto_total')
+    
+    if not concepto or not monto_total:
+        return jsonify({'error': 'Concepto y monto son requeridos'}), 400
+        
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO empleado_deudas (empleado_id, concepto, monto_total)
+                VALUES (%s, %s, %s)
+            """, (empleado_id, concepto, float(monto_total)))
+            db.commit()
+            return jsonify({'mensaje': 'Deuda registrada correctamente'})
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@finanzas_bp.route('/api/empleado/<int:empleado_id>/penalidad/nueva', methods=['POST'])
+@login_required
+def nueva_penalidad_empleado(empleado_id):
+    if getattr(current_user, 'rol_nombre', '') != 'Administrador':
+        return jsonify({'error': 'Acceso denegado'}), 403
+        
+    data = request.json
+    motivo = data.get('motivo')
+    monto = data.get('monto')
+    
+    if not motivo or not monto:
+        return jsonify({'error': 'Motivo y monto son requeridos'}), 400
+        
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO empleado_penalidades (empleado_id, motivo, monto)
+                VALUES (%s, %s, %s)
+            """, (empleado_id, motivo, float(monto)))
+            db.commit()
+            return jsonify({'mensaje': 'Penalidad registrada correctamente'})
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
