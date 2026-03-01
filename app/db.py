@@ -195,6 +195,21 @@ def check_schema_updates(app):
                     );
                 """)
 
+                # -------------------------
+                # DEUDAS, PENALIDADES, BONOS
+                # -------------------------
+                # Tabla Bonos (NUEVO)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS empleado_bonos (
+                        id SERIAL PRIMARY KEY,
+                        empleado_id INTEGER REFERENCES empleados(id) ON DELETE CASCADE,
+                        motivo VARCHAR(255) NOT NULL,
+                        monto DECIMAL(10, 2) NOT NULL,
+                        fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        deducido_en_planilla_id INTEGER REFERENCES planillas(id) ON DELETE SET NULL
+                    );
+                """)
+
                 db.commit()
 
                 # Lista de Columnas Nuevas a Verificar/Agregar
