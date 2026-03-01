@@ -1759,7 +1759,7 @@ def nuevo_empleado():
                 'meta': float(request.form.get('mixto_meta') or 0),
                 'porcentaje': float(request.form.get('mixto_porcentaje') or 0)
             }
-        elif tipo_contrato == 'ESCALONADA':
+        elif tipo_contrato in ('ESCALONADA', 'FIJO_ESCALONADA'):
             escalonada_json = request.form.get('escalonada_json')
             if escalonada_json:
                 try:
@@ -1943,7 +1943,7 @@ def editar_empleado(empleado_id):
                     'meta': float(request.form.get('mixto_meta') or 0),
                     'porcentaje': float(request.form.get('mixto_porcentaje') or 0)
                 }
-            elif tipo_contrato == 'ESCALONADA':
+            elif tipo_contrato in ('ESCALONADA', 'FIJO_ESCALONADA'):
                 escalonada_json = request.form.get('escalonada_json')
                 if escalonada_json:
                     try:

@@ -219,6 +219,8 @@
                             Mixto (Base + Comisión por Exceso)</option>
                         <option value="ESCALONADA" {% if data_source.get('tipo_contrato')=='ESCALONADA' %}selected{%
                             endif %}>Comisión Escalonada (Por Metas)</option>
+                        <option value="FIJO_ESCALONADA" {% if data_source.get('tipo_contrato')=='FIJO_ESCALONADA'
+                            %}selected{% endif %}>Sueldo Fijo + Comisión Escalonada</option>
                     </select>
                 </div>
             </div>
@@ -283,9 +285,9 @@
                         if (configComision.porcentaje) document.getElementById('mixto_porcentaje').value = configComision.porcentaje;
                     }
 
-                    if (tipo === 'ESCALONADA' && configComision && configComision.tramos) {
+                    if ((tipo === 'ESCALONADA' || tipo === 'FIJO_ESCALONADA') && configComision && configComision.tramos) {
                         configComision.tramos.forEach(t => agregarFilaTramo(t.min, t.max, t.pct));
-                    } else if (tipo === 'ESCALONADA') {
+                    } else if (tipo === 'ESCALONADA' || tipo === 'FIJO_ESCALONADA') {
                         // Agregar una fila vacía por defecto si no hay datos
                         agregarFilaTramo(0, 4000, 50);
                     }
@@ -303,7 +305,7 @@
 
                     if (tipo === 'MIXTO') {
                         pMixto.classList.remove('d-none');
-                    } else if (tipo === 'ESCALONADA') {
+                    } else if (tipo === 'ESCALONADA' || tipo === 'FIJO_ESCALONADA') {
                         pEscalonada.classList.remove('d-none');
                         // Si no hay filas, agregar una inicial
                         if (document.querySelector('#tabla_tramos tbody').children.length === 0) {
@@ -327,7 +329,7 @@
                 // Antes de enviar, serializar la tabla de tramos
                 document.querySelector('form').addEventListener('submit', function (e) {
                     const tipo = document.getElementById('tipo_contrato').value;
-                    if (tipo === 'ESCALONADA') {
+                    if (tipo === 'ESCALONADA' || tipo === 'FIJO_ESCALONADA') {
                         const tramos = [];
                         document.querySelectorAll('#tabla_tramos tbody tr').forEach(tr => {
                             const min = tr.querySelector('.tramo-min').value;

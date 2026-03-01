@@ -629,7 +629,7 @@ def calcular_planilla_preliminar():
                         ]
                         desglose_tramos, comision_sub = _calcular_desglose_tramos(tramos_mixtos, venta_pagable, acumulado_histórico)
                         
-                    elif tipo_contrato == 'ESCALONADA':
+                    elif tipo_contrato in ('ESCALONADA', 'FIJO_ESCALONADA'):
                         # Obtener tramos de la configuración del empleado
                         tramos_config = conf_comision.get('tramos', [])
                         # Si no hay configuración, usar un default seguro (0%) o un fallback
