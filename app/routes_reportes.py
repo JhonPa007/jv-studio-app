@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, flash, current_app, jsonify
 from flask_login import login_required, current_user
 from .db import get_db
-from .auth import admin_required
+from .decorators import admin_required
 
 reportes_bp = Blueprint('reportes', __name__)
 
