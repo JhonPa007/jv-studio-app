@@ -6,8 +6,12 @@
 
         <div class="col-md-4 mb-4">
             <div class="card shadow border-0">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="fas fa-calculator me-2"></i>Generar Pago</h5>
+                    <button type="button" class="btn btn-sm btn-light text-primary fw-bold" data-bs-toggle="modal"
+                        data-bs-target="#modalExtemporaneo">
+                        <i class="fas fa-plus-circle me-1"></i> Extemporáneo
+                    </button>
                 </div>
                 <div class="card-body">
                     <form id="formCalculo">
@@ -106,21 +110,150 @@
 
                     <div class="text-end mt-4">
                         <button class="btn btn-outline-secondary me-2"><i class="fas fa-print"></i> Imprimir</button>
-                        <button class="btn btn-success btn-lg px-4" onclick="procesarPagoReal()">
-                            <i class="fas fa-check-circle me-2"></i> CONFIRMAR PAGO
+                        <button class="btn btn-outline-secondary btn-sm me-2"><i class="fas fa-print"></i>
+                            Imprimir</button>
+                        <button class="btn btn-success btn-sm px-3" onclick="procesarPagoReal()">
+                            <i class="fas fa-check-circle me-1"></i> CONFIRMAR PAGO
                         </button>
                     </div>
-
                 </div>
             </div>
         </div>
     </div>
 </div>
+</div>
+</div>
 
+<!-- Modal Extemporáneo -->
+<div class="modal fade" id="modalExtemporaneo" tabindex="-1" aria-labelledby="modalExtemporaneoLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title fw-bold text-dark" id="modalExtemporaneoLabel"><i
+                        class="fas fa-plus-circle me-2"></i>Registrar Extemporáneo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formExtemporaneo">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold">Tipo de Registro</label>
+                        <select class="form-select" id="ext_tipo" required>
+                            <option value="Adelanto">Adelanto de Sueldo / Comisiones</option>
+                            <option value="Incentivo">Incentivo / Bono Extraordinario</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold">Colaborador</label>
+                        <select class="form-select" id="ext_empleado_id" required>
+                            <option value="">-- Seleccione Colaborador --</option>
+                            {% for e in empleados %}
+                            <option value="{{ e.id }}">{{ e.nombres }} {{ e.apellidos }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label text-muted small fw-bold">Fecha</label>
+                            <input type="date" class="form-control" id="ext_fecha" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label text-muted small fw-bold">Monto (S/)</label>
+                            <input type="number" class="form-control" id="ext_monto" step="0.1" min="0.1" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold">Método de Pago</label>
+                        <select class="form-select" id="ext_metodo_pago" required>
+                            <option value="Yape">Yape</option>
+                            <option value="Transferencia">Transferencia Bancaria</option>
+                            <option value="Plin">Plin</option>
+                            <option value="Efectivo (Extra-Caja)">Efectivo (Fuera de Caja)</option>
+                        </select>
+                        <small class="text-info"><i class="fas fa-info-circle"></i> Este movimiento NO afectará la caja
+                            actual.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold">Concepto / Motivo</label>
+                        <input type="text" class="form-control" id="ext_concepto"
+                            placeholder="Ej. Adelanto por emergencia" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarExtemporaneo()">
+                    <i class="fas fa-save me-1"></i> Guardar Registro
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- LÓGICA DE JAVASCRIPT -->
 <script>
     // ==========================
     // LÓGICA DE JAVASCRIPT
     // ==========================
+
+    document.addEventListener("DOMContentLoaded", function () {
+        // Inicializar fecha para modal
+        document.getElementById('ext_fecha').valueAsDate = new Date();
+    });
+
+    async function guardarExtemporaneo() {
+        const data = {
+            tipo: document.getElementById('ext_tipo').value,
+            empleado_id: document.getElementById('ext_empleado_id').value,
+            fecha: document.getElementById('ext_fecha').value,
+            monto: document.getElementById('ext_monto').value,
+            metodo_pago: document.getElementById('ext_metodo_pago').value,
+            concepto: document.getElementById('ext_concepto').value
+        };
+
+        if (!data.empleado_id || !data.fecha || !data.monto || !data.concepto) {
+            alert("Por favor, completa todos los campos.");
+            return;
+        }
+
+        try {
+            const btn = document.querySelector('button[onclick="guardarExtemporaneo()"]');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+            const response = await fetch('/finanzas/api/registrar-extemporaneo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+
+            if (result.error) {
+                alert("Error: " + result.error);
+            } else {
+                alert(result.mensaje);
+                // Cerrar modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalExtemporaneo'));
+                modal.hide();
+                // Limpiar form
+                document.getElementById('formExtemporaneo').reset();
+                document.getElementById('ext_fecha').valueAsDate = new Date();
+
+                // Si había alguien seleccionado, re-calcular su planilla automáticamente
+                const emp_actual = document.getElementById('empleado_id').value;
+                if (emp_actual == data.empleado_id) {
+                    consultarPlanilla();
+                }
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Error de conexión al servidor.");
+        } finally {
+            const btn = document.querySelector('button[onclick="guardarExtemporaneo()"]');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i> Guardar Registro';
+        }
+    }
 
     // 1. Calcular y Previsualizar
     async function consultarPlanilla() {

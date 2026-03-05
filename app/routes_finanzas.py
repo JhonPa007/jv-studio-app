@@ -796,6 +796,67 @@ def guardar_planilla():
     # ... Lógica de INSERT ...
     return jsonify({'mensaje': 'Planilla guardada correctamente'})
 
+@finanzas_bp.route('/api/registrar-extemporaneo', methods=['POST'])
+@login_required
+def registrar_extemporaneo():
+    """
+    Registra un adelanto de sueldo o un incentivo (bono) que ocurrió fuera de caja,
+    para que se adjunten a la planilla sin descuadrar la caja física.
+    """
+    if getattr(current_user, 'rol_nombre', '') not in ['Administrador', 'Gerente']:
+        return jsonify({'error': 'No tiene permisos para registrar movimientos extemporáneos'}), 403
+
+    data = request.json
+    tipo = data.get('tipo')
+    empleado_id = data.get('empleado_id')
+    fecha = data.get('fecha')
+    monto = float(data.get('monto', 0))
+    metodo_pago = data.get('metodo_pago')
+    concepto = data.get('concepto')
+
+    # Sucursal actual o 1 por default (podría venir de la sesión)
+    sucursal_id = session.get('sucursal_id', 1)
+
+    if not all([tipo, empleado_id, fecha, monto, metodo_pago, concepto]):
+        return jsonify({'error': 'Faltan datos obligatorios'}), 400
+
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            if tipo == 'Adelanto':
+                # Guardar como Gasto pero SIN caja_sesion_id
+                cursor.execute("""
+                    INSERT INTO gastos (
+                        sucursal_id, caja_sesion_id, fecha, descripcion, monto, 
+                        metodo_pago, registrado_por_colaborador_id, empleado_beneficiario_id
+                    ) VALUES (
+                        %s, NULL, %s, %s, %s, 
+                        %s, %s, %s
+                    )
+                """, (
+                    sucursal_id, fecha, f"EXTEMPORÁNEO ({metodo_pago}): {concepto}", monto, 
+                    metodo_pago, current_user.id, empleado_id
+                ))
+            elif tipo == 'Incentivo':
+                # Guardar como Bono (normalmente los bonos no tienen caja asociada de por sí, salen a planilla)
+                cursor.execute("""
+                    INSERT INTO empleado_bonos (empleado_id, motivo, monto, fecha_registro)
+                    VALUES (%s, %s, %s, %s)
+                """, (
+                    empleado_id, f"EXTEMPORÁNEO ({metodo_pago}): {concepto}", monto, fecha
+                ))
+            else:
+                return jsonify({'error': 'Tipo de registro inválido'}), 400
+
+        db.commit()
+        return jsonify({'mensaje': f'{tipo} registrado correctamente sin afectar caja.'})
+
+    except Exception as e:
+        db.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 
 # --- VISTAS HTML (PÁGINAS) ---
 
