@@ -1,0 +1,1 @@
+[(1, 'Pago de Comisiones'), (2, 'Servicios Básicos'), (3, 'Limpieza'), (4, 'Adelanto de Sueldo'), (5, 'Otros'), (14, 'Servicios'), (15, 'Comisiones'), (16, 'Proveedores')]

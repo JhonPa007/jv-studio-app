@@ -824,17 +824,30 @@ def registrar_extemporaneo():
     try:
         with db.cursor() as cursor:
             if tipo == 'Adelanto':
+                # Buscar categoría "Adelanto", si no existe usar "Planilla" o la primera disponible
+                cursor.execute("SELECT id FROM categorias_gastos WHERE nombre ILIKE '%Adelanto%' OR nombre ILIKE '%Planilla%' LIMIT 1")
+                cat_row = cursor.fetchone()
+                if cat_row:
+                    cat_id = cat_row[0] if isinstance(cat_row, tuple) else cat_row['id']
+                else:
+                    cursor.execute("SELECT id FROM categorias_gastos LIMIT 1")
+                    fallback = cursor.fetchone()
+                    if fallback:
+                        cat_id = fallback[0] if isinstance(fallback, tuple) else fallback['id']
+                    else:
+                        raise ValueError("No existen categorías de gastos en la base de datos para registrar el adelanto.")
+
                 # Guardar como Gasto pero SIN caja_sesion_id
                 cursor.execute("""
                     INSERT INTO gastos (
-                        sucursal_id, caja_sesion_id, fecha, descripcion, monto, 
+                        sucursal_id, categoria_gasto_id, caja_sesion_id, fecha, descripcion, monto, 
                         metodo_pago, registrado_por_colaborador_id, empleado_beneficiario_id
                     ) VALUES (
-                        %s, NULL, %s, %s, %s, 
+                        %s, %s, NULL, %s, %s, %s, 
                         %s, %s, %s
                     )
                 """, (
-                    sucursal_id, fecha, f"EXTEMPORÁNEO ({metodo_pago}): {concepto}", monto, 
+                    sucursal_id, cat_id, fecha, f"EXTEMPORÁNEO ({metodo_pago}): {concepto}", monto, 
                     metodo_pago, current_user.id, empleado_id
                 ))
             elif tipo == 'Incentivo':
