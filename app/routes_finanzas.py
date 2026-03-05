@@ -673,7 +673,7 @@ def calcular_planilla_preliminar():
 
             # D. DEDUCCIÓN DE ADELANTOS (Lista detallada)
             cursor.execute("""
-                SELECT id, concepto as descripcion, monto, fecha 
+                SELECT id, descripcion, monto, fecha 
                 FROM gastos 
                 WHERE empleado_beneficiario_id = %s 
                   AND fecha BETWEEN %s AND %s
