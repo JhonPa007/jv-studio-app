@@ -198,6 +198,31 @@ def check_schema_updates(app):
                 # -------------------------
                 # DEUDAS, PENALIDADES, BONOS
                 # -------------------------
+                # Tabla Deudas
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS empleado_deudas (
+                        id SERIAL PRIMARY KEY,
+                        empleado_id INTEGER REFERENCES empleados(id) ON DELETE CASCADE,
+                        concepto VARCHAR(255) NOT NULL,
+                        monto_total DECIMAL(10, 2) NOT NULL,
+                        monto_pagado DECIMAL(10, 2) DEFAULT 0.00,
+                        estado VARCHAR(50) DEFAULT 'Pendiente',
+                        fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+                
+                # Tabla Penalidades
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS empleado_penalidades (
+                        id SERIAL PRIMARY KEY,
+                        empleado_id INTEGER REFERENCES empleados(id) ON DELETE CASCADE,
+                        motivo VARCHAR(255) NOT NULL,
+                        monto DECIMAL(10, 2) NOT NULL,
+                        fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        deducido_en_planilla_id INTEGER REFERENCES planillas(id) ON DELETE SET NULL
+                    );
+                """)
+                
                 # Tabla Bonos (NUEVO)
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS empleado_bonos (

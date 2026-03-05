@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "D:\JV_Studio\jv_studio_app\catch_error.py", line 12, in <module>
+    cursor.execute("""
+    ~~~~~~~~~~~~~~^^^^
+        CREATE TABLE IF NOT EXISTS empleado_deudas (
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+        );
+        ^^
+    """)
+    ^^^^
+psycopg2.errors.InsufficientPrivilege: permiso denegado al esquema public
+LINE 2:             CREATE TABLE IF NOT EXISTS empleado_deudas (
+                                               ^
+
