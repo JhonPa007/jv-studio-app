@@ -138,6 +138,9 @@ def create_app():
     from .routes_ia import ia_bp
     app.register_blueprint(ia_bp)
 
+    from .routes_reportes import reportes_bp
+    app.register_blueprint(reportes_bp)
+
     # 4. AUTO-MIGRACIÓN DE BASE DE DATOS (Producción Friendly)
     from .db import check_schema_updates
     check_schema_updates(app)

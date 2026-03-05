@@ -301,6 +301,18 @@
                 </a>
                 <div class="collapse" id="reportesSubmenu">
                     <ul class="nav flex-column ms-3">
+                        <li><a class="nav-link small text-warning fw-bold"
+                                href="{{ url_for('reportes.dashboard_financiero') }}">
+                                <i class="fas fa-chart-pie me-1"></i> Dashboard C-Level</a></li>
+                        <li><a class="nav-link small" href="{{ url_for('reportes.ingresos_egresos') }}">Ingresos y
+                                Egresos</a></li>
+                        <li><a class="nav-link small" href="{{ url_for('reportes.balance_general') }}">Balance
+                                General</a></li>
+                        <li>
+                            <hr class="dropdown-divider bg-secondary">
+                        </li>
+                        <li><a class="nav-link small text-muted"
+                                href="{{ url_for('main.reporte_estado_resultados') }}">Estado Resp. (Antiguo)</a></li>
                         <li><a class="nav-link small" href="{{ url_for('main.reporte_produccion_general') }}">Producción
                                 Gral</a></li>
                         <li><a class="nav-link small" href="{{ url_for('main.reporte_produccion') }}">Producción

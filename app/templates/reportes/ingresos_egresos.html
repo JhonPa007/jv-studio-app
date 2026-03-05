@@ -1,0 +1,199 @@
+{% extends 'base.html' %}
+{% block title %}Ingresos y Egresos | JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid fade-in">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="text-accent fw-bold"><i class="fas fa-file-invoice-dollar me-2"></i>Reporte de Ingresos y Egresos
+            </h2>
+            <p class="text-muted">Desglose detallado del flujo de caja por conceptos contables.</p>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card bg-dark text-white border-secondary mb-4 shadow">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('reportes.ingresos_egresos') }}" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small text-muted text-uppercase fw-bold">Fecha Inicio</label>
+                    <input type="date" class="form-control bg-dark text-white border-secondary" name="fecha_inicio"
+                        value="{{ filtros.fecha_inicio }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted text-uppercase fw-bold">Fecha Fin</label>
+                    <input type="date" class="form-control bg-dark text-white border-secondary" name="fecha_fin"
+                        value="{{ filtros.fecha_fin }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted text-uppercase fw-bold">Sucursal</label>
+                    <select class="form-select bg-dark text-white border-secondary" name="sucursal_id" required>
+                        <option value="">-- Seleccione Sucursal --</option>
+                        {% for s in sucursales %}
+                        <option value="{{ s.id }}" {% if filtros.sucursal_id|string==s.id|string %}selected{% endif %}>
+                            {{ s.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-warning w-100 fw-bold"><i
+                            class="fas fa-search me-2"></i>Consultar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if resultados %}
+    <!-- Tarjetas Resumen -->
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="card bg-dark border-success h-100 shadow border-start border-5">
+                <div class="card-body">
+                    <h6 class="text-success text-uppercase fw-bold mb-1">Total Ingresos</h6>
+                    <h2 class="mb-0 text-white">S/ {{ "%.2f"|format(resultados.total_ingresos) }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card bg-dark border-danger h-100 shadow border-start border-5">
+                <div class="card-body">
+                    <h6 class="text-danger text-uppercase fw-bold mb-1">Total Egresos</h6>
+                    <h2 class="mb-0 text-white">S/ {{ "%.2f"|format(resultados.total_egresos) }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div
+                class="card bg-dark border-{% if resultados.utilidad >= 0 %}primary{% else %}warning{% endif %} h-100 shadow border-start border-5">
+                <div class="card-body">
+                    <h6
+                        class="text-{% if resultados.utilidad >= 0 %}primary{% else %}warning{% endif %} text-uppercase fw-bold mb-1">
+                        Flujo Neto</h6>
+                    <h2 class="mb-0 text-white">S/ {{ "%.2f"|format(resultados.utilidad) }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Desglose Tabular -->
+    <div class="card bg-dark text-white border-secondary shadow">
+        <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 text-warning"><i class="fas fa-list-ul me-2"></i>Detalle de Transacciones</h5>
+            <button class="btn btn-sm btn-outline-light" onclick="window.print()"><i class="fas fa-print me-1"></i>
+                Imprimir</button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover table-striped mb-0 align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th class="ps-4">Categoría / Concepto</th>
+                            <th class="text-center">Tipo de Movimiento</th>
+                            <th class="text-end pe-4">Monto Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for f in resultados.flujo %}
+                        <tr>
+                            <td class="ps-4 fw-bold text-light">{{ f.concepto|upper }}</td>
+                            <td class="text-center">
+                                {% if f.tipo == 'Ingreso' %}
+                                <span class="badge bg-success"><i class="fas fa-arrow-down me-1"></i>Ingreso</span>
+                                {% else %}
+                                <span class="badge bg-danger"><i class="fas fa-arrow-up me-1"></i>Egreso</span>
+                                {% endif %}
+                            </td>
+                            <td
+                                class="text-end pe-4 fw-bold {% if f.tipo == 'Ingreso' %}text-success{% else %}text-danger{% endif %}">
+                                S/ {{ "%.2f"|format(f.total) }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-active border-top border-white">
+                        <tr>
+                            <td colspan="2" class="text-end fw-bold text-uppercase ps-4 py-3">Flujo Operativo Neto:</td>
+                            <td
+                                class="text-end pe-4 py-3 h4 mb-0 {% if resultados.utilidad >= 0 %}text-primary{% else %}text-warning{% endif %} fw-bold">
+                                S/ {{ "%.2f"|format(resultados.utilidad) }}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    {% if filtros.sucursal_id %}
+    <div class="alert alert-info bg-dark text-info border-info d-flex align-items-center" role="alert">
+        <i class="fas fa-info-circle fa-2x me-3"></i>
+        <div>No se encontraron registros financieros para la sucursal y rango de fechas seleccionados. Ajuste los
+            filtros e intente de nuevo.</div>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+
+<!-- Estilos Específicos para Impresión del Reporte -->
+<style>
+    @media print {
+        body {
+            background-color: white !important;
+            color: black !important;
+        }
+
+        .card,
+        .table {
+            background-color: white !important;
+            color: black !important;
+            border-color: #ddd !important;
+            border: 1px solid #ddd !important;
+        }
+
+        .text-white,
+        .text-warning,
+        .text-info,
+        .text-accent {
+            color: black !important;
+        }
+
+        .bg-dark {
+            background-color: white !important;
+        }
+
+        .badge {
+            color: black !important;
+            border: 1px solid black;
+        }
+
+        .badge.bg-success,
+        .text-success {
+            color: green !important;
+        }
+
+        .badge.bg-danger,
+        .text-danger {
+            color: red !important;
+        }
+
+        #sidebar,
+        .page-header,
+        .footer,
+        form,
+        button.btn {
+            display: none !important;
+        }
+
+        .main-content-wrapper {
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+        }
+
+        @page {
+            margin: 1cm;
+            size: landscape;
+        }
+    }
+</style>
+{% endblock %}

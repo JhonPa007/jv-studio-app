@@ -1,0 +1,249 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard Financiero | JV Studio{% endblock %}
+
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    .chart-container {
+        position: relative;
+        height: 350px;
+        width: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid fade-in">
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="text-accent fw-bold"><i class="fas fa-chart-line me-2"></i>Dashboard C-Level</h2>
+                <p class="text-muted">Análisis de rendimiento, rentabilidad y márgenes de los últimos 6 meses (Todas las
+                    sucursales).</p>
+            </div>
+            <button class="btn btn-outline-light" onclick="window.print()"><i class="fas fa-print me-2"></i>Exportar
+                PDF</button>
+        </div>
+    </div>
+
+    <!-- Indicadores (KPIs) Rápidos -->
+    <div class="row g-3 mb-4">
+        {% set util_total = 0 %}
+        {% set ing_total = 0 %}
+        {% for d in datos_mensuales %}
+        {% set util_total = util_total + d.utilidad %}
+        {% set ing_total = ing_total + d.ingresos %}
+        {% endfor %}
+
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary h-100 shadow dashboard-card">
+                <div class="card-body text-center">
+                    <h6 class="text-muted text-uppercase fw-bold mb-3">Margen Promedio (6 Meses)</h6>
+                    {% if ing_total > 0 %}
+                    <h2 class="text-warning mb-0">{{ "%.1f"|format((util_total / ing_total) * 100) }}%</h2>
+                    {% else %}
+                    <h2 class="text-muted mb-0">N/A</h2>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div
+                class="card bg-dark border-secondary h-100 shadow dashboard-card border-bottom border-success border-5">
+                <div class="card-body text-center">
+                    <h6 class="text-muted text-uppercase fw-bold mb-3">Utilidad Acumulada Semestral</h6>
+                    <h2 class="text-success mb-0">S/ {{ "%.2f"|format(util_total) }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary h-100 shadow dashboard-card">
+                <div class="card-body text-center">
+                    <h6 class="text-muted text-uppercase fw-bold mb-3">Meses de Análisis Disp.</h6>
+                    <h2 class="text-info mb-0">{{ datos_mensuales|length }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="row">
+        <!-- Gráfico Principal: Ingresos vs Egresos (Barras) -->
+        <div class="col-lg-8 mb-4">
+            <div class="card bg-dark h-100 border-secondary shadow">
+                <div class="card-header border-secondary bg-transparent pt-3 pb-2">
+                    <h5 class="text-white"><i class="fas fa-chart-bar me-2 text-primary"></i>Ingresos vs. Egresos
+                        Históricos</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="barChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráfico Secundario: Tendencia de Utilidad (Línea) -->
+        <div class="col-lg-4 mb-4">
+            <div class="card bg-dark h-100 border-secondary shadow">
+                <div class="card-header border-secondary bg-transparent pt-3 pb-2">
+                    <h5 class="text-white"><i class="fas fa-level-up-alt me-2 text-success"></i>Tendencia de Utilidad
+                        Neta</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="lineChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Obtenemos los datos pasados desde el backend
+        var rawData = {{ datos_mensuales| tojson
+    }};
+
+    // Preparar arrays
+    var etiquetas = rawData.map(d => d.mes);
+    var ingresos = rawData.map(d => d.ingresos);
+    var egresos = rawData.map(d => d.egresos);
+    var utilidad = rawData.map(d => d.utilidad);
+
+    // Configuración Global Chart.js para Dark Mode
+    Chart.defaults.color = '#adb5bd';
+    Chart.defaults.borderColor = '#495057';
+
+    // 1. Gráfico de Barras Estribadas (Ingresos vs Egresos)
+    var ctxBar = document.getElementById('barChart').getContext('2d');
+    new Chart(ctxBar, {
+        type: 'bar',
+        data: {
+            labels: etiquetas,
+            datasets: [
+                {
+                    label: 'Ingresos (Ventas)',
+                    data: ingresos,
+                    backgroundColor: 'rgba(25, 135, 84, 0.7)', // Bootstrap Success
+                    borderColor: '#198754',
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                {
+                    label: 'Egresos (Gastos)',
+                    data: egresos,
+                    backgroundColor: 'rgba(220, 53, 69, 0.7)', // Bootstrap Danger
+                    borderColor: '#dc3545',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            let label = context.dataset.label || '';
+                            if (label) { label += ': '; }
+                            if (context.parsed.y !== null) {
+                                label += new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(context.parsed.y);
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function (value) { return 'S/ ' + value; }
+                    }
+                }
+            }
+        }
+    });
+
+    // 2. Gráfico de Líneas (Tendencia Utilidad Neta)
+    var ctxLine = document.getElementById('lineChart').getContext('2d');
+    new Chart(ctxLine, {
+        type: 'line',
+        data: {
+            labels: etiquetas,
+            datasets: [{
+                label: 'Flujo Neto (S/)',
+                data: utilidad,
+                borderColor: '#ffc107', // Bootstrap Warning / JV Studio Accent
+                backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                borderWidth: 3,
+                pointBackgroundColor: '#fff',
+                pointBorderColor: '#ffc107',
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                fill: true,
+                tension: 0.3 // Suavizar la línea
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false } // Ocultar leyenda única
+            },
+            scales: {
+                y: {
+                    ticks: {
+                        callback: function (value) { return 'S/ ' + value; }
+                    }
+                }
+            }
+        }
+    });
+    });
+</script>
+
+<!-- Estilos para impresión -->
+<style>
+    @media print {
+        body {
+            background-color: white !important;
+            color: black !important;
+        }
+
+        #sidebar,
+        .page-header,
+        .footer,
+        button.btn {
+            display: none !important;
+        }
+
+        .card {
+            page-break-inside: avoid;
+            border: 1px solid #ddd !important;
+        }
+
+        .main-content-wrapper {
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+        }
+
+        @page {
+            margin: 1cm;
+            size: landscape;
+        }
+
+        .chart-container {
+            height: 250px !important;
+        }
+
+        /* Ajuste para que quepa en A4 Horizontal */
+    }
+</style>
+{% endblock %}
