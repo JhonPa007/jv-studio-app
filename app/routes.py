@@ -8979,6 +8979,7 @@ def reporte_produccion():
                     LEFT JOIN clientes cl ON v.cliente_receptor_id = cl.id
                     LEFT JOIN campanas ca ON v.campana_id = ca.id
                     WHERE v.empleado_id = %s AND v.sucursal_id = %s AND DATE(v.fecha_venta) BETWEEN %s AND %s
+                      AND v.estado_pago != 'Anulado'
                       AND vi.servicio_id IS NOT NULL
                     ORDER BY v.fecha_venta DESC
                 """
@@ -9004,6 +9005,7 @@ def reporte_produccion():
                     LEFT JOIN marcas m ON p.marca_id = m.id
                     LEFT JOIN comisiones com ON com.venta_item_id = vi.id
                     WHERE v.empleado_id = %s AND v.sucursal_id = %s AND DATE(v.fecha_venta) BETWEEN %s AND %s
+                      AND v.estado_pago != 'Anulado'
                       AND vi.producto_id IS NOT NULL
                     ORDER BY v.fecha_venta DESC
                 """
@@ -9089,12 +9091,12 @@ def exportar_reporte_produccion():
 
             # Ejecutar las mismas consultas que en el reporte en pantalla
             # Consulta para SERVICIOS
-            sql_servicios = """SELECT v.fecha_venta, cl.nombres as cliente_nombres, cl.apellidos as cliente_apellidos, s.nombre as servicio_nombre, vi.precio_unitario_venta, ca.nombre as campana_nombre, vi.es_hora_extra FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id JOIN servicios s ON vi.servicio_id = s.id LEFT JOIN clientes cl ON v.cliente_id = cl.id LEFT JOIN campanas ca ON v.campana_id = ca.id WHERE v.empleado_id = %s AND v.sucursal_id = %s AND DATE(v.fecha_venta) BETWEEN %s AND %s ORDER BY v.fecha_venta DESC"""
+            sql_servicios = """SELECT v.fecha_venta, cl.nombres as cliente_nombres, cl.apellidos as cliente_apellidos, s.nombre as servicio_nombre, vi.precio_unitario_venta, ca.nombre as campana_nombre, vi.es_hora_extra FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id JOIN servicios s ON vi.servicio_id = s.id LEFT JOIN clientes cl ON v.cliente_id = cl.id LEFT JOIN campanas ca ON v.campana_id = ca.id WHERE v.empleado_id = %s AND v.sucursal_id = %s AND DATE(v.fecha_venta) BETWEEN %s AND %s AND v.estado_pago != 'Anulado' ORDER BY v.fecha_venta DESC"""
             cursor.execute(sql_servicios, (colaborador_id, sucursal_id, fecha_inicio, fecha_fin))
             servicios_vendidos = cursor.fetchall()
 
             # Consulta para PRODUCTOS
-            sql_productos = """SELECT v.fecha_venta, cl.nombres as cliente_nombres, cl.apellidos as cliente_apellidos, p.nombre as producto_nombre, m.nombre as marca_nombre, vi.cantidad, vi.precio_unitario_venta, vi.subtotal_item_neto, com.monto_comision FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id JOIN productos p ON vi.producto_id = p.id LEFT JOIN clientes cl ON v.cliente_id = cl.id LEFT JOIN marcas m ON p.marca_id = m.id LEFT JOIN comisiones com ON com.venta_item_id = vi.id WHERE v.empleado_id = %s AND v.sucursal_id = %s AND DATE(v.fecha_venta) BETWEEN %s AND %s ORDER BY v.fecha_venta DESC"""
+            sql_productos = """SELECT v.fecha_venta, cl.nombres as cliente_nombres, cl.apellidos as cliente_apellidos, p.nombre as producto_nombre, m.nombre as marca_nombre, vi.cantidad, vi.precio_unitario_venta, vi.subtotal_item_neto, com.monto_comision FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id JOIN productos p ON vi.producto_id = p.id LEFT JOIN clientes cl ON v.cliente_id = cl.id LEFT JOIN marcas m ON p.marca_id = m.id LEFT JOIN comisiones com ON com.venta_item_id = vi.id WHERE v.empleado_id = %s AND v.sucursal_id = %s AND DATE(v.fecha_venta) BETWEEN %s AND %s AND v.estado_pago != 'Anulado' ORDER BY v.fecha_venta DESC"""
             cursor.execute(sql_productos, (colaborador_id, sucursal_id, fecha_inicio, fecha_fin))
             productos_vendidos = cursor.fetchall()
             

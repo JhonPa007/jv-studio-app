@@ -591,8 +591,10 @@ def calcular_planilla_preliminar():
                     SELECT COALESCE(SUM(vi.subtotal_item_neto), 0) as total
                     FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id
                     WHERE v.empleado_id = %s 
-                      AND v.fecha_venta BETWEEN %s AND %s 
-                      AND v.estado != 'Anulada'
+                      AND DATE(v.fecha_venta) BETWEEN %s AND %s 
+                      AND v.estado_pago != 'Anulado'
+                      AND vi.servicio_id IS NOT NULL 
+                      AND vi.es_hora_extra = FALSE
                       AND v.pago_nomina_id IS NULL 
                 """, (empleado_id, p_ini, p_fin))
                 venta_pagable = float(cursor.fetchone()['total'])
@@ -603,8 +605,10 @@ def calcular_planilla_preliminar():
                     SELECT COALESCE(SUM(vi.subtotal_item_neto), 0) as total
                     FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id
                     WHERE v.empleado_id = %s 
-                      AND v.fecha_venta >= %s AND v.fecha_venta < %s 
-                      AND v.estado != 'Anulada'
+                      AND DATE(v.fecha_venta) >= %s AND DATE(v.fecha_venta) < %s 
+                      AND v.estado_pago != 'Anulado'
+                      AND vi.servicio_id IS NOT NULL 
+                      AND vi.es_hora_extra = FALSE
                 """, (empleado_id, inicio_de_ese_mes, p_ini))
                 acumulado_histórico = float(cursor.fetchone()['total'])
                 
