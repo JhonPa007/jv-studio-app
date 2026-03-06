@@ -7633,20 +7633,31 @@ def nuevo_gasto():
             # 4. INSERTAR GASTO
             try:
                 with db_conn.cursor() as cursor:
+                    # Verificar si la categoría es un Adelanto
+                    cursor.execute("SELECT nombre FROM categorias_gastos WHERE id = %s", (int(categoria_gasto_id_str),))
+                    cat_row = cursor.fetchone()
+                    # cat_row es una tupla si no usamos RealDictCursor temporalmente, pero psycopg2.extras.RealDictCursor devuelve un dict
+                    # El cursor por defecto de get_db() es normal, pero veamos. Lo más seguro:
+                    cat_nombre = cat_row[0] if isinstance(cat_row, tuple) else (cat_row['nombre'] if cat_row else '')
+                    es_adelanto = cat_nombre and 'adelanto' in cat_nombre.lower()
+                    
+                    estado_conf = 'Pendiente' if es_adelanto else 'Confirmado'
+                    caja_a_guardar = None if es_adelanto else caja_id_activa
+
                     sql = """INSERT INTO gastos 
                                 (sucursal_id, categoria_gasto_id, fecha, descripcion, monto, metodo_pago, 
                                  registrado_por_colaborador_id, empleado_beneficiario_id, caja_sesion_id,
                                  comprobante_tipo, comprobante_serie, comprobante_numero, 
-                                 comprobante_ruc_emisor, comprobante_razon_social_emisor)
-                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+                                 comprobante_ruc_emisor, comprobante_razon_social_emisor, estado_confirmacion)
+                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
                     
                     empleado_beneficiario_id = int(empleado_beneficiario_id_str) if empleado_beneficiario_id_str else None
 
                     val = (sucursal_id, int(categoria_gasto_id_str), fecha_str, descripcion, monto, 
-                           metodo_pago, current_user.id, empleado_beneficiario_id, caja_id_activa, # <--- USAMOS LA CAJA VALIDADA
+                           metodo_pago, current_user.id, empleado_beneficiario_id, caja_a_guardar, 
                            comprobante_tipo or None, comprobante_serie or None,
                            comprobante_numero or None, comprobante_ruc_emisor or None,
-                           comprobante_razon_social_emisor or None
+                           comprobante_razon_social_emisor or None, estado_conf
                           )
                     cursor.execute(sql, val)
                 

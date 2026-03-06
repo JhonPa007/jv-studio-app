@@ -889,26 +889,40 @@ def registrar_extemporaneo():
 def confirmar_adelanto(gasto_id):
     """
     Endpoint para que el colaborador confirme la recepción de un adelanto.
-    Idealmente a ser consumido desde la Billetera (App Móvil).
+    Ideado para la Billetera (App Móvil). Asigna el descuento a la caja abierta ACTUAL.
     """
     db = get_db()
     try:
-        with db.cursor() as cursor:
-            # Opción 1: Verificar que el gasto le pertenece al usuario actual 
-            # (Si la app móvil envía el token del usuario logueado)
-            # cursor.execute("SELECT id FROM gastos WHERE id = %s AND empleado_beneficiario_id = %s", (gasto_id, current_user.id))
-            # O simplemente actualizar si existe (confiando en que la vista del front filtra):
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Obtener la sucursal del gasto
+            cursor.execute("SELECT sucursal_id FROM gastos WHERE id = %s", (gasto_id,))
+            gasto = cursor.fetchone()
+            if not gasto:
+                return jsonify({'error': 'Adelanto no encontrado'}), 404
+                
+            sucursal_id = gasto['sucursal_id']
+
+            # 2. Buscar si hay una caja abierta en esa sucursal
+            cursor.execute("SELECT id FROM caja_sesiones WHERE sucursal_id = %s AND estado = 'Abierta' LIMIT 1", (sucursal_id,))
+            caja = cursor.fetchone()
+            
+            if not caja:
+                return jsonify({'error': 'No se puede confirmar ahora. No hay ninguna caja física abierta en el local para asumir el egreso.'}), 400
+
+            caja_id = caja['id']
+
+            # 3. Actualizar el gasto (Confirmarlo y enrrutarlo a la caja de hoy)
             cursor.execute("""
                 UPDATE gastos 
-                SET estado_confirmacion = 'Confirmado' 
+                SET estado_confirmacion = 'Confirmado', caja_sesion_id = %s
                 WHERE id = %s AND estado_confirmacion != 'Confirmado'
-            """, (gasto_id,))
+            """, (caja_id, gasto_id))
             
             if cursor.rowcount == 0:
-                return jsonify({'error': 'Adelanto no encontrado o ya confirmado'}), 404
+                return jsonify({'error': 'Adelanto ya confirmado previamente'}), 400
                 
             db.commit()
-            return jsonify({'mensaje': 'Adelanto confirmado exitosamente'})
+            return jsonify({'mensaje': 'Adelanto confirmado exitosamente. El descuento ha sido aplicado a la caja actual y a tu planilla.'})
     except Exception as e:
         db.rollback()
         return jsonify({'error': str(e)}), 500
