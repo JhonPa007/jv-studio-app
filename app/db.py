@@ -260,6 +260,8 @@ def check_schema_updates(app):
                     ("clientes", "apellido_paterno", "VARCHAR(100)"),
                     ("clientes", "apellido_materno", "VARCHAR(100)"),
                     ("clientes", "saldo_monedero", "DECIMAL(12, 2) DEFAULT 0.00"),
+                    # GASTOS
+                    ("gastos", "estado_confirmacion", "VARCHAR(20) DEFAULT 'Confirmado'"),
                     # GIFT CARDS - PAQUETES
                     ("gift_cards", "package_id", "INTEGER REFERENCES packages(id) ON DELETE SET NULL"),
                 ]

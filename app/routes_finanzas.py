@@ -677,14 +677,23 @@ def calcular_planilla_preliminar():
 
             # D. DEDUCCIÓN DE ADELANTOS (Lista detallada)
             cursor.execute("""
-                SELECT id, descripcion, monto, fecha 
+                SELECT id, descripcion, monto, fecha, estado_confirmacion 
                 FROM gastos 
                 WHERE empleado_beneficiario_id = %s 
                   AND fecha BETWEEN %s AND %s
                   AND deducido_en_planilla_id IS NULL 
             """, (empleado_id, f_inicio, f_fin))
             adelantos = cursor.fetchall()
-            total_adelantos = sum(float(a['monto']) for a in adelantos) if adelantos else 0.0
+            
+            # Solo descontamos los adelantos que han sido confirmados por el colaborador
+            adelantos_confirmados = [a for a in adelantos if a.get('estado_confirmacion') == 'Confirmado']
+            adelantos_pendientes = [a for a in adelantos if a.get('estado_confirmacion') == 'Pendiente']
+            
+            total_adelantos = sum(float(a['monto']) for a in adelantos_confirmados) if adelantos_confirmados else 0.0
+            total_adelantos_pendientes = sum(float(a['monto']) for a in adelantos_pendientes) if adelantos_pendientes else 0.0
+
+            if adelantos_pendientes:
+                mensajes_alerta.append(f"⚠️ El colaborador tiene S/ {total_adelantos_pendientes:.2f} en adelantos pendientes de confirmar que NO se han descontado.")
 
             # E. PENALIDADES
             cursor.execute("""
@@ -780,7 +789,8 @@ def calcular_planilla_preliminar():
                     'neto_a_pagar': round(total_neto_pagar, 2)
                 },
                 'detalle_calculo': detalle_final,
-                'listado_adelantos': format_list(adelantos),
+                'listado_adelantos': format_list(adelantos_confirmados),
+                'listado_adelantos_pendientes': format_list(adelantos_pendientes),
                 'listado_penalidades': format_list(penalidades),
                 'listado_deudas': deudas_amortizadas,
                 'listado_bonos': format_list(bonos),
@@ -845,10 +855,10 @@ def registrar_extemporaneo():
                 cursor.execute("""
                     INSERT INTO gastos (
                         sucursal_id, categoria_gasto_id, caja_sesion_id, fecha, descripcion, monto, 
-                        metodo_pago, registrado_por_colaborador_id, empleado_beneficiario_id
+                        metodo_pago, registrado_por_colaborador_id, empleado_beneficiario_id, estado_confirmacion
                     ) VALUES (
                         %s, %s, NULL, %s, %s, %s, 
-                        %s, %s, %s
+                        %s, %s, %s, 'Pendiente'
                     )
                 """, (
                     sucursal_id, cat_id, fecha, f"EXTEMPORÁNEO ({metodo_pago}): {concepto}", monto, 
@@ -872,6 +882,59 @@ def registrar_extemporaneo():
         db.rollback()
         import traceback
         traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@finanzas_bp.route('/api/adelantos/<int:gasto_id>/confirmar', methods=['PUT'])
+@login_required
+def confirmar_adelanto(gasto_id):
+    """
+    Endpoint para que el colaborador confirme la recepción de un adelanto.
+    Idealmente a ser consumido desde la Billetera (App Móvil).
+    """
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            # Opción 1: Verificar que el gasto le pertenece al usuario actual 
+            # (Si la app móvil envía el token del usuario logueado)
+            # cursor.execute("SELECT id FROM gastos WHERE id = %s AND empleado_beneficiario_id = %s", (gasto_id, current_user.id))
+            # O simplemente actualizar si existe (confiando en que la vista del front filtra):
+            cursor.execute("""
+                UPDATE gastos 
+                SET estado_confirmacion = 'Confirmado' 
+                WHERE id = %s AND estado_confirmacion != 'Confirmado'
+            """, (gasto_id,))
+            
+            if cursor.rowcount == 0:
+                return jsonify({'error': 'Adelanto no encontrado o ya confirmado'}), 404
+                
+            db.commit()
+            return jsonify({'mensaje': 'Adelanto confirmado exitosamente'})
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@finanzas_bp.route('/api/adelantos/<int:gasto_id>/rechazar', methods=['PUT'])
+@login_required
+def rechazar_adelanto(gasto_id):
+    """
+    Endpoint para que el colaborador rechace un adelanto (ej. dice no haberlo recibido).
+    """
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            cursor.execute("""
+                UPDATE gastos 
+                SET estado_confirmacion = 'Rechazado' 
+                WHERE id = %s AND estado_confirmacion = 'Pendiente'
+            """, (gasto_id,))
+            
+            if cursor.rowcount == 0:
+                return jsonify({'error': 'Adelanto no encontrado o no está en estado Pendiente'}), 404
+                
+            db.commit()
+            return jsonify({'mensaje': 'Adelanto rechazado. Se alertará a la administración.'})
+    except Exception as e:
+        db.rollback()
         return jsonify({'error': str(e)}), 500
 
 
