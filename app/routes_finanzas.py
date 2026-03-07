@@ -915,7 +915,7 @@ def confirmar_adelanto(gasto_id):
             cursor.execute("""
                 UPDATE gastos 
                 SET estado_confirmacion = 'Confirmado', caja_sesion_id = %s
-                WHERE id = %s AND estado_confirmacion != 'Confirmado'
+                WHERE id = %s AND (estado_confirmacion != 'Confirmado' OR caja_sesion_id IS NULL)
             """, (caja_id, gasto_id))
             
             if cursor.rowcount == 0:
