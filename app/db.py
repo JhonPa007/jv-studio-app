@@ -264,6 +264,8 @@ def check_schema_updates(app):
                     ("gastos", "estado_confirmacion", "VARCHAR(20) DEFAULT 'Confirmado'"),
                     # GIFT CARDS - PAQUETES
                     ("gift_cards", "package_id", "INTEGER REFERENCES packages(id) ON DELETE SET NULL"),
+                    # RESERVAS
+                    ("reservas", "origen", "VARCHAR(20) DEFAULT 'POS'"),
                 ]
                 
                 print("--- Iniciando Verificación de Schema (Auto-Migration) ---")

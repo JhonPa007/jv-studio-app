@@ -842,6 +842,29 @@
                     return [];
                 },
 
+                eventContent: function (arg) {
+                    let container = document.createElement('div');
+                    container.style.overflow = 'hidden';
+                    container.style.textOverflow = 'ellipsis';
+                    container.style.whiteSpace = 'nowrap';
+                    container.style.fontSize = '0.85em';
+                    container.style.padding = '1px 3px';
+
+                    let iconHtml = '';
+                    if (arg.event.extendedProps.origen === 'Web') {
+                        iconHtml = '<i class="fas fa-globe me-1 text-info" title="Reserva Web"></i>';
+                    }
+
+                    container.innerHTML = `<div class="fc-event-main-frame">
+                        <div class="fc-event-time">${arg.timeText}</div>
+                        <div class="fc-event-title-container">
+                            <div class="fc-event-title fc-sticky">${iconHtml}${arg.event.title}</div>
+                        </div>
+                    </div>`;
+
+                    return { domNodes: [container] };
+                },
+
                 // Fuentes de Datos
                 resources: function (fetchInfo, successCallback, failureCallback) {
                     const sucursalId = selectorSucursal.value;

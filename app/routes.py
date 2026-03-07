@@ -2418,7 +2418,7 @@ def listar_reservas():
     try:
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Obtener lista de reservas (sin cambios)
-            sql = "SELECT r.id, TO_CHAR(r.fecha_hora_inicio, 'DD/MM/YYYY') as fecha_hora, CONCAT(c.razon_social_nombres, ' ', COALESCE(c.apellidos, '')) AS cliente_nombre, e.nombre_display AS empleado_nombre, s.nombre AS servicio_nombre, r.precio_cobrado, r.estado FROM reservas r LEFT JOIN clientes c ON r.cliente_id = c.id JOIN empleados e ON r.empleado_id = e.id JOIN servicios s ON r.servicio_id = s.id ORDER BY r.fecha_hora_inicio DESC"
+            sql = "SELECT r.id, TO_CHAR(r.fecha_hora_inicio, 'DD/MM/YYYY') as fecha_hora, CONCAT(c.razon_social_nombres, ' ', COALESCE(c.apellidos, '')) AS cliente_nombre, e.nombre_display AS empleado_nombre, s.nombre AS servicio_nombre, r.precio_cobrado, r.estado, r.origen FROM reservas r LEFT JOIN clientes c ON r.cliente_id = c.id JOIN empleados e ON r.empleado_id = e.id JOIN servicios s ON r.servicio_id = s.id ORDER BY r.fecha_hora_inicio DESC"
             cursor.execute(sql)
             lista_de_reservas = cursor.fetchall()
 
@@ -2735,6 +2735,7 @@ def api_agenda_dia_data():
                         r.fecha_hora_fin as end, 
                         r.estado, 
                         r.empleado_id as "resourceId", 
+                        r.origen,
                         CONCAT(s.nombre, ' - ', c.razon_social_nombres) as title 
                     FROM reservas r 
                     JOIN servicios s ON r.servicio_id = s.id 
@@ -2788,7 +2789,10 @@ def api_agenda_dia_data():
                         "title": titulo_final,
                         "start": reserva['start'].isoformat(),
                         "end": reserva['end'].isoformat(),
-                        "extendedProps": {"estado": reserva['estado']}, 
+                        "extendedProps": {
+                            "estado": reserva['estado'],
+                            "origen": reserva['origen']
+                        }, 
                         "classNames": clases
                     })
 
@@ -3139,7 +3143,7 @@ def nueva_reserva():
                 # return jsonify({"success": False, "message": "Horario ocupado."}), 409
             
             # --- 3. Insertar Reserva ---
-            sql = "INSERT INTO reservas (sucursal_id, cliente_id, empleado_id, servicio_id, fecha_hora_inicio, fecha_hora_fin, estado, notas_cliente, precio_cobrado) VALUES (%s, %s, %s, %s, %s, %s, 'Programada', %s, %s) RETURNING id"
+            sql = "INSERT INTO reservas (sucursal_id, cliente_id, empleado_id, servicio_id, fecha_hora_inicio, fecha_hora_fin, estado, notas_cliente, precio_cobrado, origen) VALUES (%s, %s, %s, %s, %s, %s, 'Programada', %s, %s, 'POS') RETURNING id"
             val = (sucursal_id, cliente_id, empleado_id, servicio_id, fecha_hora_inicio, fecha_hora_fin, notas_cliente, precio_del_servicio)
             
             cursor.execute(sql, val)
