@@ -10518,7 +10518,6 @@ def _procesar_envio_sunat(venta_id):
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         zip_file.writestr(f"{nombre_base}.xml", xml_firmado_str)
     zip_data = zip_buffer.getvalue()
-    zip_base64 = base64.b64encode(zip_data).decode('utf-8')
     
     # Cargar Credenciales
     db = get_db()
@@ -10540,8 +10539,10 @@ def _procesar_envio_sunat(venta_id):
     settings = Settings(strict=False, xml_huge_tree=True)
     client = Client(wsdl=SUNAT_WSDL_URL, transport=transport, wsse=UsernameToken(usuario_wsse, clave_sol), settings=settings)
     
-    # Zeep puede devolver bytes directos o un objeto, dependiendo de la versión
-    response = client.service.sendBill(fileName=nombre_archivo_zip, contentFile=zip_base64)
+    # IMPORTANTE: Zeep codifica automáticamente a base64 los campos xs:base64Binary.
+    # Si pasamos un string base64, se codificará DOBLEMENTE, lo que causa errores en SUNAT.
+    # Pasamos los bytes originales directamente.
+    response = client.service.sendBill(fileName=nombre_archivo_zip, contentFile=zip_data)
     
     # --- LÓGICA DE PROCESAMIENTO CDR (CORREGIDA) ---
     cdr_zip_data = None
@@ -10619,7 +10620,12 @@ def enviar_sunat(venta_id):
         success_message = _procesar_envio_sunat(venta_id)
         flash(success_message, 'success')
     except Fault as fault:
-        flash(f"Error de SOAP al comunicarse con SUNAT: {fault.message}", "danger")
+        detail = ""
+        if hasattr(fault, 'detail') and fault.detail is not None:
+            try:
+                detail = f" (Detalle: {ET.tostring(fault.detail, encoding='unicode')})"
+            except: pass
+        flash(f"Error de SOAP al comunicarse con SUNAT: {fault.message}{detail}", "danger")
         current_app.logger.error(f"Error SOAP en enviar_sunat para venta {venta_id}: {fault}")
     except Exception as e:
         flash(f"Error al enviar a SUNAT: {e}", "danger")
@@ -10762,7 +10768,12 @@ def consultar_estado_sunat(venta_id):
             flash("Respuesta vacía de SUNAT.", "warning")
 
     except Fault as fault:
-        flash(f"SUNAT Error (SOAP): {fault.message}", "danger")
+        detail = ""
+        if hasattr(fault, 'detail') and fault.detail is not None:
+            try:
+                detail = f" (Detalle: {ET.tostring(fault.detail, encoding='unicode')})"
+            except: pass
+        flash(f"SUNAT Error (SOAP): {fault.message}{detail}", "danger")
     except Exception as e:
         flash(f"Error al consultar: {e}", "danger")
         current_app.logger.error(f"Error consultar_sunat: {e}")
