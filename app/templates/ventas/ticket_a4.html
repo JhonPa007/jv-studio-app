@@ -285,7 +285,8 @@
                 <h4>R.U.C. {{ config_sistema.ruc_empresa if config_sistema and config_sistema.ruc_empresa else
                     '20614287561' }}</h4>
                 <h2>{{ venta.tipo_comprobante|upper }}</h2>
-                <h4>{{ venta.serie_comprobante }} - {{ '%08d'|format(venta.numero_comprobante|int) }}</h4>
+                <h4 style="color: red;">VERSION 1.1 - {{ venta.serie_comprobante }} - {{
+                    '%08d'|format(venta.numero_comprobante|int) }}</h4>
             </div>
         </div>
 
