@@ -9,62 +9,91 @@
             <i class="fas {{ 'fa-plus-circle' if es_nueva else 'fa-edit' }} me-2"></i>
             {{ titulo_form }}
         </h2>
-        
+
         {% set data_source = form_data if form_data else (gasto if gasto else {}) %}
 
         <form method="POST" action="{{ action_url }}">
             <div class="row">
                 <div class="col-md-4 mb-3">
                     <label for="fecha" class="form-label">Fecha del Gasto <span class="text-danger">*</span></label>
-                    <input type="date" class="form-control" id="fecha" name="fecha" value="{{ hoy or data_source.get('fecha')|string|slice(0,10) }}" required>
+                    <input type="date" class="form-control" id="fecha" name="fecha"
+                        value="{{ hoy or data_source.get('fecha')|string|slice(0,10) }}" required>
                 </div>
                 <div class="col-md-4 mb-3">
                     <label for="sucursal_nombre" class="form-label">Sucursal</label>
-                    <input type="text" class="form-control" id="sucursal_nombre" value="{{ session.get('sucursal_nombre', 'No asignada') }}" readonly disabled>
+                    <input type="text" class="form-control" id="sucursal_nombre"
+                        value="{{ session.get('sucursal_nombre', 'No asignada') }}" readonly disabled>
                 </div>
                 <div class="col-md-4 mb-3">
-                    <label for="categoria_gasto_id" class="form-label">Categoría del Gasto <span class="text-danger">*</span></label>
-                    <select class="form-select" id="categoria_gasto_id" name="categoria_gasto_id" required>
-                        <option value="">Seleccione...</option>
-                        {% for cat in categorias_gastos %}<option value="{{ cat.id }}" {% if data_source.get('categoria_gasto_id')|string == cat.id|string %}selected{% endif %}>{{ cat.nombre }}</option>{% endfor %}
-                    </select>
+                    <label for="categoria_gasto_id" class="form-label">Categoría del Gasto <span
+                            class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <select class="form-select" id="categoria_gasto_id" name="categoria_gasto_id" required>
+                            <option value="">Seleccione...</option>
+                            {% for cat in categorias_gastos %}
+                            <option value="{{ cat.id }}" {% if
+                                data_source.get('categoria_gasto_id')|string==cat.id|string %}selected{% endif %}
+                                data-requiere-beneficiario="{{ 'true' if cat.requiere_beneficiario else 'false' }}">
+                                {{ cat.nombre }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button class="btn btn-outline-primary" type="button" id="btnNuevaCategoria"
+                            title="Registrar Nueva Categoría"><i class="fas fa-plus"></i></button>
+                    </div>
                 </div>
             </div>
-            
-            <!-- REQUERIMIENTO: Bloque dinámico para el beneficiario -->
-            <div id="bloque_beneficiario" class="mb-3" style="display:none;">
-                <label for="empleado_beneficiario_id" class="form-label">Colaborador (Beneficiario)</label>
-                <select class="form-select" id="empleado_beneficiario_id" name="empleado_beneficiario_id">
+
+            <!-- Bloque dinámico para el beneficiario -->
+            <div id="bloque_beneficiario" class="mb-3 p-3 border border-info rounded bg-dark" style="display:none;">
+                <label for="empleado_beneficiario_id" class="form-label text-info"><i
+                        class="fas fa-user-tag me-2"></i>Colaborador (Beneficiario) <span
+                        class="text-danger">*</span></label>
+                <select class="form-select select2" id="empleado_beneficiario_id" name="empleado_beneficiario_id">
                     <option value="">Seleccione un colaborador...</option>
-                    {% for colab in colaboradores %}<option value="{{ colab.id }}" {% if data_source.get('empleado_beneficiario_id')|string == colab.id|string %}selected{% endif %}>{{ colab.nombres }} {{ colab.apellidos }}</option>{% endfor %}
+                    {% for colab in colaboradores %}<option value="{{ colab.id }}" {% if
+                        data_source.get('empleado_beneficiario_id')|string==colab.id|string %}selected{% endif %}>{{
+                        colab.apellidos }}, {{ colab.nombres }}</option>{% endfor %}
                 </select>
+                <div class="form-text text-info small">Esta categoría requiere asignar un beneficiario para el historial
+                    y liquidaciones.</div>
             </div>
 
             <div class="mb-3">
-                <label for="descripcion" class="form-label">Descripción del Gasto <span class="text-danger">*</span></label>
-                <textarea class="form-control" id="descripcion" name="descripcion" rows="3" required>{{ data_source.get('descripcion', '') }}</textarea>
+                <label for="descripcion" class="form-label">Descripción del Gasto <span
+                        class="text-danger">*</span></label>
+                <textarea class="form-control" id="descripcion" name="descripcion" rows="3"
+                    required>{{ data_source.get('descripcion', '') }}</textarea>
             </div>
 
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="monto" class="form-label">Monto (S/) <span class="text-danger">*</span></label>
-                    <input type="number" step="0.01" min="0.01" class="form-control" id="monto" name="monto" value="{{ data_source.get('monto', '') }}" required>
+                    <input type="number" step="0.01" min="0.01" class="form-control" id="monto" name="monto"
+                        value="{{ data_source.get('monto', '') }}" required>
                 </div>
                 <div class="col-md-6 mb-3">
-                    <label for="metodo_pago" class="form-label">Método de Pago <span class="text-danger">*</span></label>
+                    <label for="metodo_pago" class="form-label">Método de Pago <span
+                            class="text-danger">*</span></label>
                     <select class="form-select" id="metodo_pago" name="metodo_pago" required>
                         <option value="">Seleccione...</option>
-                        <option value="Efectivo" {% if data_source.get('metodo_pago') == 'Efectivo' %}selected{% endif %}>Efectivo</option>
-                        <option value="Cuenta Bancaria" {% if data_source.get('metodo_pago') == 'Cuenta Bancaria' %}selected{% endif %}>Cuenta Bancaria</option>
-                        <option value="Tarjeta Empresa" {% if data_source.get('metodo_pago') == 'Tarjeta Empresa' %}selected{% endif %}>Tarjeta Empresa</option>
-                        <option value="Yape/Plin" {% if data_source.get('metodo_pago') == 'Yape/Plin' %}selected{% endif %}>Yape/Plin</option>
-                        <option value="Otro" {% if data_source.get('metodo_pago') == 'Otro' %}selected{% endif %}>Otro</option>
+                        <option value="Efectivo" {% if data_source.get('metodo_pago')=='Efectivo' %}selected{% endif %}>
+                            Efectivo</option>
+                        <option value="Cuenta Bancaria" {% if data_source.get('metodo_pago')=='Cuenta Bancaria'
+                            %}selected{% endif %}>Cuenta Bancaria</option>
+                        <option value="Tarjeta Empresa" {% if data_source.get('metodo_pago')=='Tarjeta Empresa'
+                            %}selected{% endif %}>Tarjeta Empresa</option>
+                        <option value="Yape/Plin" {% if data_source.get('metodo_pago')=='Yape/Plin' %}selected{% endif
+                            %}>Yape/Plin</option>
+                        <option value="Otro" {% if data_source.get('metodo_pago')=='Otro' %}selected{% endif %}>Otro
+                        </option>
                     </select>
                 </div>
             </div>
-            
+
             <div class="form-check mb-2">
-                <input class="form-check-input" type="checkbox" id="checkRegistrarComprobante" data-bs-toggle="collapse" data-bs-target="#collapseComprobante" aria-expanded="false" aria-controls="collapseComprobante">
+                <input class="form-check-input" type="checkbox" id="checkRegistrarComprobante" data-bs-toggle="collapse"
+                    data-bs-target="#collapseComprobante" aria-expanded="false" aria-controls="collapseComprobante">
                 <label class="form-check-label" for="checkRegistrarComprobante">
                     Registrar Comprobante de Gasto (Opcional)
                 </label>
@@ -75,43 +104,95 @@
                     <h5 class="text-light">Detalles del Comprobante</h5>
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                             <label for="comprobante_tipo" class="form-label">Tipo</label>
-                             <select class="form-select" id="comprobante_tipo" name="comprobante_tipo">
+                            <label for="comprobante_tipo" class="form-label">Tipo</label>
+                            <select class="form-select" id="comprobante_tipo" name="comprobante_tipo">
                                 <option value="">Seleccione tipo...</option>
-                                <option value="Boleta de Venta" {% if data_source.get('comprobante_tipo') == 'Boleta de Venta' %}selected{% endif %}>Boleta de Venta</option>
-                                <option value="Factura" {% if data_source.get('comprobante_tipo') == 'Factura' %}selected{% endif %}>Factura</option>
-                                <option value="Recibo por Honorarios" {% if data_source.get('comprobante_tipo') == 'Recibo por Honorarios' %}selected{% endif %}>Recibo por Honorarios</option>
-                                <option value="Ticket" {% if data_source.get('comprobante_tipo') == 'Ticket' %}selected{% endif %}>Ticket</option>
-                                <option value="Otro" {% if data_source.get('comprobante_tipo') == 'Otro' %}selected{% endif %}>Otro</option>
+                                <option value="Boleta de Venta" {% if
+                                    data_source.get('comprobante_tipo')=='Boleta de Venta' %}selected{% endif %}>Boleta
+                                    de Venta</option>
+                                <option value="Factura" {% if data_source.get('comprobante_tipo')=='Factura'
+                                    %}selected{% endif %}>Factura</option>
+                                <option value="Recibo por Honorarios" {% if
+                                    data_source.get('comprobante_tipo')=='Recibo por Honorarios' %}selected{% endif %}>
+                                    Recibo por Honorarios</option>
+                                <option value="Ticket" {% if data_source.get('comprobante_tipo')=='Ticket' %}selected{%
+                                    endif %}>Ticket</option>
+                                <option value="Otro" {% if data_source.get('comprobante_tipo')=='Otro' %}selected{%
+                                    endif %}>Otro</option>
                             </select>
                         </div>
                         <div class="col-md-4 mb-3">
                             <label for="comprobante_serie" class="form-label">Serie</label>
-                            <input type="text" class="form-control" id="comprobante_serie" name="comprobante_serie" value="{{ data_source.get('comprobante_serie', '') }}">
+                            <input type="text" class="form-control" id="comprobante_serie" name="comprobante_serie"
+                                value="{{ data_source.get('comprobante_serie', '') }}">
                         </div>
                         <div class="col-md-4 mb-3">
                             <label for="comprobante_numero" class="form-label">Número</label>
-                            <input type="text" class="form-control" id="comprobante_numero" name="comprobante_numero" value="{{ data_source.get('comprobante_numero', '') }}">
+                            <input type="text" class="form-control" id="comprobante_numero" name="comprobante_numero"
+                                value="{{ data_source.get('comprobante_numero', '') }}">
                         </div>
                     </div>
                     <div class="row">
-                         <div class="col-md-4 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label for="comprobante_ruc_emisor" class="form-label">RUC del Emisor</label>
-                            <input type="text" class="form-control" id="comprobante_ruc_emisor" name="comprobante_ruc_emisor" value="{{ data_source.get('comprobante_ruc_emisor', '') }}" maxlength="11">
+                            <input type="text" class="form-control" id="comprobante_ruc_emisor"
+                                name="comprobante_ruc_emisor"
+                                value="{{ data_source.get('comprobante_ruc_emisor', '') }}" maxlength="11">
                         </div>
                         <div class="col-md-8 mb-3">
-                            <label for="comprobante_razon_social_emisor" class="form-label">Razón Social del Emisor</label>
-                            <input type="text" class="form-control" id="comprobante_razon_social_emisor" name="comprobante_razon_social_emisor" value="{{ data_source.get('comprobante_razon_social_emisor', '') }}">
+                            <label for="comprobante_razon_social_emisor" class="form-label">Razón Social del
+                                Emisor</label>
+                            <input type="text" class="form-control" id="comprobante_razon_social_emisor"
+                                name="comprobante_razon_social_emisor"
+                                value="{{ data_source.get('comprobante_razon_social_emisor', '') }}">
                         </div>
                     </div>
                 </div>
             </div>
-            
+
             <div class="d-flex justify-content-end mt-4">
-                <a href="{{ url_for('main.listar_gastos') }}" class="btn btn-secondary me-2"><i class="fas fa-times me-1"></i>Cancelar</a>
+                <a href="{{ url_for('main.listar_gastos') }}" class="btn btn-secondary me-2"><i
+                        class="fas fa-times me-1"></i>Cancelar</a>
                 <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Guardar Gasto</button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- Modal Nueva Categoría -->
+<div class="modal fade" id="modalNuevaCategoria" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light border-secondary shadow-lg">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" style="color: var(--color-acento-dorado);"><i
+                        class="fas fa-plus-circle me-2"></i>Nueva Categoría de Gasto</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Nombre <span class="text-danger">*</span></label>
+                    <input type="text" id="modal_cat_nombre" class="form-control bg-dark text-white border-secondary"
+                        placeholder="Ej: Adelanto de Sueldo">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Descripción (Opcional)</label>
+                    <input type="text" id="modal_cat_desc" class="form-control bg-dark text-white border-secondary"
+                        placeholder="Breve descripción...">
+                </div>
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="modal_cat_requiere">
+                    <label class="form-check-label text-warning" for="modal_cat_requiere">¿Requiere asignar un
+                        Beneficiario?</label>
+                    <div class="form-text text-muted small">Marque esto para gastos que deben vincularse a un
+                        colaborador.</div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnGuardarCategoriaModal">Crear Categoría</button>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -119,32 +200,115 @@
 {% block scripts %}
 {{ super() }}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const categoriaSelect = document.getElementById('categoria_gasto_id');
-    const bloqueBeneficiario = document.getElementById('bloque_beneficiario');
-    const selectBeneficiario = document.getElementById('empleado_beneficiario_id');
+    document.addEventListener('DOMContentLoaded', function () {
+        const categoriaSelect = document.getElementById('categoria_gasto_id');
+        const bloqueBeneficiario = document.getElementById('bloque_beneficiario');
+        const selectBeneficiario = document.getElementById('empleado_beneficiario_id');
 
-    function toggleBeneficiario() {
-        const selectedOption = categoriaSelect.options[categoriaSelect.selectedIndex];
-        if (!selectedOption) return; // Salir si no hay nada seleccionado
+        function toggleBeneficiario() {
+            const selectedOption = categoriaSelect.options[categoriaSelect.selectedIndex];
+            if (!selectedOption || !selectedOption.value) {
+                bloqueBeneficiario.style.display = 'none';
+                selectBeneficiario.required = false;
+                return;
+            }
 
-        const categoriaTexto = selectedOption.text.toLowerCase();
+            const requiere = selectedOption.getAttribute('data-requiere-beneficiario') === 'true';
+            const categoriaTexto = selectedOption.text.toLowerCase();
 
-        if (categoriaTexto.includes('adelanto') || categoriaTexto.includes('comisi')) { // 'comisi' para cubrir comisión/comisiones
-            bloqueBeneficiario.style.display = 'block';
-            selectBeneficiario.required = true;
-        } else {
-            bloqueBeneficiario.style.display = 'none';
-            selectBeneficiario.required = false;
-            selectBeneficiario.value = '';
+            // Mantenemos la lógica de palabras clave como fallback de seguridad
+            if (requiere || categoriaTexto.includes('adelanto') || categoriaTexto.includes('comisi')) {
+                bloqueBeneficiario.style.display = 'block';
+                selectBeneficiario.required = true;
+            } else {
+                bloqueBeneficiario.style.display = 'none';
+                selectBeneficiario.required = false;
+                selectBeneficiario.value = '';
+                if ($.fn.select2) { $(selectBeneficiario).trigger('change'); }
+            }
         }
-    }
 
-    // Listener para el cambio en el select de categoría
-    categoriaSelect.addEventListener('change', toggleBeneficiario);
+        // Listener para el cambio en el select de categoría
+        categoriaSelect.addEventListener('change', toggleBeneficiario);
 
-    // Llamada inicial para establecer el estado correcto al cargar la página (para el caso de edición)
-    toggleBeneficiario();
-});
+        // Llamada inicial
+        toggleBeneficiario();
+
+        // --- LÓGICA DEL MODAL RÁPIDO ---
+        const btnNuevaCat = document.getElementById('btnNuevaCategoria');
+        if (btnNuevaCat) {
+            const modalElement = document.getElementById('modalNuevaCategoria');
+            const modal = new bootstrap.Modal(modalElement);
+
+            btnNuevaCat.onclick = () => modal.show();
+
+            document.getElementById('btnGuardarCategoriaModal').onclick = function () {
+                const nombre = document.getElementById('modal_cat_nombre').value;
+                const descripcion = document.getElementById('modal_cat_desc').value;
+                const requiere = document.getElementById('modal_cat_requiere').checked;
+
+                if (!nombre) {
+                    alert("El nombre de la categoría es obligatorio");
+                    return;
+                }
+
+                // Desactivar botón para evitar doble envío
+                const btnGuardar = this;
+                btnGuardar.disabled = true;
+                btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Guardando...';
+
+                fetch("{{ url_for('main.api_crear_categoria_gasto_rapida') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        nombre: nombre,
+                        descripcion: descripcion,
+                        requiere_beneficiario: requiere
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Agregar la nueva opción al select
+                            const newOption = new Option(data.nombre, data.id);
+                            newOption.setAttribute('data-requiere-beneficiario', data.requiere_beneficiario ? 'true' : 'false');
+                            categoriaSelect.add(newOption);
+                            categoriaSelect.value = data.id;
+
+                            // Disparar toggle
+                            toggleBeneficiario();
+
+                            // Cerrar modal
+                            modal.hide();
+
+                            // Limpiar campos
+                            document.getElementById('modal_cat_nombre').value = '';
+                            document.getElementById('modal_cat_desc').value = '';
+                            document.getElementById('modal_cat_requiere').checked = false;
+
+                            alert("Categoría creada y seleccionada.");
+                        } else {
+                            alert("Error: " + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert("Ocurrió un error al procesar la solicitud.");
+                    })
+                    .finally(() => {
+                        btnGuardar.disabled = false;
+                        btnGuardar.innerHTML = 'Crear Categoría';
+                    });
+            };
+        }
+
+        // Inicializar Select2 si está disponible
+        if ($.fn.select2) {
+            $('.select2').select2({
+                theme: 'bootstrap-5',
+                dropdownParent: $('#bloque_beneficiario') // Importante para modales si estuviera en uno, pero aquí ayuda al render
+            });
+        }
+    });
 </script>
 {% endblock %}

@@ -5,44 +5,114 @@
 {% block content %}
 <div class="container-fluid mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-file-invoice-dollar me-2"></i>{{ titulo_pagina }}</h2>
-        <a href="{{ url_for('main.nuevo_gasto') }}" class="btn btn-primary">
-            <i class="fas fa-plus me-2"></i>Registrar Nuevo Gasto
-        </a>
+        <h2 style="color: var(--color-acento-dorado);"><i class="fas fa-file-invoice-dollar me-2"></i>{{ titulo_pagina
+            }}</h2>
+        <div>
+            <a href="{{ url_for('main.exportar_gastos_excel', **filtros) }}" class="btn btn-outline-success me-2">
+                <i class="fas fa-file-excel me-2"></i>Exportar Excel
+            </a>
+            <a href="{{ url_for('main.nuevo_gasto') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Registrar Nuevo Gasto
+            </a>
+        </div>
     </div>
 
-   %}
+    <!-- Filtros -->
+    <div class="card mb-4 bg-dark-custom border-secondary shadow-sm">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('main.listar_gastos') }}" class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label small text-muted">Fecha Inicio</label>
+                    <input type="date" name="fecha_inicio"
+                        class="form-control form-control-sm bg-dark text-white border-secondary"
+                        value="{{ filtros.get('fecha_inicio', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted">Fecha Fin</label>
+                    <input type="date" name="fecha_fin"
+                        class="form-control form-control-sm bg-dark text-white border-secondary"
+                        value="{{ filtros.get('fecha_fin', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted">Beneficiario (Colaborador)</label>
+                    <select name="beneficiario_id"
+                        class="form-select form-select-sm select2 bg-dark text-white border-secondary">
+                        <option value="">-- Todos --</option>
+                        {% for colab in colaboradores_matriz %}
+                        <option value="{{ colab.id }}" {% if filtros.get('beneficiario_id')|string==colab.id|string
+                            %}selected{% endif %}>
+                            {{ colab.apellidos }}, {{ colab.nombres }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted">Categoría de Gasto</label>
+                    <select name="categoria_id" class="form-select form-select-sm bg-dark text-white border-secondary">
+                        <option value="">-- Todas --</option>
+                        {% for cat in categorias_matriz %}
+                        <option value="{{ cat.id }}" {% if filtros.get('categoria_id')|string==cat.id|string
+                            %}selected{% endif %}>
+                            {{ cat.nombre }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary btn-sm w-100 me-2"><i
+                            class="fas fa-filter me-1"></i>Filtrar</button>
+                    <a href="{{ url_for('main.listar_gastos') }}" class="btn btn-outline-secondary btn-sm"
+                        title="Limpiar Filtros"><i class="fas fa-undo"></i></a>
+                </div>
+            </form>
+        </div>
+    </div>
 
     {% if gastos %}
     <div class="table-responsive">
-        <table class="table table-hover table-custom table-sm">
-            <thead>
+        <table class="table table-hover table-custom table-sm align-middle">
+            <thead class="table-dark">
                 <tr>
                     <th>ID</th>
                     <th>Fecha</th>
-                    <th>Descripción</th>
                     <th>Categoría</th>
+                    <th>A favor de / Beneficiario</th>
+                    <th>Descripción</th>
                     <th>Sucursal</th>
                     <th>Monto (S/)</th>
                     <th>Método Pago</th>
                     <th>Registrado por</th>
-                    <th>Acciones</th>
+                    <th class="text-center">Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 {% for gasto in gastos %}
                 <tr>
-                    <td>{{ gasto.id }}</td>
-                    <td>{{ gasto.fecha.strftime('%d/%m/%Y') if gasto.fecha else '-' }}</td>
-                    <td style="max-width: 300px; white-space: normal;">{{ gasto.descripcion }}</td>
-                    <td>{{ gasto.categoria_nombre }}</td>
-                    <td>{{ gasto.sucursal_nombre }}</td>
-                    <td class="text-end">{{ "%.2f"|format(gasto.monto) }}</td>
-                    <td>{{ gasto.metodo_pago }}</td>
-                    <td>{{ gasto.colaborador_nombre }}</td>
-                    <td class="table-actions">
-                        <a href="{{ url_for('main.editar_gasto', gasto_id=gasto.id) }}" class="btn btn-xs btn-warning" title="Editar Gasto"><i class="fas fa-edit"></i></a>
-                        <a href="{{ url_for('main.eliminar_gasto', gasto_id=gasto.id) }}" class="btn btn-xs btn-danger ms-1" title="Eliminar Gasto" onclick="return confirm('¿Estás seguro de que deseas eliminar este registro de gasto de forma permanente?');"><i class="fas fa-trash"></i></a>
+                    <td><span class="text-muted small">#{{ gasto.id }}</span></td>
+                    <td class="text-nowrap">{{ gasto.fecha.strftime('%d/%m/%Y') if gasto.fecha else '-' }}</td>
+                    <td><span class="badge bg-secondary">{{ gasto.categoria_nombre }}</span></td>
+                    <td>
+                        {% if gasto.beneficiario_nombre %}
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-user-circle me-2 text-info opacity-75" style="font-size: 1.2rem;"></i>
+                            <span class="fw-semibold" style="color: #e0e0e0;">{{ gasto.beneficiario_nombre }}</span>
+                        </div>
+                        {% else %}
+                        <span class="text-muted small">General / Otros</span>
+                        {% endif %}
+                    </td>
+                    <td style="max-width: 250px; white-space: normal;" class="small">{{ gasto.descripcion }}</td>
+                    <td><span class="small">{{ gasto.sucursal_nombre }}</span></td>
+                    <td class="text-end fw-bold text-danger">S/ {{ "%.2f"|format(gasto.monto) }}</td>
+                    <td><span class="small">{{ gasto.metodo_pago }}</span></td>
+                    <td class="small text-muted">{{ gasto.colaborador_nombre }}</td>
+                    <td class="table-actions text-center">
+                        <a href="{{ url_for('main.editar_gasto', gasto_id=gasto.id) }}"
+                            class="btn btn-xs btn-outline-warning" title="Editar Gasto"><i class="fas fa-edit"></i></a>
+                        <a href="{{ url_for('main.eliminar_gasto', gasto_id=gasto.id) }}"
+                            class="btn btn-xs btn-outline-danger ms-1" title="Eliminar Gasto"
+                            onclick="return confirm('¿Estás seguro de que deseas eliminar este registro de gasto de forma permanente?');"><i
+                                class="fas fa-trash"></i></a>
                     </td>
                 </tr>
                 {% endfor %}
@@ -50,9 +120,23 @@
         </table>
     </div>
     {% else %}
-    <div class="alert alert-info-custom">
-        <i class="fas fa-info-circle me-2"></i>No hay gastos registrados todavía.
+    <div class="alert alert-info bg-dark border-info text-info">
+        <i class="fas fa-info-circle me-2"></i>No se encontraron gastos que coincidan con los filtros seleccionados.
     </div>
     {% endif %}
 </div>
+
+{% block scripts %}
+<script>
+    $(document).ready(function () {
+        if ($.fn.select2) {
+            $('.select2').select2({
+                theme: 'bootstrap-5',
+                placeholder: 'Seleccione...',
+                allowClear: true
+            });
+        }
+    });
+</script>
+{% endblock %}
 {% endblock %}

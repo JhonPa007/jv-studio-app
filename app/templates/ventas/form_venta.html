@@ -203,9 +203,10 @@
                                 <select class="form-select" id="select_producto">
                                     <option value="">-- Agregar Producto --</option>
                                     {% for p in productos %}
+                                    {% set nombre_completo = p.nombre + ' (' + p.marca_nombre + ')' if p.marca_nombre else p.nombre %}
                                     <option value="{{ p.id }}" data-precio="{{ p.precio_venta }}"
-                                        data-nombre="{{ p.nombre }}" data-stock="{{ p.stock_actual }}">
-                                        {{ p.nombre }} (Stock: {{ p.stock_actual }}) - S/ {{
+                                        data-nombre="{{ nombre_completo }}" data-stock="{{ p.stock_actual }}">
+                                        {{ nombre_completo }} (Stock: {{ p.stock_actual }}) - S/ {{
                                         "%.2f"|format(p.precio_venta)
                                         }}
                                     </option>

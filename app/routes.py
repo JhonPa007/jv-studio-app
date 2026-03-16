@@ -5968,8 +5968,14 @@ def nueva_venta():
             cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY nombre")
             servicios = cursor.fetchall()
             
-            # 4. Productos Activos
-            cursor.execute("SELECT id, nombre, precio_venta, stock_actual FROM productos WHERE activo = TRUE ORDER BY nombre")
+            # 4. Productos Activos (con Marca)
+            cursor.execute("""
+                SELECT p.id, p.nombre, p.precio_venta, p.stock_actual, m.nombre as marca_nombre
+                FROM productos p
+                LEFT JOIN marcas m ON p.marca_id = m.id
+                WHERE p.activo = TRUE 
+                ORDER BY p.nombre
+            """)
             productos = cursor.fetchall()
             
             # 5. Campañas Vigentes
@@ -6409,13 +6415,28 @@ def listar_ventas():
     # Obtener filtros de la URL
     fecha_inicio_str = request.args.get('fecha_inicio')
     fecha_fin_str = request.args.get('fecha_fin')
+    
+    # Requerimiento: Si no hay filtros de fecha, cargar predeterminadamente con la fecha actual
+    lima_tz = pytz.timezone('America/Lima')
+    hoy = datetime.now(lima_tz).strftime('%Y-%m-%d')
+    
+    if not fecha_inicio_str or not fecha_inicio_str.strip():
+        fecha_inicio_str = hoy
+    if not fecha_fin_str or not fecha_fin_str.strip():
+        fecha_fin_str = hoy
+
     estado_pago = request.args.get('estado_pago')
     tipo_comprobante = request.args.get('tipo_comprobante')
     empleado_id = request.args.get('empleado_id') # Nuevo Filtro
 
-    # Valores por defecto para fechas si no se especifican (ej. mes actual o últimos 30 días)
-    # Estrategia: Si no hay filtros, mostrar ultimos 100 registros para no saturar.
-    # Si hay filtros de fecha, respetar el rango.
+    # Creamos un diccionario con los filtros actuales para pasarlo al template
+    filtros = {
+        'fecha_inicio': fecha_inicio_str,
+        'fecha_fin': fecha_fin_str,
+        'estado_pago': estado_pago or 'Todos',
+        'tipo_comprobante': tipo_comprobante or 'Todos',
+        'empleado_id': empleado_id or 'Todos'
+    }
     
     lista_de_empleados = []
 
@@ -6469,9 +6490,6 @@ def listar_ventas():
             base_sql += " ORDER BY v.fecha_venta DESC"
 
             # Límite por defecto si no hay filtro de fechas para evitar carga masiva experimental
-            if not fecha_inicio_str and not fecha_fin_str:
-                 base_sql += " LIMIT 200"
-
             cursor.execute(base_sql, tuple(params))
             lista_de_ventas = cursor.fetchall()
             
@@ -6481,9 +6499,10 @@ def listar_ventas():
         
     return render_template('ventas/lista_ventas.html', 
                             ventas=lista_de_ventas,
+                            total_ventas=len(lista_de_ventas),
                             empleados=lista_de_empleados,
                             titulo_pagina="Historial de Ventas",
-                            filtros=request.args)
+                            filtros=filtros)
 
 
 @main_bp.route('/ventas/exportar/excel')
@@ -7308,153 +7327,114 @@ def listar_categorias_gastos():
 @login_required
 @admin_required
 def nueva_categoria_gasto():
-    """
-    Muestra el formulario para registrar una nueva categoría de gasto (GET)
-    y procesa la creación (POST).
-    """
     form_titulo = "Registrar Nueva Categoría de Gasto"
     action_url_form = url_for('main.nueva_categoria_gasto')
 
     if request.method == 'POST':
         nombre = request.form.get('nombre')
         descripcion = request.form.get('descripcion')
+        requiere_beneficiario = 'requiere_beneficiario' in request.form
 
         if not nombre:
             flash('El nombre de la categoría es obligatorio.', 'warning')
             return render_template('finanzas/form_categoria_gasto.html', 
-                                   form_data=request.form, 
-                                   es_nueva=True, 
-                                   titulo_form=form_titulo,
-                                   action_url=action_url_form)
+                                   form_data=request.form, es_nueva=True, 
+                                   titulo_form=form_titulo, action_url=action_url_form)
 
-        cursor_insert = None
         try:
             db = get_db()
-            cursor_insert = db.cursor()
-            sql = "INSERT INTO categorias_gastos (nombre, descripcion) VALUES (%s, %s)"
-            val = (nombre, (descripcion if descripcion else None))
-            cursor_insert.execute(sql, val)
-            db.commit()
-            flash(f'Categoría de gasto "{nombre}" registrada exitosamente!', 'success')
-            return redirect(url_for('main.listar_categorias_gastos'))
+            with db.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO categorias_gastos (nombre, descripcion, requiere_beneficiario)
+                    VALUES (%s, %s, %s)
+                """, (nombre, (descripcion if descripcion else None), requiere_beneficiario))
+                db.commit()
+                flash(f'Categoría de gasto "{nombre}" registrada exitosamente!', 'success')
+                return redirect(url_for('main.listar_categorias_gastos'))
         except Exception as err:
-            db.rollback()
-            if err.errno == 1062: # Error de entrada duplicada (nombre UNIQUE)
-                flash(f'Error: Ya existe una categoría de gasto con el nombre "{nombre}".', 'danger')
-            else:
-                flash(f'Error al registrar la categoría: {err}', 'danger')
-            current_app.logger.error(f"Error en nueva_categoria_gasto (POST): {err}")
+            flash(f'Error al registrar la categoría: {err}', 'danger')
             return render_template('finanzas/form_categoria_gasto.html', 
-                                   form_data=request.form, 
-                                   es_nueva=True, 
-                                   titulo_form=form_titulo,
-                                   action_url=action_url_form)
-        finally:
-            if cursor_insert:
-                cursor_insert.close()
+                                   form_data=request.form, es_nueva=True, 
+                                   titulo_form=form_titulo, action_url=action_url_form)
 
-    # Método GET: muestra el formulario vacío
-    return render_template('finanzas/form_categoria_gasto.html', 
-                           es_nueva=True, 
-                           titulo_form=form_titulo,
-                           action_url=action_url_form)
+    return render_template('finanzas/form_categoria_gasto.html', es_nueva=True, 
+                           titulo_form=form_titulo, action_url=action_url_form)
+
+@main_bp.route('/api/finanzas/categorias_gastos/crear_rapida', methods=['POST'])
+@login_required
+def api_crear_categoria_gasto_rapida():
+    if not current_user.can('ver_finanzas'):
+        return jsonify({'success': False, 'message': 'No autorizado'}), 403
     
+    data = request.json
+    nombre = data.get('nombre')
+    descripcion = data.get('descripcion')
+    requiere_beneficiario = data.get('requiere_beneficiario', False)
+    
+    if not nombre:
+        return jsonify({'success': False, 'message': 'El nombre es obligatorio'}), 400
+        
+    try:
+        db = get_db()
+        with db.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO categorias_gastos (nombre, descripcion, requiere_beneficiario)
+                VALUES (%s, %s, %s) RETURNING id
+            """, (nombre, descripcion, requiere_beneficiario))
+            new_id = cursor.fetchone()[0]
+            db.commit()
+            return jsonify({
+                'success': True, 
+                'id': new_id, 
+                'nombre': nombre,
+                'requiere_beneficiario': requiere_beneficiario
+            })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @main_bp.route('/finanzas/categorias_gastos/editar/<int:categoria_id>', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def editar_categoria_gasto(categoria_id):
-    """
-    Muestra el formulario para editar una categoría de gasto existente (GET)
-    y procesa la actualización (POST).
-    """
     db_conn = get_db()
-    cursor = None 
-
-    # Obtener la categoría actual para editar
     categoria_actual = None
     try:
-        cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cursor.execute("SELECT id, nombre, descripcion FROM categorias_gastos WHERE id = %s", (categoria_id,))
-        categoria_actual = cursor.fetchone()
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            cursor.execute("SELECT id, nombre, descripcion, requiere_beneficiario FROM categorias_gastos WHERE id = %s", (categoria_id,))
+            categoria_actual = cursor.fetchone()
     except Exception as err:
-        flash(f"Error al buscar la categoría de gasto: {err}", "danger")
-        current_app.logger.error(f"Error DB buscando categoría de gasto en editar (ID: {categoria_id}): {err}")
+        flash(f"Error al buscar la categoría: {err}", "danger")
         return redirect(url_for('main.listar_categorias_gastos'))
-    finally:
-        if cursor: 
-            cursor.close()
-            cursor = None 
 
     if not categoria_actual:
-        flash(f"Categoría de gasto con ID {categoria_id} no encontrada.", "warning")
+        flash("Categoría no encontrada.", "warning")
         return redirect(url_for('main.listar_categorias_gastos'))
 
-    form_titulo = f"Editar Categoría: {categoria_actual.get('nombre', '')}"
+    form_titulo = f"Editar Categoría: {categoria_actual['nombre']}"
     action_url_form = url_for('main.editar_categoria_gasto', categoria_id=categoria_id)
 
     if request.method == 'POST':
         nombre_nuevo = request.form.get('nombre')
         descripcion_nueva = request.form.get('descripcion')
+        requiere_beneficiario = 'requiere_beneficiario' in request.form
         
-        errores = []
         if not nombre_nuevo:
-            errores.append('El nombre de la categoría es obligatorio.')
-
-        # Validar unicidad del nombre si ha cambiado
-        if nombre_nuevo and nombre_nuevo.lower() != categoria_actual.get('nombre', '').lower():
-            try:
-                cursor = db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-                cursor.execute("SELECT id FROM categorias_gastos WHERE nombre = %s AND id != %s", (nombre_nuevo, categoria_id))
-                if cursor.fetchone():
-                    errores.append(f'Error: Ya existe otra categoría de gasto con el nombre "{nombre_nuevo}".')
-            except Exception as err_check:
-                current_app.logger.error(f"Error DB verificando nombre de categoría de gasto: {err_check}")
-                errores.append("Error al verificar la disponibilidad del nombre.")
-            finally:
-                if cursor: cursor.close(); cursor = None
-        
-        if errores:
-            for error_msg in errores:
-                flash(error_msg, 'warning')
-            return render_template('finanzas/form_categoria_gasto.html',
-                                   es_nueva=False,
-                                   titulo_form=form_titulo,
-                                   action_url=action_url_form,
-                                   categoria=categoria_actual, # 'categoria' coincide con la variable en el form
-                                   form_data=request.form)
+            flash('El nombre es obligatorio.', 'warning')
         else:
-            # Actualizar la categoría en la BD
             try:
-                cursor = db_conn.cursor()
-                sql_update = "UPDATE categorias_gastos SET nombre = %s, descripcion = %s WHERE id = %s"
-                val_update = (nombre_nuevo, (descripcion_nueva if descripcion_nueva else None), categoria_id)
-                cursor.execute(sql_update, val_update)
-                db_conn.commit()
-                flash(f'Categoría de gasto "{nombre_nuevo}" actualizada exitosamente!', 'success')
-                return redirect(url_for('main.listar_categorias_gastos'))
-            except Exception as err_upd:
-                db_conn.rollback()
-                if err_upd.errno == 1062:
-                     flash(f'Error: Ya existe una categoría de gasto con el nombre "{nombre_nuevo}".', 'danger')
-                else:
-                    flash(f"Error al actualizar la categoría de gasto: {err_upd}", 'danger')
-                current_app.logger.error(f"Error DB en POST editar_categoria_gasto (ID: {categoria_id}): {err_upd}")
-            finally:
-                if cursor: cursor.close()
-            
-            return render_template('finanzas/form_categoria_gasto.html',
-                                   es_nueva=False,
-                                   titulo_form=form_titulo,
-                                   action_url=action_url_form,
-                                   categoria=categoria_actual,
-                                   form_data=request.form)
+                with db_conn.cursor() as cursor:
+                    cursor.execute("""
+                        UPDATE categorias_gastos SET nombre=%s, descripcion=%s, requiere_beneficiario=%s 
+                        WHERE id=%s
+                    """, (nombre_nuevo, descripcion_nueva, requiere_beneficiario, categoria_id))
+                    db_conn.commit()
+                    flash(f'Categoría "{nombre_nuevo}" actualizada exitosamente!', 'success')
+                    return redirect(url_for('main.listar_categorias_gastos'))
+            except Exception as err:
+                flash(f"Error al actualizar: {err}", 'danger')
 
-    # Método GET: Mostrar el formulario con los datos actuales
-    return render_template('finanzas/form_categoria_gasto.html', 
-                           es_nueva=False, 
-                           titulo_form=form_titulo,
-                           action_url=action_url_form,
-                           categoria=categoria_actual)
+    return render_template('finanzas/form_categoria_gasto.html', es_nueva=False, 
+                           titulo_form=form_titulo, action_url=action_url_form, categoria=categoria_actual)
 
 @main_bp.route('/finanzas/categorias_gastos/eliminar/<int:categoria_id>', methods=['GET'])
 @login_required
@@ -7507,35 +7487,156 @@ def listar_gastos():
         flash('Acceso denegado', 'danger')
         return redirect(url_for('main.index'))
     """
-    Muestra una lista de todos los gastos registrados.
+    Muestra una lista de todos los gastos registrados con filtros.
     """
+    fecha_inicio = request.args.get('fecha_inicio')
+    fecha_fin = request.args.get('fecha_fin')
+    beneficiario_id = request.args.get('beneficiario_id')
+    categoria_id = request.args.get('categoria_id')
+
     try:
         db = get_db()
         cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        where_clauses = ["TRUE"]
+        params = []
+        
+        if fecha_inicio:
+            where_clauses.append("g.fecha >= %s")
+            params.append(fecha_inicio)
+        if fecha_fin:
+            where_clauses.append("g.fecha <= %s")
+            params.append(fecha_fin)
+        if beneficiario_id:
+            where_clauses.append("g.empleado_beneficiario_id = %s")
+            params.append(beneficiario_id)
+        if categoria_id:
+            where_clauses.append("g.categoria_gasto_id = %s")
+            params.append(categoria_id)
+            
+        where_sql = " AND ".join(where_clauses)
+        
         # Unimos con otras tablas para obtener nombres en lugar de solo IDs
-        sql = """
+        sql = f"""
             SELECT 
                 g.id, g.fecha, g.descripcion, g.monto, g.metodo_pago,
                 s.nombre AS sucursal_nombre,
                 cg.nombre AS categoria_nombre,
-                CONCAT(e.nombres, ' ', e.apellidos) AS colaborador_nombre
+                CONCAT(e.nombres, ' ', e.apellidos) AS colaborador_nombre,
+                CONCAT(eb.nombres, ' ', eb.apellidos) AS beneficiario_nombre
             FROM gastos g
             JOIN sucursales s ON g.sucursal_id = s.id
             JOIN categorias_gastos cg ON g.categoria_gasto_id = cg.id
             JOIN empleados e ON g.registrado_por_colaborador_id = e.id
+            LEFT JOIN empleados eb ON g.empleado_beneficiario_id = eb.id
+            WHERE {where_sql}
             ORDER BY g.fecha DESC, g.id DESC
         """
-        cursor.execute(sql)
+        cursor.execute(sql, params)
         lista_de_gastos = cursor.fetchall()
+
+        # Maestros para los filtros
+        cursor.execute("SELECT id, nombre FROM categorias_gastos ORDER BY nombre")
+        categorias = cursor.fetchall()
+        cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE ORDER BY nombres")
+        colaboradores = cursor.fetchall()
+
         cursor.close()
     except Exception as err:
         flash(f"Error al acceder a los gastos: {err}", "danger")
         current_app.logger.error(f"Error en listar_gastos: {err}")
         lista_de_gastos = []
+        categorias = []
+        colaboradores = []
         
     return render_template('finanzas/lista_gastos.html', 
                            gastos=lista_de_gastos,
+                           categorias_matriz=categorias,
+                           colaboradores_matriz=colaboradores,
+                           filtros=request.args,
                            titulo_pagina="Historial de Gastos")
+
+@main_bp.route('/finanzas/gastos/exportar')
+@login_required
+def exportar_gastos_excel():
+    if not current_user.can('ver_finanzas'):
+        return "No autorizado", 403
+        
+    fecha_inicio = request.args.get('fecha_inicio')
+    fecha_fin = request.args.get('fecha_fin')
+    beneficiario_id = request.args.get('beneficiario_id')
+    categoria_id = request.args.get('categoria_id')
+
+    try:
+        db = get_db()
+        cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        where_clauses = ["TRUE"]
+        params = []
+        
+        if fecha_inicio:
+            where_clauses.append("g.fecha >= %s")
+            params.append(fecha_inicio)
+        if fecha_fin:
+            where_clauses.append("g.fecha <= %s")
+            params.append(fecha_fin)
+        if beneficiario_id:
+            where_clauses.append("g.empleado_beneficiario_id = %s")
+            params.append(beneficiario_id)
+        if categoria_id:
+            where_clauses.append("g.categoria_gasto_id = %s")
+            params.append(categoria_id)
+            
+        where_sql = " AND ".join(where_clauses)
+        
+        sql = f"""
+            SELECT 
+                g.fecha,
+                cg.nombre AS categoria,
+                g.descripcion,
+                g.monto,
+                g.metodo_pago,
+                s.nombre AS sucursal,
+                CONCAT(eb.nombres, ' ', eb.apellidos) AS beneficiario,
+                CONCAT(e.nombres, ' ', e.apellidos) AS registrado_por
+            FROM gastos g
+            JOIN sucursales s ON g.sucursal_id = s.id
+            JOIN categorias_gastos cg ON g.categoria_gasto_id = cg.id
+            JOIN empleados e ON g.registrado_por_colaborador_id = e.id
+            LEFT JOIN empleados eb ON g.empleado_beneficiario_id = eb.id
+            WHERE {where_sql}
+            ORDER BY g.fecha DESC, g.id DESC
+        """
+        cursor.execute(sql, params)
+        data = cursor.fetchall()
+        cursor.close()
+        
+        if not data:
+            flash("No hay datos para exportar con los filtros seleccionados.", "warning")
+            return redirect(url_for('main.listar_gastos', **request.args))
+
+        import pandas as pd
+        import io
+        from flask import send_file
+        
+        df = pd.DataFrame(data)
+            
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Gastos')
+            
+        output.seek(0)
+        
+        return send_file(
+            output,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=f"reporte_gastos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        )
+        
+    except Exception as e:
+        flash(f"Error al exportar: {e}", "danger")
+        return redirect(url_for('main.listar_gastos'))
 
 @main_bp.route('/finanzas/gastos/nuevo', methods=['GET', 'POST'])
 @login_required
@@ -7584,7 +7685,7 @@ def nuevo_gasto():
     try:
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # Categorías
-            cursor.execute("SELECT id, nombre FROM categorias_gastos ORDER BY nombre")
+            cursor.execute("SELECT id, nombre, requiere_beneficiario FROM categorias_gastos ORDER BY nombre")
             categorias_gastos = cursor.fetchall()
             
             # Colaboradores
@@ -7708,7 +7809,7 @@ def editar_gasto(gasto_id):
                 return redirect(url_for('main.listar_gastos'))
 
             # Cargar Maestros
-            cursor.execute("SELECT id, nombre FROM categorias_gastos ORDER BY nombre")
+            cursor.execute("SELECT id, nombre, requiere_beneficiario FROM categorias_gastos ORDER BY nombre")
             categorias_gastos = cursor.fetchall()
             
             cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE ORDER BY apellidos, nombres")
