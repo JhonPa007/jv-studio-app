@@ -1,0 +1,3 @@
+﻿Columns in gastos: ['fecha', 'sucursal_id', 'registrado_por_colaborador_id', 'fecha_registro', 'empleado_beneficiario_id', 'monto', 'id', 'categoria_gasto_id', 'caja_sesion_id', 'comprobante_razon_social_emisor', 'descripcion', 'metodo_pago', 'comprobante_tipo', 'comprobante_serie', 'comprobante_numero', 'comprobante_ruc_emisor']
+Recent adelantos:
+Open cajas in sucursal 1: []

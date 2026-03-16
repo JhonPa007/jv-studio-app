@@ -1,0 +1,17 @@
+Columns in gastos:
+  caja_sesion_id
+  categoria_gasto_id
+  comprobante_numero
+  comprobante_razon_social_emisor
+  comprobante_ruc_emisor
+  comprobante_serie
+  comprobante_tipo
+  descripcion
+  empleado_beneficiario_id
+  fecha
+  fecha_registro
+  id
+  metodo_pago
+  monto
+  registrado_por_colaborador_id
+  sucursal_id

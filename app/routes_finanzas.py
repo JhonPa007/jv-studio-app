@@ -912,20 +912,26 @@ def confirmar_adelanto(gasto_id):
             caja_id = caja['id']
 
             # 3. Actualizar el gasto (Confirmarlo y enrrutarlo a la caja de hoy)
+            # Usamos COALESCE para manejar posibles nulos en la BD
             cursor.execute("""
                 UPDATE gastos 
                 SET estado_confirmacion = 'Confirmado', caja_sesion_id = %s
-                WHERE id = %s AND (estado_confirmacion != 'Confirmado' OR caja_sesion_id IS NULL)
+                WHERE id = %s AND (COALESCE(estado_confirmacion, 'Pendiente') != 'Confirmado' OR caja_sesion_id IS NULL)
             """, (caja_id, gasto_id))
             
             if cursor.rowcount == 0:
-                return jsonify({'error': 'Adelanto ya confirmado previamente'}), 400
+                # Verificamos si realmente ya tiene caja para dar un error coherente
+                cursor.execute("SELECT caja_sesion_id, estado_confirmacion FROM gastos WHERE id = %s", (gasto_id,))
+                check = cursor.fetchone()
+                if check and check['caja_sesion_id'] and check['estado_confirmacion'] == 'Confirmado':
+                    return jsonify({'error': 'Este adelanto ya fue confirmado y registrado en caja previamente.'}), 400
                 
             db.commit()
-            return jsonify({'mensaje': 'Adelanto confirmado exitosamente. El descuento ha sido aplicado a la caja actual y a tu planilla.'})
+            return jsonify({'mensaje': 'Adelanto confirmado exitosamente. El egreso ha sido aplicado a la caja actual y a tu planilla.'})
     except Exception as e:
         db.rollback()
-        return jsonify({'error': str(e)}), 500
+        current_app.logger.error(f"Error confirmando adelanto {gasto_id}: {e}")
+        return jsonify({'error': 'Error interno al procesar la confirmación.'}), 500
 
 @finanzas_bp.route('/api/adelantos/<int:gasto_id>/rechazar', methods=['PUT'])
 @login_required

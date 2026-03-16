@@ -1,0 +1,5 @@
+﻿Column estado_confirmacion MISSING
+Error: no existe la columna ½estado_confirmacion╗
+LINE 1: SELECT id, descripcion, monto, caja_sesion_id, estado_confir...
+                                                       ^
+
