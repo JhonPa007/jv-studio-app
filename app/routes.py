@@ -1030,6 +1030,35 @@ def api_buscar_cliente_por_documento():
         return jsonify({"error": "Error interno al buscar el cliente."}), 500
 
 
+@main_bp.route('/api/clientes/buscar_por_telefono')
+@login_required
+def api_buscar_cliente_por_telefono():
+    """
+    API para buscar un cliente existente por su número de teléfono.
+    """
+    telefono = request.args.get('telefono', '').strip()
+
+    if not telefono:
+        return jsonify({"error": "Se requiere un número de teléfono."}), 400
+
+    try:
+        db = get_db()
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Buscamos por teléfono exacto
+            sql = "SELECT id, razon_social_nombres, apellidos, numero_documento, telefono FROM clientes WHERE telefono = %s"
+            cursor.execute(sql, (telefono,))
+            cliente = cursor.fetchone()
+
+            if cliente:
+                return jsonify(cliente)
+            else:
+                return jsonify({"error": "No se encontró un cliente con ese teléfono."}), 404
+    
+    except Exception as err:
+        current_app.logger.error(f"Error DB en api_buscar_cliente_por_telefono: {err}")
+        return jsonify({"error": "Error interno al buscar el cliente."}), 500
+
+
 # --- RUTAS PARA EL HISTORIAL DE CLIENTES (CLÍNICO/FOTOGRÁFICO) ---
 
 @main_bp.route('/clientes/historial/<int:cliente_id>', methods=['GET'])
