@@ -1394,15 +1394,29 @@ def listar_servicios():
         db = get_db()
         cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # Usamos un JOIN para obtener el nombre de la categoría del servicio
-        sql = """
-            SELECT s.id, s.nombre, s.descripcion, s.duracion_minutos, s.precio, 
-                   s.activo, cs.nombre as categoria_nombre, s.categoria_id, s.orden
-            FROM servicios s
-            JOIN categorias_servicios cs ON s.categoria_id = cs.id
-            ORDER BY s.orden ASC, s.nombre ASC
-        """
-        cursor.execute(sql)
-        lista_de_servicios = cursor.fetchall()
+        try:
+            sql = """
+                SELECT s.id, s.nombre, s.descripcion, s.duracion_minutos, s.precio, 
+                       s.activo, cs.nombre as categoria_nombre, s.categoria_id, s.orden
+                FROM servicios s
+                JOIN categorias_servicios cs ON s.categoria_id = cs.id
+                ORDER BY s.orden ASC, s.nombre ASC
+            """
+            cursor.execute(sql)
+            lista_de_servicios = cursor.fetchall()
+        except Exception:
+            # Fallback por si la columna 'orden' aún no ha sido migrada
+            db.rollback()
+            cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) # Reabrir cursor tras rollback
+            sql = """
+                SELECT s.id, s.nombre, s.descripcion, s.duracion_minutos, s.precio, 
+                       s.activo, cs.nombre as categoria_nombre, s.categoria_id
+                FROM servicios s
+                JOIN categorias_servicios cs ON s.categoria_id = cs.id
+                ORDER BY s.nombre ASC
+            """
+            cursor.execute(sql)
+            lista_de_servicios = cursor.fetchall()
         cursor.close()
     except Exception as err:
         flash(f"Error al acceder a los servicios: {err}", "danger")
@@ -4780,22 +4794,42 @@ def listar_productos():
         db = get_db()
         cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         # Consulta SQL corregida para incluir TODAS las columnas necesarias
-        sql = """
-            SELECT 
-                p.id, p.nombre, p.stock_actual, p.stock_minimo, p.activo,
-                p.precio_venta, p.comision_vendedor_monto,
-                p.contenido_neto_valor, p.unidad_medida, p.orden,
-                cp.nombre AS categoria_nombre,
-                m.nombre AS marca_nombre, 
-                pr.nombre_empresa AS proveedor_nombre
-            FROM productos p
-            LEFT JOIN categorias_productos cp ON p.categoria_id = cp.id
-            LEFT JOIN marcas m ON p.marca_id = m.id 
-            LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
-            ORDER BY p.orden ASC, p.nombre ASC
-        """
-        cursor.execute(sql)
-        lista_de_productos = cursor.fetchall()
+        try:
+            sql = """
+                SELECT 
+                    p.id, p.nombre, p.stock_actual, p.stock_minimo, p.activo,
+                    p.precio_venta, p.comision_vendedor_monto,
+                    p.contenido_neto_valor, p.unidad_medida, p.orden,
+                    cp.nombre AS categoria_nombre,
+                    m.nombre AS marca_nombre, 
+                    pr.nombre_empresa AS proveedor_nombre
+                FROM productos p
+                LEFT JOIN categorias_productos cp ON p.categoria_id = cp.id
+                LEFT JOIN marcas m ON p.marca_id = m.id 
+                LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
+                ORDER BY p.orden ASC, p.nombre ASC
+            """
+            cursor.execute(sql)
+            lista_de_productos = cursor.fetchall()
+        except Exception:
+            db.rollback()
+            cursor = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            sql = """
+                SELECT 
+                    p.id, p.nombre, p.stock_actual, p.stock_minimo, p.activo,
+                    p.precio_venta, p.comision_vendedor_monto,
+                    p.contenido_neto_valor, p.unidad_medida,
+                    cp.nombre AS categoria_nombre,
+                    m.nombre AS marca_nombre, 
+                    pr.nombre_empresa AS proveedor_nombre
+                FROM productos p
+                LEFT JOIN categorias_productos cp ON p.categoria_id = cp.id
+                LEFT JOIN marcas m ON p.marca_id = m.id 
+                LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
+                ORDER BY p.nombre ASC
+            """
+            cursor.execute(sql)
+            lista_de_productos = cursor.fetchall()
         cursor.close()
     except Exception as err:
         flash(f"Error al acceder a los productos: {err}", "danger")
@@ -5993,18 +6027,34 @@ def nueva_venta():
             empleados = cursor.fetchall()
             
             # 3. Servicios Activos
-            cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY orden ASC, nombre ASC")
-            servicios = cursor.fetchall()
+            try:
+                cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY orden ASC, nombre ASC")
+                servicios = cursor.fetchall()
+            except Exception:
+                db_conn.rollback()
+                cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY nombre ASC")
+                servicios = cursor.fetchall()
             
             # 4. Productos Activos (con Marca)
-            cursor.execute("""
-                SELECT p.id, p.nombre, p.precio_venta, p.stock_actual, m.nombre as marca_nombre
-                FROM productos p
-                LEFT JOIN marcas m ON p.marca_id = m.id
-                WHERE p.activo = TRUE 
-                ORDER BY p.orden ASC, p.nombre ASC
-            """)
-            productos = cursor.fetchall()
+            try:
+                cursor.execute("""
+                    SELECT p.id, p.nombre, p.precio_venta, p.stock_actual, m.nombre as marca_nombre
+                    FROM productos p
+                    LEFT JOIN marcas m ON p.marca_id = m.id
+                    WHERE p.activo = TRUE 
+                    ORDER BY p.orden ASC, p.nombre ASC
+                """)
+                productos = cursor.fetchall()
+            except Exception:
+                db_conn.rollback()
+                cursor.execute("""
+                    SELECT p.id, p.nombre, p.precio_venta, p.stock_actual, m.nombre as marca_nombre
+                    FROM productos p
+                    LEFT JOIN marcas m ON p.marca_id = m.id
+                    WHERE p.activo = TRUE 
+                    ORDER BY p.nombre ASC
+                """)
+                productos = cursor.fetchall()
             
             # 5. Campañas Vigentes
             cursor.execute("SELECT id, nombre FROM campanas WHERE activo = TRUE AND CURRENT_DATE BETWEEN fecha_inicio AND fecha_fin")
