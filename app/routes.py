@@ -5551,6 +5551,69 @@ def api_crear_marca_rapida():
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+@main_bp.route('/api/productos/crear_rapido', methods=['POST'])
+@login_required
+@admin_required
+def api_crear_producto_rapido():
+    """
+    Crea un producto básico vía AJAX desde el formulario de compra.
+    """
+    if not request.is_json:
+        return jsonify({"success": False, "message": "Se requiere JSON"}), 400
+        
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip().title()
+    categoria_id = data.get('categoria_id')
+    marca_id = data.get('marca_id') or None
+    precio_compra = float(data.get('precio_compra') or 0)
+    precio_venta = float(data.get('precio_venta') or 0)
+    codigo_barras = data.get('codigo_barras', '').strip() or None
+    
+    if not nombre or not categoria_id or not precio_venta:
+        return jsonify({'success': False, 'message': 'Nombre, Categoría y Precio Venta son obligatorios.'}), 400
+
+    try:
+        db = get_db()
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Verificar duplicados por nombre
+            cursor.execute("SELECT id FROM productos WHERE LOWER(nombre) = LOWER(%s)", (nombre,))
+            if cursor.fetchone():
+                return jsonify({'success': False, 'message': f'Ya existe un producto llamado "{nombre}".'}), 400
+
+            # 2. Insertar
+            sql = """
+                INSERT INTO productos (nombre, categoria_id, marca_id, precio_compra, precio_venta, codigo_barras, stock_actual, activo)
+                VALUES (%s, %s, %s, %s, %s, %s, 0, TRUE)
+                RETURNING id, nombre
+            """
+            cursor.execute(sql, (nombre, categoria_id, marca_id, precio_compra, precio_venta, codigo_barras))
+            nuevo_prod = cursor.fetchone()
+            
+            # Obtener nombre de la marca si existe
+            marca_nombre = "Sin Marca"
+            if marca_id:
+                cursor.execute("SELECT nombre FROM marcas WHERE id = %s", (marca_id,))
+                row_m = cursor.fetchone()
+                if row_m: marca_nombre = row_m['nombre']
+                
+            db.commit()
+            
+            return jsonify({
+                'success': True,
+                'producto': {
+                    'id': nuevo_prod['id'],
+                    'nombre': nuevo_prod['nombre'],
+                    'marca_nombre': marca_nombre,
+                    'precio_compra': precio_compra
+                }
+            })
+
+    except Exception as e:
+        if db: db.rollback()
+        current_app.logger.error(f"Error api_crear_producto_rapido: {e}")
+        return jsonify({'success': False, 'message': f'Error interno: {str(e)}'}), 500
+
+
 # --- RUTAS PARA VENTAS ---
 
 
@@ -8122,6 +8185,7 @@ def nueva_compra():
     
     # --- Cargar datos para los menús desplegables ---
     proveedores_activos, sucursales_activas, productos_activos = [], [], []
+    categorias_prod, marcas_todas = [], []
     tipos_comprobante_compra = ["Factura", "Boleta de Venta", "Guía de Remisión", "Otro"]
     estados_pago_compra = ["Pagada", "Pendiente de Pago", "Crédito"]
     
@@ -8129,11 +8193,17 @@ def nueva_compra():
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute("SELECT id, nombre_empresa FROM proveedores WHERE activo = TRUE ORDER BY nombre_empresa")
             proveedores_activos = cursor.fetchall()
-        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            
             cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
             sucursales_activas = cursor.fetchall()
-        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # Consulta actualizada para incluir el nombre de la marca
+            
+            cursor.execute("SELECT id, nombre FROM categorias_productos WHERE activo = TRUE ORDER BY nombre")
+            categorias_prod = cursor.fetchall()
+            
+            cursor.execute("SELECT id, nombre FROM marcas WHERE activo = TRUE ORDER BY nombre")
+            marcas_todas = cursor.fetchall()
+            
+            # Consulta actualizada para incluir el nombre de la marca y ordenar por ella
             sql_productos_compra = """
                 SELECT 
                     p.id, p.nombre, p.precio_compra,
@@ -8141,7 +8211,7 @@ def nueva_compra():
                 FROM productos p
                 LEFT JOIN marcas m ON p.marca_id = m.id
                 WHERE p.activo = TRUE 
-                ORDER BY p.nombre, m.nombre
+                ORDER BY m.nombre ASC NULLS LAST, p.nombre ASC
             """
             cursor.execute(sql_productos_compra)
             productos_activos = cursor.fetchall()
@@ -8237,8 +8307,11 @@ def nueva_compra():
                            proveedores=proveedores_activos,
                            sucursales=sucursales_activas,
                            productos=productos_activos,
-                           tipos_comprobante=tipos_comprobante_compra,
-                           estados_pago=estados_pago_compra)
+                           tipos_comprobante=tipos_comprobante_compra, 
+                           estados_pago=estados_pago_compra,
+                           categorias_prod=categorias_prod,
+                           marcas_todas=marcas_todas)
+
 
 @main_bp.route('/compras')
 @login_required

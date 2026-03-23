@@ -125,16 +125,31 @@
                 <div class="row g-2 align-items-end">
                     <div class="col-md-5">
                         <label for="selectProducto" class="form-label">Producto:</label>
-                        <select id="selectProducto" class="form-select form-select-sm">
-                            <option value="">Seleccione un producto...</option>
-                            {% for prod in productos %}
-                            <option value="{{ prod.id }}" data-nombre="{{ prod.nombre }}" data-costo="{{ "
-                                %.2f"|format(prod.precio_compra) if prod.precio_compra else '0.00' }}">
-                                {# Texto actualizado para mostrar producto y marca #}
-                                {{ prod.nombre }} - **{{ prod.marca_nombre if prod.marca_nombre else 'Sin Marca' }}**
-                            </option>
-                            {% endfor %}
-                        </select>
+                        <div class="input-group">
+                            <select id="selectProducto" class="form-select form-select-sm">
+                                <option value="">Seleccione un producto...</option>
+                                {% set group = None %}
+                                {% for prod in productos %}
+                                {% set brand = prod.marca_nombre if prod.marca_nombre else 'Sin Marca' %}
+                                {% if brand != group %}
+                                {% if group is not none %}</optgroup>{% endif %}
+                                <optgroup label="{{ brand }}">
+                                    {% set group = brand %}
+                                    {% endif %}
+                                    <option value="{{ prod.id }}" data-nombre="{{ prod.nombre }}" data-costo="{{ "
+                                        %.2f"|format(prod.precio_compra) if prod.precio_compra else '0.00' }}"
+                                        data-marca="{{ brand }}">
+                                        {{ prod.nombre }}
+                                    </option>
+                                    {% endfor %}
+                                    {% if group is not none %}
+                                </optgroup>{% endif %}
+                            </select>
+                            <button type="button" class="btn btn-outline-warning btn-sm" id="btnNuevoProductoCompra"
+                                title="Crear Nuevo Producto">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="col-md-2">
                         <label for="cantidadProducto" class="form-label">Cantidad:</label>
@@ -217,6 +232,74 @@
                 <button type="submit" class="btn btn-success"><i class="fas fa-save me-1"></i>Guardar Compra</button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- Modal para Crear Nuevo Producto Rápido -->
+<div class="modal fade" id="modalNuevoProductoRapido" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-white border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-warning"><i class="fas fa-plus-circle me-2"></i>Nuevo Producto Rápido</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <form id="formNuevoProductoRapido">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="np_nombre" class="form-label small">Nombre del Producto *</label>
+                        <input type="text" class="form-control form-control-sm bg-secondary text-white border-0"
+                            id="np_nombre" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="np_categoria_id" class="form-label small">Categoría *</label>
+                            <select id="np_categoria_id"
+                                class="form-select form-select-sm bg-secondary text-white border-0" required>
+                                <option value="">Seleccione...</option>
+                                {% for cat in categorias_prod %}
+                                <option value="{{ cat.id }}">{{ cat.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="np_marca_id" class="form-label small">Marca (Opcional)</label>
+                            <select id="np_marca_id"
+                                class="form-select form-select-sm bg-secondary text-white border-0">
+                                <option value="">Sin Marca</option>
+                                {% for mar in marcas_todas %}
+                                <option value="{{ mar.id }}">{{ mar.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="np_precio_compra" class="form-label small">Último Precio Compra (S/)</label>
+                            <input type="number" step="0.01"
+                                class="form-control form-control-sm bg-secondary text-white border-0"
+                                id="np_precio_compra" value="0.00">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="np_precio_venta" class="form-label small">Precio Venta (S/) *</label>
+                            <input type="number" step="0.01"
+                                class="form-control form-control-sm bg-secondary text-white border-0"
+                                id="np_precio_venta" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="np_codigo_barras" class="form-label small">Código de Barras (Opcional)</label>
+                        <input type="text" class="form-control form-control-sm bg-secondary text-white border-0"
+                            id="np_codigo_barras">
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                        data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning btn-sm fw-bold">Guardar y Seleccionar</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -352,6 +435,80 @@
         }
 
         actualizarTotalesCompra();
+
+        // Lógica para crear nuevo producto rápido
+        const btnNuevoProducto = document.getElementById('btnNuevoProductoCompra');
+        const modalNuevoProducto = new bootstrap.Modal(document.getElementById('modalNuevoProductoRapido'));
+        const formNuevoProducto = document.getElementById('formNuevoProductoRapido');
+
+        if (btnNuevoProducto) {
+            btnNuevoProducto.addEventListener('click', () => modalNuevoProducto.show());
+        }
+
+        if (formNuevoProducto) {
+            formNuevoProducto.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const data = {
+                    nombre: document.getElementById('np_nombre').value,
+                    categoria_id: document.getElementById('np_categoria_id').value,
+                    marca_id: document.getElementById('np_marca_id').value,
+                    precio_compra: document.getElementById('np_precio_compra').value,
+                    precio_venta: document.getElementById('np_precio_venta').value,
+                    codigo_barras: document.getElementById('np_codigo_barras').value
+                };
+
+                fetch("{{ url_for('main.api_crear_producto_rapido') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                })
+                    .then(res => res.json())
+                    .then(resData => {
+                        if (resData.success) {
+                            const prod = resData.producto;
+
+                            // Intentar encontrar el optgroup de la marca
+                            let optgroup = Array.from(selectProducto.querySelectorAll('optgroup')).find(g => g.label === prod.marca_nombre);
+                            if (!optgroup) {
+                                optgroup = document.createElement('optgroup');
+                                optgroup.label = prod.marca_nombre;
+                                selectProducto.appendChild(optgroup);
+                            }
+
+                            const newOpt = document.createElement('option');
+                            newOpt.value = prod.id;
+                            newOpt.textContent = prod.nombre;
+                            newOpt.dataset.nombre = prod.nombre;
+                            newOpt.dataset.costo = prod.precio_compra.toFixed(2);
+                            newOpt.dataset.marca = prod.marca_nombre;
+
+                            optgroup.appendChild(newOpt);
+                            selectProducto.value = prod.id;
+                            costoProductoInput.value = prod.precio_compra.toFixed(2);
+
+                            modalNuevoProducto.hide();
+                            formNuevoProducto.reset();
+
+                            // Notificación si SweetAlert2 está disponible
+                            if (window.Swal) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: '¡Producto creado!',
+                                    text: `"${prod.nombre}" se ha registrado y seleccionado.`,
+                                    timer: 2000,
+                                    showConfirmButton: false
+                                });
+                            }
+                        } else {
+                            alert("Error al crear producto: " + resData.message);
+                        }
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        alert("Error de conexión al intentar crear el producto.");
+                    });
+            });
+        }
     });
 </script>
 {% endblock %}
