@@ -268,6 +268,9 @@ def check_schema_updates(app):
                     ("reservas", "origen", "VARCHAR(20) DEFAULT 'POS'"),
                     # CATEGORIAS GASTOS
                     ("categorias_gastos", "requiere_beneficiario", "BOOLEAN DEFAULT FALSE"),
+                    # ORDENACION
+                    ("servicios", "orden", "INTEGER DEFAULT 0"),
+                    ("productos", "orden", "INTEGER DEFAULT 0"),
                 ]
                 
                 print("--- Iniciando Verificación de Schema (Auto-Migration) ---")

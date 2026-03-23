@@ -1396,10 +1396,10 @@ def listar_servicios():
         # Usamos un JOIN para obtener el nombre de la categoría del servicio
         sql = """
             SELECT s.id, s.nombre, s.descripcion, s.duracion_minutos, s.precio, 
-                   s.activo, cs.nombre as categoria_nombre, s.categoria_id
+                   s.activo, cs.nombre as categoria_nombre, s.categoria_id, s.orden
             FROM servicios s
             JOIN categorias_servicios cs ON s.categoria_id = cs.id
-            ORDER BY s.nombre
+            ORDER BY s.orden ASC, s.nombre ASC
         """
         cursor.execute(sql)
         lista_de_servicios = cursor.fetchall()
@@ -1441,6 +1441,7 @@ def nuevo_servicio():
         # El campo 'activo' de un checkbox se envía si está marcado, no se envía si no.
         porcentaje_comision_extra_str = request.form.get('porcentaje_comision_extra')
         porcentaje_comision_extra = float(porcentaje_comision_extra_str) if porcentaje_comision_extra_str else None
+        orden = request.form.get('orden', '0', type=int)
         activo = 'activo' in request.form # True si 'activo' está en request.form, False si no.
 
         # Validaciones
@@ -1453,9 +1454,7 @@ def nuevo_servicio():
             errores.append('El precio es obligatorio.')
         else:
             try:
-                # Intentar convertir precio a un tipo numérico adecuado para DECIMAL
-                # Se puede usar float() o Decimal() de la librería decimal
-                precio_decimal = float(precio) # Ojo con la precisión de float para dinero. Decimal es mejor.
+                precio_decimal = float(precio)
                 if precio_decimal < 0:
                     errores.append('El precio no puede ser negativo.')
             except ValueError:
@@ -1476,9 +1475,9 @@ def nuevo_servicio():
             db = get_db()
             cursor = db.cursor()
             sql = """INSERT INTO servicios 
-                                (nombre, descripcion, duracion_minutos, precio, categoria_id, activo, porcentaje_comision_extra) 
-                             VALUES (%s, %s, %s, %s, %s, %s, %s)"""
-            val = (nombre, (descripcion or None), duracion_minutos, precio, categoria_id, activo, porcentaje_comision_extra)
+                                (nombre, descripcion, duracion_minutos, precio, categoria_id, activo, porcentaje_comision_extra, orden) 
+                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+            val = (nombre, (descripcion or None), duracion_minutos, precio, categoria_id, activo, porcentaje_comision_extra, orden)
             cursor.execute(sql, val)
             db.commit()
             flash(f'Servicio "{nombre}" registrado exitosamente!', 'success')
@@ -1545,6 +1544,7 @@ def editar_servicio(servicio_id):
         categoria_id_str = request.form.get('categoria_id')
         porcentaje_comision_extra_str = request.form.get('porcentaje_comision_extra')
         porcentaje_comision_extra = float(porcentaje_comision_extra_str) if porcentaje_comision_extra_str else None
+        orden = request.form.get('orden', '0', type=int)
         activo = 'activo' in request.form # True si el checkbox 'activo' está marcado
 
         # Variables para almacenar los valores convertidos y validados
@@ -1571,8 +1571,6 @@ def editar_servicio(servicio_id):
             errores.append('El precio es obligatorio.')
         else:
             try:
-                # Para dinero, es mejor usar Decimal: from decimal import Decimal; precio_decimal = Decimal(precio_str)
-                # Por simplicidad, usamos float, pero ten cuidado con la precisión para cálculos financieros.
                 precio_decimal = float(precio_str)
                 if precio_decimal < 0:
                     errores.append('El precio no puede ser negativo.')
@@ -1590,11 +1588,10 @@ def editar_servicio(servicio_id):
         if errores:
             for error in errores:
                 flash(error, 'warning')
-            # Volver a mostrar el formulario con los datos ingresados y los errores
             return render_template('servicios/form_servicio.html', 
-                                   form_data=request.form, # Datos que el usuario intentó enviar
-                                   categorias=categorias,  # Lista de categorías para el dropdown
-                                   servicio=servicio_actual, # Datos originales del servicio para el título, etc.
+                                   form_data=request.form, 
+                                   categorias=categorias,  
+                                   servicio=servicio_actual, 
                                    es_nuevo=False,
                                    titulo_form=f"Editar Servicio: {servicio_actual['nombre']}")
         
@@ -1605,9 +1602,9 @@ def editar_servicio(servicio_id):
                 # 3. Actualizar la base de datos
                 sql_update = """UPDATE servicios SET 
                                     nombre=%s, descripcion=%s, duracion_minutos=%s, precio=%s, 
-                                    categoria_id=%s, activo=%s, porcentaje_comision_extra=%s 
+                                    categoria_id=%s, activo=%s, porcentaje_comision_extra=%s, orden=%s 
                                 WHERE id=%s"""
-                val_update = (nombre, descripcion, duracion_minutos, precio_decimal, categoria_id, activo, porcentaje_comision_extra, servicio_id)
+                val_update = (nombre, descripcion, duracion_minutos, precio_decimal, categoria_id, activo, porcentaje_comision_extra, orden, servicio_id)
                 cursor.execute(sql_update, val_update)
             db_conn.commit()
             flash(f'Servicio "{nombre}" actualizado exitosamente.', 'success')
@@ -4787,7 +4784,7 @@ def listar_productos():
             SELECT 
                 p.id, p.nombre, p.stock_actual, p.stock_minimo, p.activo,
                 p.precio_venta, p.comision_vendedor_monto,
-                p.contenido_neto_valor, p.unidad_medida,
+                p.contenido_neto_valor, p.unidad_medida, p.orden,
                 cp.nombre AS categoria_nombre,
                 m.nombre AS marca_nombre, 
                 pr.nombre_empresa AS proveedor_nombre
@@ -4795,7 +4792,7 @@ def listar_productos():
             LEFT JOIN categorias_productos cp ON p.categoria_id = cp.id
             LEFT JOIN marcas m ON p.marca_id = m.id 
             LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
-            ORDER BY p.nombre
+            ORDER BY p.orden ASC, p.nombre ASC
         """
         cursor.execute(sql)
         lista_de_productos = cursor.fetchall()
@@ -4839,6 +4836,7 @@ def nuevo_producto():
             comision_monto_str = request.form.get('comision_vendedor_monto')
             stock_actual = request.form.get('stock_actual', '0', type=int)
             stock_minimo = request.form.get('stock_minimo', '0', type=int)
+            orden = request.form.get('orden', '0', type=int)
             activo = 'activo' in request.form
             
             # Validaciones y conversiones
@@ -4852,10 +4850,10 @@ def nuevo_producto():
             with db_conn.cursor() as cursor:
                 sql = """INSERT INTO productos 
                             (nombre, codigo_barras, descripcion, categoria_id, marca_id, proveedor_id, 
-                             precio_compra, precio_venta, comision_vendedor_monto, stock_actual, stock_minimo, activo)
-                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+                             precio_compra, precio_venta, comision_vendedor_monto, stock_actual, stock_minimo, activo, orden)
+                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
                 val = (nombre, codigo_barras, descripcion, categoria_id, marca_id, proveedor_id,
-                       precio_compra, precio_venta, comision_vendedor_monto, stock_actual, stock_minimo, activo)
+                       precio_compra, precio_venta, comision_vendedor_monto, stock_actual, stock_minimo, activo, orden)
                 cursor.execute(sql, val)
             db_conn.commit()
             flash(f'Producto "{nombre}" registrado exitosamente!', 'success')
@@ -4920,6 +4918,7 @@ def editar_producto(producto_id):
             comision_monto_str = request.form.get('comision_vendedor_monto') # <-- CAMPO ACTUALIZADO
             stock_actual = request.form.get('stock_actual', '0', type=int)
             stock_minimo = request.form.get('stock_minimo', '0', type=int)
+            orden = request.form.get('orden', '0', type=int)
             activo = 'activo' in request.form
 
             # 2. Validaciones
@@ -4946,12 +4945,12 @@ def editar_producto(producto_id):
                 sql_update = """UPDATE productos SET 
                                     nombre = %s, codigo_barras = %s, descripcion = %s, categoria_id = %s,
                                     marca_id = %s, proveedor_id = %s, precio_compra = %s, precio_venta = %s,
-                                    comision_vendedor_monto = %s, stock_actual = %s, stock_minimo = %s, activo = %s
+                                    comision_vendedor_monto = %s, stock_actual = %s, stock_minimo = %s, activo = %s, orden = %s
                                 WHERE id = %s"""
                 val_update = (
                     nombre, codigo_barras_nuevo, descripcion, categoria_id, marca_id, proveedor_id,
                     precio_compra, precio_venta, comision_vendedor_monto, stock_actual, stock_minimo, 
-                    activo, producto_id
+                    activo, orden, producto_id
                 )
                 cursor.execute(sql_update, val_update)
             
@@ -5994,7 +5993,7 @@ def nueva_venta():
             empleados = cursor.fetchall()
             
             # 3. Servicios Activos
-            cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY nombre")
+            cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY orden ASC, nombre ASC")
             servicios = cursor.fetchall()
             
             # 4. Productos Activos (con Marca)
@@ -6003,7 +6002,7 @@ def nueva_venta():
                 FROM productos p
                 LEFT JOIN marcas m ON p.marca_id = m.id
                 WHERE p.activo = TRUE 
-                ORDER BY p.nombre
+                ORDER BY p.orden ASC, p.nombre ASC
             """)
             productos = cursor.fetchall()
             
