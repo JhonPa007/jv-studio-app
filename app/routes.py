@@ -4899,7 +4899,7 @@ def nuevo_producto():
     
     return render_template('productos/form_producto.html', 
                            form_data=request.form if request.method == 'POST' else None,
-                           es_nueva=True, titulo_form="Registrar Nuevo Producto",
+                           es_nuevo=True, titulo_form="Registrar Nuevo Producto",
                            action_url=url_for('main.nuevo_producto'),
                            categorias_prod=categorias_prod, marcas_todas=marcas_todas, proveedores_todos=proveedores_todos)
 
@@ -4997,7 +4997,7 @@ def editar_producto(producto_id):
             flash(f"Error al actualizar el producto: {e}", "warning")
             # Volver a renderizar con los datos y el error
             return render_template('productos/form_producto.html', 
-                                   form_data=request.form, es_nueva=False, 
+                                   form_data=request.form, es_nuevo=False, 
                                    titulo_form=f"Editar Producto (Error)",
                                    action_url=url_for('main.editar_producto', producto_id=producto_id),
                                    producto=producto_actual,
@@ -5005,7 +5005,7 @@ def editar_producto(producto_id):
 
     # --- Lógica GET ---
     return render_template('productos/form_producto.html', 
-                           es_nueva=False, 
+                           es_nuevo=False, 
                            titulo_form=f"Editar Producto: {producto_actual.get('nombre')}",
                            action_url=url_for('main.editar_producto', producto_id=producto_id),
                            producto=producto_actual,
