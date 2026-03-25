@@ -7675,6 +7675,9 @@ def listar_gastos():
         """
         cursor.execute(sql, params)
         lista_de_gastos = cursor.fetchall()
+        
+        # Calcular el total para la vista
+        total_gastos = sum(float(g['monto']) for g in lista_de_gastos) if lista_de_gastos else 0.0
 
         # Maestros para los filtros
         cursor.execute("SELECT id, nombre FROM categorias_gastos ORDER BY nombre")
@@ -7687,11 +7690,13 @@ def listar_gastos():
         flash(f"Error al acceder a los gastos: {err}", "danger")
         current_app.logger.error(f"Error en listar_gastos: {err}")
         lista_de_gastos = []
+        total_gastos = 0.0
         categorias = []
         colaboradores = []
         
     return render_template('finanzas/lista_gastos.html', 
                            gastos=lista_de_gastos,
+                           total_gastos=total_gastos,
                            categorias_matriz=categorias,
                            colaboradores_matriz=colaboradores,
                            filtros=request.args,

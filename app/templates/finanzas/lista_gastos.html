@@ -117,6 +117,15 @@
                 </tr>
                 {% endfor %}
             </tbody>
+            <tfoot class="table-dark">
+                <tr class="fw-bold" style="border-top: 2px solid var(--color-acento-dorado);">
+                    <td colspan="6" class="text-end" style="color: var(--color-acento-dorado); font-size: 1.1rem;">
+                        TOTAL:</td>
+                    <td class="text-end text-danger" style="font-size: 1.1rem;">S/ {{ "%.2f"|format(total_gastos) }}
+                    </td>
+                    <td colspan="3"></td>
+                </tr>
+            </tfoot>
         </table>
     </div>
     {% else %}
