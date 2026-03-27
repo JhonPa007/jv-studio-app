@@ -6146,9 +6146,6 @@ def editar_venta(venta_id):
     if request.method == 'POST':
         try:
             # 1. Recoger Datos Editables
-            # Nota: El tipo, serie y número NO se recogen porque no se pueden cambiar aquí.
-            
-            # Gestión del Cliente (Igual que antes para permitir corregir el cliente)
             cliente_id = request.form.get('cliente_id')
             nuevo_doc = request.form.get('nuevo_cliente_doc')
             nuevo_nombre = request.form.get('nuevo_cliente_nombre').strip().title() if request.form.get('nuevo_cliente_nombre') else None
@@ -6169,37 +6166,116 @@ def editar_venta(venta_id):
             if not cliente_id or str(cliente_id) == 'API_NEW': cliente_id = None 
 
             empleado_id = request.form.get('empleado_id')
+            sucursal_id = request.form.get('sucursal_id')
             fecha_venta_str = request.form.get('fecha_venta')
             notas_venta = request.form.get('notas_venta')
             estado_pago_calculado = request.form.get('estado_pago')
+            descuento_monto = float(request.form.get('descuento_monto') or 0.0)
 
             # Pagos
             pagos_json = request.form.get('pagos_json')
             lista_pagos = json.loads(pagos_json) if pagos_json else []
 
+            # Ítems
+            items_json = request.form.get('items_lista')
+            lista_items = json.loads(items_json) if items_json else []
+
             with db_conn.cursor() as cursor_update:
-                # 2. Actualizar Venta (SIN CAMBIAR SERIE NI TIPO)
+                # 1. Recuperar ítems actuales para REVERTIR stock
+                cursor_update.execute("SELECT producto_id, cantidad FROM venta_items WHERE venta_id = %s AND producto_id IS NOT NULL", (venta_id,))
+                items_viejos = cursor_update.fetchall()
+                for v_item in items_viejos:
+                    # Devolvemos stock
+                    cursor_update.execute("UPDATE productos SET stock_actual = stock_actual + %s WHERE id = %s", (v_item[1], v_item[0]))
+                    # Borramos de Kardex si existe (O simplemente lo dejamos y añadimos uno nuevo de AJUSTE/ANULACIÓN)
+                    # En este caso, para simplificar e igualar lógica de borrado, sumamos stock.
+
+                # 2. Borrar ítems actuales y pagos
+                cursor_update.execute("DELETE FROM venta_items WHERE venta_id = %s", (venta_id,))
+                cursor_update.execute("DELETE FROM venta_pagos WHERE venta_id = %s", (venta_id,))
+
+                # 3. Recalcular Subtotales
+                subtotal_servicios = 0.0
+                subtotal_productos = 0.0
+                
+                for item in lista_items:
+                    precio = float(item['precio'])
+                    cantidad = float(item['cantidad'])
+                    total_item = precio * cantidad
+                    
+                    if item['tipo'] == 'servicio':
+                        subtotal_servicios += total_item
+                    else:
+                        subtotal_productos += total_item
+                
+                # Para simplificar el edit, no manejamos fidelidad de nuevo aquí para evitar discrepancias, 
+                # a menos que el usuario lo pida. El precio ya viene "ajustado" o manual.
+                monto_total_bruto = subtotal_servicios + subtotal_productos
+                monto_final = monto_total_bruto - descuento_monto
+                
+                # 4. Actualizar Cabecera de Venta
                 sql_update_venta = """
                     UPDATE ventas 
                     SET cliente_receptor_id = %s,
                         empleado_id = %s,
+                        sucursal_id = %s,
                         fecha_venta = %s,
                         notas_venta = %s,
-                        estado_pago = %s
-                        -- NO actualizamos tipo_comprobante, serie, numero ni estado_sunat
+                        estado_pago = %s,
+                        subtotal_servicios = %s,
+                        subtotal_productos = %s,
+                        descuento_monto = %s,
+                        monto_final_venta = %s
                     WHERE id = %s
                 """
                 cursor_update.execute(sql_update_venta, (
                     cliente_id, 
                     empleado_id, 
+                    sucursal_id,
                     fecha_venta_str, 
                     notas_venta, 
                     estado_pago_calculado,
+                    subtotal_servicios,
+                    subtotal_productos,
+                    descuento_monto,
+                    monto_final,
                     venta_id
                 ))
 
-                # 3. Actualizar Pagos
-                cursor_update.execute("DELETE FROM venta_pagos WHERE venta_id = %s", (venta_id,))
+                # 5. Insertar Nuevos Ítems y Ajustar Stock
+                sql_insert_item = """
+                    INSERT INTO venta_items (venta_id, servicio_id, producto_id, descripcion_item_venta, cantidad, precio_unitario_venta, subtotal_item_bruto, subtotal_item_neto, es_hora_extra, porcentaje_servicio_extra, comision_servicio_extra, entregado_al_colaborador) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
+                """
+                
+                for item in lista_items:
+                    precio = float(item['precio'])
+                    cantidad = float(item['cantidad'])
+                    total_item = precio * cantidad
+                    tipo = item['tipo']
+                    es_extra = item.get('es_hora_extra', False)
+                    pct_extra = float(item.get('porcentaje_servicio_extra', 0)) if es_extra else 0.0
+                    comision_extra = total_item * (pct_extra / 100.0) if es_extra else 0.0
+
+                    cursor_update.execute(sql_insert_item, (
+                        venta_id,
+                        item['id'] if tipo == 'servicio' else None,
+                        item['id'] if tipo == 'producto' else None,
+                        item['descripcion'], cantidad, precio,
+                        total_item, total_item,
+                        es_extra, pct_extra, comision_extra
+                    ))
+                    
+                    if tipo == 'producto':
+                        # Descontar stock
+                        cursor_update.execute("UPDATE productos SET stock_actual = stock_actual - %s WHERE id = %s", (cantidad, item['id']))
+                        # Registrar Kardex
+                        cursor_update.execute("""
+                            INSERT INTO kardex (producto_id, tipo_movimiento, cantidad, motivo, usuario_id, venta_id)
+                            VALUES (%s, 'VENTA (EDIT)', %s, %s, %s, %s)
+                        """, (item['id'], -cantidad, f"Edición Venta {venta_id}", current_user.id, venta_id))
+
+                # 6. Insertar Pagos
                 sql_insert_pago = "INSERT INTO venta_pagos (venta_id, metodo_pago, monto, referencia_pago, fecha_pago) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)"
                 for pago in lista_pagos:
                     metodo = pago.get('metodo_pago') or 'Efectivo'
@@ -6253,6 +6329,38 @@ def editar_venta(venta_id):
             cursor.execute("SELECT id, nombres, apellidos FROM empleados WHERE activo = TRUE ORDER BY nombres")
             empleados = cursor.fetchall()
 
+            # 5. Servicios Activos
+            cursor.execute("SELECT id, nombre, precio FROM servicios WHERE activo = TRUE ORDER BY nombre")
+            servicios = cursor.fetchall()
+            
+            # 6. Productos Activos
+            cursor.execute("""
+                SELECT p.id, p.nombre, p.precio_venta, p.stock_actual, m.nombre as marca_nombre
+                FROM productos p
+                LEFT JOIN marcas m ON p.marca_id = m.id
+                WHERE p.activo = TRUE 
+                ORDER BY p.nombre
+            """)
+            productos = cursor.fetchall()
+
+            # 7. Campañas
+            cursor.execute("SELECT id, nombre FROM campanas WHERE activo = TRUE")
+            campanas = cursor.fetchall()
+
+            # Formatear items para JS
+            items_formateados = []
+            for it in items_venta:
+                items_formateados.append({
+                    'id': str(it['servicio_id'] or it['producto_id']),
+                    'tipo': 'servicio' if it['servicio_id'] else 'producto',
+                    'descripcion': it['descripcion_item_venta'],
+                    'precio': float(it['precio_unitario_venta']),
+                    'cantidad': it['cantidad'],
+                    'es_hora_extra': it['es_hora_extra'],
+                    'porcentaje_servicio_extra': float(it['porcentaje_servicio_extra'] or 0)
+                })
+            items_venta_json = json.dumps(items_formateados)
+
             # Ya no necesitamos enviar 'tipos_comprobante' porque es readonly
             metodos_pago = ['Efectivo', 'Yape', 'Plin', 'Tarjeta', 'Transferencia']
 
@@ -6260,11 +6368,14 @@ def editar_venta(venta_id):
                                    titulo_form=f"Editar Datos Venta #{venta_actual['numero_comprobante']}",
                                    action_url=url_for('main.editar_venta', venta_id=venta_id),
                                    venta=venta_actual,
-                                   items_venta=items_venta,
+                                   items_venta_json=items_venta_json,
                                    pagos_venta_json=pagos_venta_json,
                                    sucursales=sucursales,
                                    clientes=clientes,
                                    empleados=empleados,
+                                   servicios=servicios,
+                                   productos=productos,
+                                   campanas=campanas,
                                    metodos_pago=metodos_pago)
     except Exception as e:
         flash(f"Error cargando: {e}", "danger")
