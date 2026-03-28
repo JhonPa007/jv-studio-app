@@ -246,6 +246,13 @@
                                             <td>{{ mov.fecha.strftime('%H:%M') }}</td>
                                             <td>
                                                 {{ mov.descripcion }} <br>
+                                                {% if mov.estado_confirmacion == 'Pendiente' %}
+                                                <span class="badge bg-warning text-dark"
+                                                    style="font-size: 0.65rem;">Pendiente de Confirmar</span>
+                                                {% elif mov.estado_confirmacion == 'Rechazado' %}
+                                                <span class="badge bg-danger" style="font-size: 0.65rem;">Rechazado por
+                                                    Colab.</span>
+                                                {% endif %}
                                                 <small class="text-muted">{{ mov.metodo_pago }}</small>
                                             </td>
                                             <td

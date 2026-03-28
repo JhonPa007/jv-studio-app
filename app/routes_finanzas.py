@@ -915,8 +915,9 @@ def confirmar_adelanto(gasto_id):
             # Usamos COALESCE para manejar posibles nulos en la BD
             cursor.execute("""
                 UPDATE gastos 
-                SET estado_confirmacion = 'Confirmado', caja_sesion_id = %s
-                WHERE id = %s AND (COALESCE(estado_confirmacion, 'Pendiente') != 'Confirmado' OR caja_sesion_id IS NULL)
+                SET estado_confirmacion = 'Confirmado', 
+                    caja_sesion_id = COALESCE(caja_sesion_id, %s)
+                WHERE id = %s AND (COALESCE(estado_confirmacion, 'Pendiente') != 'Confirmado')
             """, (caja_id, gasto_id))
             
             if cursor.rowcount == 0:

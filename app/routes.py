@@ -8004,7 +8004,7 @@ def nuevo_gasto():
                     es_adelanto = cat_nombre and 'adelanto' in cat_nombre.lower()
                     
                     estado_conf = 'Pendiente' if es_adelanto else 'Confirmado'
-                    caja_a_guardar = None if es_adelanto else caja_id_activa
+                    caja_a_guardar = caja_id_activa # CORRECCIÓN: Siempre guardar caja si hay una activa, incluso para adelantos.
 
                     sql = """INSERT INTO gastos 
                                 (sucursal_id, categoria_gasto_id, fecha, descripcion, monto, metodo_pago, 
@@ -8234,7 +8234,7 @@ def ver_detalle_caja(sesion_id):
             cursor.execute("""
                 SELECT id, fecha, 'Gasto' as tipo, 
                        descripcion, monto, 'Egreso' as flujo,
-                       metodo_pago
+                       metodo_pago, estado_confirmacion
                 FROM gastos 
                 WHERE caja_sesion_id = %s
             """, (sesion_id,))
@@ -8688,16 +8688,16 @@ def gestionar_caja():
             sql_movimientos = """
                 (SELECT v.fecha_venta as fecha, vp.monto, vp.metodo_pago, 
                         'Venta #' || COALESCE(v.serie_comprobante, '') || '-' || COALESCE(v.numero_comprobante, 'S/N') as descripcion, 
-                        'Ingreso' as flujo, v.id as id, 'Venta' as tipo
+                        'Ingreso' as flujo, v.id as id, 'Venta' as tipo, NULL as estado_confirmacion
                  FROM venta_pagos vp JOIN ventas v ON vp.venta_id = v.id
                  WHERE v.caja_sesion_id = %s AND v.estado_pago != 'Anulado')
                 UNION ALL
                 (SELECT g.fecha_registro as fecha, (g.monto * -1) as monto, g.metodo_pago, 
-                        g.descripcion, 'Egreso' as flujo, g.id as id, 'Gasto' as tipo
+                        g.descripcion, 'Egreso' as flujo, g.id as id, 'Gasto' as tipo, g.estado_confirmacion
                  FROM gastos g WHERE g.caja_sesion_id = %s)
                 UNION ALL
                 (SELECT mc.fecha as fecha, mc.monto, mc.metodo_pago,
-                        mc.concepto as descripcion, 'Ingreso' as flujo, mc.id as id, 'Otro Ingreso' as tipo
+                        mc.concepto as descripcion, 'Ingreso' as flujo, mc.id as id, 'Otro Ingreso' as tipo, NULL as estado_confirmacion
                  FROM movimientos_caja mc
                  WHERE mc.caja_sesion_id = %s 
                    AND mc.tipo = 'INGRESO'
