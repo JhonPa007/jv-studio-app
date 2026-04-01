@@ -1,22 +1,22 @@
 {% for cliente in clientes %}
 <tr style="background-color: var(--color-bg-card); border-bottom: 1px solid var(--color-border);">
-    <td>
+    <td style="padding: 4px 10px !important;">
         <a href="{{ url_for('main.detalle_cliente', cliente_id=cliente.id) }}" class="text-decoration-none fw-bold"
-            style="color: var(--color-accent) !important;">
+            style="color: #000000 !important;">
             {{ cliente.razon_social_nombres }} {{ cliente.apellidos or '' }}
         </a>
     </td>
-    <td class="text-center small" style="color: var(--color-text-primary) !important;">
+    <td class="text-center small" style="color: #000000 !important; padding: 4px 10px !important;">
         {{ cliente.tipo_documento or 'S/D' }}: {{ cliente.numero_documento or 'No reg.' }}
     </td>
-    <td style="color: var(--color-text-primary) !important;">{{ cliente.telefono or '-' }}</td>
-    <td class="text-center">
+    <td style="color: #000000 !important; padding: 4px 10px !important;">{{ cliente.telefono or '-' }}</td>
+    <td class="text-center" style="padding: 4px 10px !important;">
         <span class="badge bg-warning text-dark">
             {{ cliente.puntos_fidelidad if cliente.puntos_fidelidad is not none else 0 }}
         </span>
     </td>
-    <td class="text-center">
-        <a href="{{ url_for('main.editar_cliente', cliente_id=cliente.id) }}" class="btn btn-xs btn-outline-warning"
+    <td class="text-center" style="padding: 4px 10px !important;">
+        <a href="{{ url_for('main.editar_cliente', cliente_id=cliente.id) }}" class="btn btn-xs btn-outline-dark"
             title="Editar Cliente"><i class="fas fa-edit"></i></a>
     </td>
 </tr>
