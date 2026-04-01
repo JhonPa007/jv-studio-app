@@ -477,11 +477,11 @@ def api_cliente_historial_servicios(cliente_id):
                     v.fecha_venta as fecha, 
                     s.nombre as servicio, 
                     e.nombres as colaborador,
-                    vi.precio_total as precio
+                    vi.subtotal_item_neto as precio
                 FROM venta_items vi
                 JOIN ventas v ON vi.venta_id = v.id
                 JOIN servicios s ON vi.servicio_id = s.id
-                LEFT JOIN empleados e ON vi.empleado_id = e.id
+                LEFT JOIN empleados e ON v.empleado_id = e.id
                 WHERE v.cliente_receptor_id = %s 
                   AND v.estado_pago != 'Anulado'
                 ORDER BY v.fecha_venta DESC
