@@ -11333,11 +11333,13 @@ def procesar_conversion_venta(venta_id):
     sucursal_id = session.get('sucursal_id')
 
     # Manejo de Sin Documento
+    es_clientes_varios = False
     if tipo_doc == 'SIN DOCUMENTO':
         tipo_doc = 'Otro'
         num_doc = '00000000'
         nombre_cliente = 'CLIENTES VARIOS'
         direccion_cliente = direccion_cliente or ''
+        es_clientes_varios = True
 
     # Validación Estricta para Factura
     if nuevo_tipo == 'Factura Electrónica':
@@ -11378,16 +11380,18 @@ def procesar_conversion_venta(venta_id):
             numero_str = str(nuevo_numero).zfill(8)
 
             # 3. Actualizar Venta (El Canje Real)
+            # PROTECCIÓN DE PUNTOS: Si es 'Sin Documento' (Clientes Varios), no sobreescribimos el cliente_receptor_id
+            # para que el cliente original siga acumulando sus puntos y beneficios.
             cursor.execute("""
                 UPDATE ventas 
                 SET tipo_comprobante = %s,
                     serie_comprobante = %s,
                     numero_comprobante = %s,
-                    cliente_receptor_id = %s, -- Asignamos el cliente validado
-                    cliente_facturacion_id = %s, -- También como facturación
-                    estado_sunat = 'Pendiente' -- Listo para enviar
+                    cliente_receptor_id = CASE WHEN %s THEN cliente_receptor_id ELSE %s END,
+                    cliente_facturacion_id = %s,
+                    estado_sunat = 'Pendiente'
                 WHERE id = %s
-            """, (nuevo_tipo, serie, numero_str, cliente_id, cliente_id, venta_id))
+            """, (nuevo_tipo, serie, numero_str, es_clientes_varios, cliente_id, cliente_id, venta_id))
 
             # 4. Actualizar Correlativo
             cursor.execute("""
