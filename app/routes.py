@@ -11332,6 +11332,13 @@ def procesar_conversion_venta(venta_id):
     direccion_cliente = request.form.get('direccion_cliente')
     sucursal_id = session.get('sucursal_id')
 
+    # Manejo de Sin Documento
+    if tipo_doc == 'SIN DOCUMENTO':
+        tipo_doc = 'Otro'
+        num_doc = '00000000'
+        nombre_cliente = 'CLIENTES VARIOS'
+        direccion_cliente = direccion_cliente or ''
+
     # Validación Estricta para Factura
     if nuevo_tipo == 'Factura Electrónica':
         if tipo_doc != 'RUC' or len(num_doc) != 11:
