@@ -458,6 +458,52 @@ def api_registrar_comunicacion():
         return jsonify({"success": False, "message": f"Error de base de datos: {err}"}), 500
 
 
+@main_bp.route('/api/clientes/historial_servicios/<int:cliente_id>')
+@login_required
+def api_cliente_historial_servicios(cliente_id):
+    """
+    API para obtener el historial de servicios y puntos de un cliente para mostrar en el Dashboard.
+    """
+    db_conn = get_db()
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Puntos del cliente
+            cursor.execute("SELECT razon_social_nombres, puntos_fidelidad FROM clientes WHERE id = %s", (cliente_id,))
+            cliente = cursor.fetchone()
+            
+            # 2. Historial de Servicios (Items de venta)
+            cursor.execute("""
+                SELECT 
+                    v.fecha_venta as fecha, 
+                    s.nombre as servicio, 
+                    e.nombres as colaborador,
+                    vi.precio_total as precio
+                FROM venta_items vi
+                JOIN ventas v ON vi.venta_id = v.id
+                JOIN servicios s ON vi.servicio_id = s.id
+                LEFT JOIN empleados e ON vi.empleado_id = e.id
+                WHERE v.cliente_receptor_id = %s 
+                  AND v.estado_pago != 'Anulado'
+                ORDER BY v.fecha_venta DESC
+                LIMIT 10
+            """, (cliente_id,))
+            historial = cursor.fetchall()
+
+            # Formatear fechas para JSON
+            for h in historial:
+                if h['fecha']:
+                    h['fecha'] = h['fecha'].strftime('%d/%m/%Y %H:%M')
+
+            return jsonify({
+                "success": True,
+                "nombre": cliente['razon_social_nombres'] if cliente else 'Cliente',
+                "puntos": (cliente['puntos_fidelidad'] or 0) if cliente else 0,
+                "historial": historial
+            })
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 @main_bp.route('/clientes', methods=['GET'])
 @login_required
 def listar_clientes():
