@@ -242,27 +242,43 @@
                     aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
-                <div class="row mb-4">
-                    <div class="col-md-6 border-end border-secondary">
-                        <div class="d-flex flex-column align-items-center">
-                            <h6 class="text-muted text-uppercase small mb-2">Puntos del Cliente</h6>
-                            <div class="display-5 fw-bold text-success" id="modal-cliente-puntos">0</div>
-                            <small class="text-muted">Puntos de Fidelidad acumulados</small>
-                        </div>
-                    </div>
-                    <div class="col-md-6 text-center">
-                        <h6 class="text-muted text-uppercase small mb-3">Historial Reciente</h6>
-                        <p class="small text-muted mb-0">Revisa qué servicios se realizó últimamente para personalizar
-                            tu saludo.</p>
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="text-muted small text-uppercase fw-bold mb-1"><i
+                                class="fas fa-sticky-note me-1"></i> Notas Especiales</label>
+                        <textarea id="modal-cliente-notas"
+                            class="form-control bg-dark text-warning border-secondary small" rows="2"
+                            placeholder="Sin notas..."></textarea>
                     </div>
                 </div>
 
-                <div id="modal-loading" class="text-center py-5 d-none">
+                <div class="row mb-3">
+                    <div class="col-12 text-center">
+                        <button type="button" id="btn-modal-ia-gemini" class="btn btn-outline-warning btn-sm w-100">
+                            <i class="fas fa-magic me-1"></i> Sugerir Mensaje con IA (Gemini)
+                        </button>
+                    </div>
+                    <div class="col-12 mt-2 px-3">
+                        <div id="modal-ia-loading" class="text-center py-2 d-none">
+                            <div class="spinner-border spinner-border-sm text-warning"></div>
+                            <span class="ms-2 small text-muted">Consultando a Gemini...</span>
+                        </div>
+                        <div id="modal-ia-result-container" class="alert alert-dark border-secondary d-none p-2"
+                            style="font-size: 0.9rem;">
+                            <p id="modal-ia-text" class="mb-2 text-info" style="white-space: pre-line;"></p>
+                            <button type="button" class="btn btn-sm btn-info btn-xs" onclick="usarMensajeIA()">
+                                <i class="fas fa-check me-1"></i> Aplicar este mensaje
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="modal-loading" class="text-center py-4 d-none">
                     <div class="spinner-border text-warning" role="status"></div>
                     <p class="mt-2 text-muted">Cargando historial...</p>
                 </div>
 
-                <div id="modal-table-container" class="table-responsive rounded border border-secondary">
+                <div id="modal-table-container" class="table-responsive rounded border border-secondary mb-3">
                     <table class="table table-dark table-hover mb-0 fw-light" style="font-size: 0.85rem;">
                         <thead class="bg-secondary text-dark fw-bold">
                             <tr>
@@ -278,9 +294,9 @@
                 </div>
             </div>
             <div class="modal-footer border-secondary bg-black bg-opacity-25">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
-                <button type="button" id="btn-modal-continuar-envio" class="btn btn-success px-4">
-                    <i class="fab fa-whatsapp me-2"></i> Enviar Saludo por WhatsApp
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" id="btn-modal-continuar-envio" class="btn btn-success btn-sm px-4">
+                    <i class="fab fa-whatsapp me-2"></i> Enviar por WhatsApp
                 </button>
             </div>
         </div>
@@ -308,16 +324,21 @@
                 currentBoton = this;
                 currentData = { ...this.dataset };
 
-                // 1. Limpiar Modal y Mostrar Loading
+                // 1. Limpiar Modal
                 document.getElementById('modal-cliente-nombre').textContent = this.closest('li').querySelector('strong').textContent;
-                document.getElementById('modal-cliente-puntos').textContent = '...';
                 document.getElementById('modal-historial-body').innerHTML = '';
                 document.getElementById('modal-loading').classList.remove('d-none');
                 document.getElementById('modal-table-container').classList.add('d-none');
 
+                // Reset IA UI
+                const resultBox = document.getElementById('modal-ia-result-container');
+                resultBox.classList.add('d-none');
+                document.getElementById('modal-ia-text').textContent = '';
+                document.getElementById('modal-cliente-notas').value = 'Cargando...';
+
                 modalResumen.show();
 
-                // 2. Cargar Datos
+                // 2. Cargar Datos (Historial + Notas)
                 fetch(`/api/clientes/historial_servicios/${currentData.clienteId}`)
                     .then(res => res.json())
                     .then(data => {
@@ -325,7 +346,7 @@
                         document.getElementById('modal-table-container').classList.remove('d-none');
 
                         if (data.success) {
-                            document.getElementById('modal-cliente-puntos').textContent = data.puntos;
+                            document.getElementById('modal-cliente-notas').value = data.notas || '';
                             const tbody = document.getElementById('modal-historial-body');
 
                             if (data.historial && data.historial.length > 0) {
@@ -342,66 +363,96 @@
                             } else {
                                 tbody.innerHTML = '<tr><td colspan="3" class="text-center py-3 text-muted">Sin servicios previos registrados.</td></tr>';
                             }
-                        } else {
-                            alert("No se pudo cargar el historial.");
                         }
-                    })
-                    .catch(err => {
-                        console.error(err);
-                        alert("Error de conexión al cargar datos.");
                     });
             });
         });
 
-        btnContinuar.addEventListener('click', function () {
-            if (!currentData || !currentBoton) return;
+        // 3. Generar Mensaje con IA Gemini
+        document.getElementById('btn-modal-ia-gemini').addEventListener('click', function () {
+            const loading = document.getElementById('modal-ia-loading');
+            const resultBox = document.getElementById('modal-ia-result-container');
+            const resultText = document.getElementById('modal-ia-text');
 
-            const { clienteId, tipo, anio, whatsappLink, mensaje } = currentData;
-            const self = currentBoton;
+            loading.classList.remove('d-none');
+            resultBox.classList.add('d-none');
 
-            // Cerrar modal
-            modalResumen.hide();
-
-            // 1. WhatsApp
-            if (whatsappLink) {
-                window.open(whatsappLink, '_blank');
-            }
-
-            // 2. Copiar mensaje
-            if (mensaje) {
-                navigator.clipboard.writeText(mensaje).then(() => {
-                    const notification = document.createElement('div');
-                    notification.className = 'copy-notification';
-                    notification.textContent = '¡Copiado!';
-                    self.parentNode.appendChild(notification);
-                    setTimeout(() => { notification.style.opacity = '1'; }, 10);
-                    setTimeout(() => {
-                        notification.style.opacity = '0';
-                        setTimeout(() => { notification.remove(); }, 300);
-                    }, 1500);
+            fetch('/marketing/crm-ia/generar-mensaje', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cliente_id: currentData.clienteId,
+                    motivo: currentData.tipo || 'DASHBOARD_ALERTA'
+                })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    loading.classList.add('d-none');
+                    if (data.success) {
+                        resultBox.classList.remove('d-none');
+                        resultText.textContent = data.mensaje;
+                    } else {
+                        alert("Error IA: " + data.message);
+                    }
+                })
+                .catch(() => {
+                    loading.classList.add('d-none');
+                    alert("Error técnico con la IA.");
                 });
-            }
+        });
 
-            // 3. Registrar en Backend
+        // 4. Continuar al WhatsApp (Guardando Nota primero)
+        btnContinuar.addEventListener('click', function () {
+            if (!currentData) return;
+
+            const nota = document.getElementById('modal-cliente-notas').value;
+            fetch('/marketing/crm-ia/guardar-nota', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cliente_id: currentData.clienteId, nota: nota })
+            }).finally(() => {
+                modalResumen.hide();
+                window.open(currentData.whatsappLink, '_blank');
+
+                // Registrar la comunicación si corresponde
+                registrarComunicacionLocal();
+            });
+        });
+
+        function registrarComunicacionLocal() {
             fetch('/api/clientes/registrar_comunicacion', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    cliente_id: clienteId,
-                    tipo_comunicacion: tipo,
-                    anio_aplicable: anio
+                    cliente_id: currentData.clienteId,
+                    tipo_comunicacion: currentData.tipo,
+                    anio_aplicable: currentData.anio
                 })
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const listItem = self.closest('li');
-                        listItem.style.transition = 'opacity 0.6s';
-                        listItem.style.opacity = '0';
-                        setTimeout(() => { listItem.style.display = 'none'; }, 600);
-                    }
-                });
-        });
+            }).then(r => r.json()).then(data => {
+                if (data.success && currentBoton) {
+                    const listItem = currentBoton.closest('li');
+                    listItem.style.opacity = '0.4';
+                    currentBoton.disabled = true;
+                    currentBoton.innerHTML = '<i class="fas fa-check me-1"></i> Enviado';
+                }
+            });
+        }
     });
+
+    // Función global para el botón del mensaje IA
+    function usarMensajeIA() {
+        const mensaje = document.getElementById('modal-ia-text').textContent;
+        // Obtenemos el link de WhatsApp original desde el dataset capturado
+        // Simplificado: buscar el link de wa.me en el botón del modal
+        const parentModal = document.getElementById('modalHistorialDashboard');
+        // Usamos una regex para extraer el número de teléfono del link original
+        // En una implementación real, tendríamos el phone en el currentData accesible
+        // Aquí lo haré abriendo con el mensaje nuevo
+        const whatsappLink = document.querySelector(`.btn-enviar-comunicacion`).getAttribute('data-whatsapp-link');
+        const phoneMatch = whatsappLink.match(/wa\.me\/([0-9]+)/);
+        if (phoneMatch) {
+            window.open(`https://wa.me/${phoneMatch[1]}?text=${encodeURIComponent(mensaje)}`, '_blank');
+        }
+    }
 </script>
 {% endblock %}

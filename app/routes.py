@@ -467,11 +467,11 @@ def api_cliente_historial_servicios(cliente_id):
     db_conn = get_db()
     try:
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # 1. Puntos del cliente
-            cursor.execute("SELECT razon_social_nombres, puntos_fidelidad FROM clientes WHERE id = %s", (cliente_id,))
+            # 1. Info del cliente
+            cursor.execute("SELECT razon_social_nombres, puntos_fidelidad, notas_especiales FROM clientes WHERE id = %s", (cliente_id,))
             cliente = cursor.fetchone()
             
-            # 2. Historial de Servicios (Items de venta)
+            # 2. Historial de Servicios
             cursor.execute("""
                 SELECT 
                     v.fecha_venta as fecha, 
@@ -498,6 +498,7 @@ def api_cliente_historial_servicios(cliente_id):
                 "success": True,
                 "nombre": cliente['razon_social_nombres'] if cliente else 'Cliente',
                 "puntos": (cliente['puntos_fidelidad'] or 0) if cliente else 0,
+                "notas": (cliente['notas_especiales'] or '') if cliente else '',
                 "historial": historial
             })
     except Exception as e:

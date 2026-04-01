@@ -23,6 +23,30 @@
         </div>
     </div>
 
+    <!-- Buscador Avanzado -->
+    <div class="row mb-4">
+        <div class="col-md-10 mx-auto">
+            <form action="{{ url_for('marketing.crm_inteligente') }}" method="GET">
+                <div class="input-group input-group-lg shadow-sm"
+                    style="border: 2px solid #d4af37; border-radius: 12px; overflow: hidden;">
+                    <span class="input-group-text bg-dark border-0 text-warning">
+                        <i class="fas fa-search"></i>
+                    </span>
+                    <input type="text" name="q" class="form-control bg-dark text-white border-0 py-3"
+                        placeholder="Buscar cliente por nombre o DNI para gestionar Notas o IA..."
+                        value="{{ query or '' }}">
+                    <button class="btn btn-warning fw-bold px-4 border-0" type="submit">BUSCAR</button>
+                    {% if query %}
+                    <a href="{{ url_for('marketing.crm_inteligente') }}"
+                        class="btn btn-dark d-flex align-items-center border-0 text-muted">
+                        <i class="fas fa-times"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Filtros Rápidos -->
     <div class="row mb-4">
         <div class="col-12">
