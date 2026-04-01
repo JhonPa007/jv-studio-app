@@ -110,15 +110,17 @@
                                     <div class="d-flex align-items-center">
                                         <div id="nota-text-{{ c.id }}" class="text-truncate" style="max-width: 150px;">
                                             {{ c.notas_especiales or '---' }}</div>
-                                        <button class="btn btn-sm btn-link text-warning p-0 ms-2 btn-open-note"
-                                            data-id="{{ c.id }}" data-nota="{{ c.notas_especiales or '' }}">
+                                        <button type="button"
+                                            class="btn btn-sm btn-link text-warning p-0 ms-2 btn-open-note"
+                                            data-id="{{ c.id }}" data-nota="{{ c.notas_especiales or '' | e }}">
                                             <i class="fas fa-edit"></i>
                                         </button>
                                     </div>
                                 </td>
                                 <td class="text-center">
-                                    <button class="btn btn-warning btn-sm px-3 fw-bold btn-gen-ia" data-id="{{ c.id }}"
-                                        data-motivo="{{ c.motivo_contacto }}" data-telefono="{{ c.telefono }}">
+                                    <button type="button" class="btn btn-warning btn-sm px-3 fw-bold btn-gen-ia"
+                                        data-id="{{ c.id }}" data-motivo="{{ c.motivo_contacto }}"
+                                        data-telefono="{{ c.telefono }}">
                                         <i class="fas fa-robot me-1"></i> Sugerir Mensaje
                                     </button>
                                 </td>
@@ -196,108 +198,114 @@
 </div>
 
 <script>
-    let currentPhone = "";
-    const noteModal = new bootstrap.Modal(document.getElementById('noteModal'));
-    const iaModal = new bootstrap.Modal(document.getElementById('iaModal'));
+    document.addEventListener('DOMContentLoaded', () => {
+        let currentPhone = "";
+        const noteModalEl = document.getElementById('noteModal');
+        const iaModalEl = document.getElementById('iaModal');
 
-    // Manejo de clicks para Notas
-    document.querySelectorAll('.btn-open-note').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const id = btn.getAttribute('data-id');
-            const nota = btn.getAttribute('data-nota');
-            openNoteModal(id, nota);
-        });
-    });
+        if (!noteModalEl || !iaModalEl) return;
 
-    // Manejo de clicks para IA
-    document.querySelectorAll('.btn-gen-ia').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const id = btn.getAttribute('data-id');
-            const motivo = btn.getAttribute('data-motivo');
-            const telefono = btn.getAttribute('data-telefono');
-            generateIAMessage(id, motivo, telefono);
-        });
-    });
+        const noteModal = new bootstrap.Modal(noteModalEl);
+        const iaModal = new bootstrap.Modal(iaModalEl);
 
-    function openNoteModal(id, currentNote) {
-        document.getElementById('current_cliente_id').value = id;
-        document.getElementById('note_textarea').value = currentNote || "";
-        noteModal.show();
-    }
+        // Delegación de eventos (más robusto que forEach)
+        document.body.addEventListener('click', (e) => {
+            const btnNote = e.target.closest('.btn-open-note');
+            const btnIA = e.target.closest('.btn-gen-ia');
 
-    async function saveNote() {
-        const id = document.getElementById('current_cliente_id').value;
-        const nota = document.getElementById('note_textarea').value;
-
-        try {
-            const res = await fetch('/marketing/crm-ia/guardar-nota', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cliente_id: id, nota: nota })
-            });
-            const data = await res.json();
-            if (data.success) {
-                document.getElementById(`nota-text-${id}`).innerText = nota || "---";
-                // Actualizar el data-attribute para futuros clicks
-                document.querySelector(`.btn-open-note[data-id="${id}"]`).setAttribute('data-nota', nota);
-                noteModal.hide();
+            if (btnNote) {
+                e.preventDefault();
+                const id = btnNote.getAttribute('data-id');
+                const nota = btnNote.getAttribute('data-nota');
+                document.getElementById('current_cliente_id').value = id;
+                document.getElementById('note_textarea').value = nota || "";
+                noteModal.show();
             }
-        } catch (e) {
-            alert("Error al guardar nota");
-        }
-    }
 
-    async function generateIAMessage(id, motivo, telefono) {
-        currentPhone = telefono;
-        document.getElementById('ia_loading').style.display = 'block';
-        document.getElementById('ia_result').style.display = 'none';
-        iaModal.show();
-
-        try {
-            const res = await fetch('/marketing/crm-ia/generar-mensaje', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cliente_id: id, motivo: motivo })
-            });
-            const data = await res.json();
-
-            document.getElementById('ia_loading').style.display = 'none';
-            document.getElementById('ia_result').style.display = 'block';
-
-            if (data.success) {
-                document.getElementById('suggested_text').innerText = data.mensaje;
-            } else {
-                document.getElementById('suggested_text').innerText = "❌ No se pudo generar el mensaje: " + data.message;
+            if (btnIA) {
+                e.preventDefault();
+                const id = btnIA.getAttribute('data-id');
+                const motivo = btnIA.getAttribute('data-motivo');
+                const telefono = btnIA.getAttribute('data-telefono');
+                generateIAMessage(id, motivo, telefono);
             }
-        } catch (e) {
-            document.getElementById('ia_loading').style.display = 'none';
-            document.getElementById('ia_result').style.display = 'block';
-            document.getElementById('suggested_text').innerText = "❌ Error de conexión.";
-        }
-    }
-
-    function copyAndOpenWA() {
-        const text = document.getElementById('suggested_text').innerText;
-        navigator.clipboard.writeText(text).then(() => {
-            const encodedText = encodeURIComponent(text);
-            window.open(`https://wa.me/51${currentPhone}?text=${encodedText}`, '_blank');
         });
-    }
 
-    // Filtrado de Tabla
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
+        async function generateIAMessage(id, motivo, telefono) {
+            currentPhone = telefono;
+            document.getElementById('ia_loading').style.display = 'block';
+            document.getElementById('ia_result').style.display = 'none';
+            iaModal.show();
 
-            const filter = btn.getAttribute('data-filter');
-            document.querySelectorAll('.crm-row').forEach(row => {
-                if (filter === 'all') {
-                    row.style.display = '';
+            try {
+                const res = await fetch('/marketing/crm-ia/generar-mensaje', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cliente_id: id, motivo: motivo })
+                });
+                const data = await res.json();
+
+                document.getElementById('ia_loading').style.display = 'none';
+                document.getElementById('ia_result').style.display = 'block';
+
+                if (data.success) {
+                    document.getElementById('suggested_text').innerText = data.mensaje;
                 } else {
-                    const tags = row.getAttribute('data-tags');
-                    row.style.display = tags.includes(filter) ? '' : 'none';
+                    document.getElementById('suggested_text').innerText = "❌ No se pudo generar el mensaje: " + data.message;
                 }
+            } catch (e) {
+                document.getElementById('ia_loading').style.display = 'none';
+                document.getElementById('ia_result').style.display = 'block';
+                document.getElementById('suggested_text').innerText = "❌ Error de conexión.";
+            }
+        }
+
+        // Exponer funciones globales si es necesario
+        window.saveNote = async () => {
+            const id = document.getElementById('current_cliente_id').value;
+            const nota = document.getElementById('note_textarea').value;
+
+            try {
+                const res = await fetch('/marketing/crm-ia/guardar-nota', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cliente_id: id, nota: nota })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById(`nota-text-${id}`).innerText = nota || "---";
+                    const btn = document.querySelector(`.btn-open-note[data-id="${id}"]`);
+                    if (btn) btn.setAttribute('data-nota', nota);
+                    noteModal.hide();
+                }
+            } catch (e) {
+                alert("Error al guardar nota");
+            }
+        };
+
+        window.copyAndOpenWA = () => {
+            const text = document.getElementById('suggested_text').innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const encodedText = encodeURIComponent(text);
+                window.open(`https://wa.me/51${currentPhone}?text=${encodedText}`, '_blank');
+            });
+        };
+
+        // Filtrado de Tabla
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                const filter = btn.getAttribute('data-filter');
+                document.querySelectorAll('.crm-row').forEach(row => {
+                    if (filter === 'all') {
+                        row.style.display = '';
+                    } else {
+                        const tags = row.getAttribute('data-tags');
+                        row.style.display = (tags && tags.includes(filter)) ? '' : 'none';
+                    }
+                });
             });
         });
     });

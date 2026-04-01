@@ -308,9 +308,12 @@
 {% block scripts %}
 {{ super() }}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('DOMContentLoaded', () => {
         const listadoBotones = document.querySelectorAll('.btn-enviar-comunicacion');
-        const modalResumen = new bootstrap.Modal(document.getElementById('modalHistorialDashboard'));
+        const modalResumenEl = document.getElementById('modalHistorialDashboard');
+        if (!modalResumenEl) return;
+
+        const modalResumen = new bootstrap.Modal(modalResumenEl);
         const btnContinuar = document.getElementById('btn-modal-continuar-envio');
 
         let currentData = null;
@@ -369,7 +372,8 @@
         });
 
         // 3. Generar Mensaje con IA Gemini
-        document.getElementById('btn-modal-ia-gemini').addEventListener('click', function () {
+        document.getElementById('btn-modal-ia-gemini').addEventListener('click', function (e) {
+            e.preventDefault();
             const loading = document.getElementById('modal-ia-loading');
             const resultBox = document.getElementById('modal-ia-result-container');
             const resultText = document.getElementById('modal-ia-text');
@@ -402,7 +406,8 @@
         });
 
         // 4. Continuar al WhatsApp (Guardando Nota primero)
-        btnContinuar.addEventListener('click', function () {
+        btnContinuar.addEventListener('click', function (e) {
+            e.preventDefault();
             if (!currentData) return;
 
             const nota = document.getElementById('modal-cliente-notas').value;
@@ -413,8 +418,6 @@
             }).finally(() => {
                 modalResumen.hide();
                 window.open(currentData.whatsappLink, '_blank');
-
-                // Registrar la comunicación si corresponde
                 registrarComunicacionLocal();
             });
         });
@@ -437,22 +440,18 @@
                 }
             });
         }
-    });
 
-    // Función global para el botón del mensaje IA
-    function usarMensajeIA() {
-        const mensaje = document.getElementById('modal-ia-text').textContent;
-        // Obtenemos el link de WhatsApp original desde el dataset capturado
-        // Simplificado: buscar el link de wa.me en el botón del modal
-        const parentModal = document.getElementById('modalHistorialDashboard');
-        // Usamos una regex para extraer el número de teléfono del link original
-        // En una implementación real, tendríamos el phone en el currentData accesible
-        // Aquí lo haré abriendo con el mensaje nuevo
-        const whatsappLink = document.querySelector(`.btn-enviar-comunicacion`).getAttribute('data-whatsapp-link');
-        const phoneMatch = whatsappLink.match(/wa\.me\/([0-9]+)/);
-        if (phoneMatch) {
-            window.open(`https://wa.me/${phoneMatch[1]}?text=${encodeURIComponent(mensaje)}`, '_blank');
-        }
-    }
+        // Función global accesible
+        window.usarMensajeIA = () => {
+            const mensaje = document.getElementById('modal-ia-text').textContent;
+            if (!currentData || !currentData.whatsappLink) return;
+
+            // Extraer el número del enlace original de currentData
+            const phoneMatch = currentData.whatsappLink.match(/wa\.me\/([0-9]+)/);
+            if (phoneMatch) {
+                window.open(`https://wa.me/${phoneMatch[1]}?text=${encodeURIComponent(mensaje)}`, '_blank');
+            }
+        };
+    });
 </script>
 {% endblock %}
