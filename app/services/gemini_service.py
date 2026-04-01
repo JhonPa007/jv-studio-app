@@ -9,7 +9,7 @@ class GeminiCRM:
     """
     def __init__(self):
         self.api_key = os.environ.get('GEMINI_API_KEY')
-        self.model = "gemini-1.5-flash"
+        self.model = "gemini-1.5-pro"
         self.url = f"https://generativelanguage.googleapis.com/v1/models/{self.model}:generateContent?key={self.api_key}"
 
     def generar_mensaje_whatsapp(self, cliente_data):
