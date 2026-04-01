@@ -462,46 +462,80 @@ def api_registrar_comunicacion():
 @login_required
 def listar_clientes():
     db_conn = get_db()
-    cursor = None
     try:
-        # Obtener término de búsqueda (si existe)
+        # Obtener términos de búsqueda y filtros específicos
         q = request.args.get('q', '').strip()
+        nombre_filtro = request.args.get('nombre', '').strip()
+        dni_filtro = request.args.get('dni', '').strip()
+        telefono_filtro = request.args.get('telefono', '').strip()
+        puntos_min = request.args.get('puntos_min', None, type=int)
         
+        # Ordenación
+        sort_by = request.args.get('sort', 'nombre')
+        order = request.args.get('order', 'asc').lower()
+        
+        # Validar campos de orden para evitar SQL injection
+        allowed_sort_fields = {
+            'nombre': 'razon_social_nombres',
+            'dni': 'numero_documento',
+            'telefono': 'telefono',
+            'puntos': 'puntos_fidelidad'
+        }
+        db_sort_field = allowed_sort_fields.get(sort_by, 'razon_social_nombres')
+        if order not in ['asc', 'desc']:
+            order = 'asc'
+
+        # Construir la consulta SQL dinámicamente
+        sql_base = """
+            SELECT id, razon_social_nombres, apellidos, tipo_documento, 
+                   numero_documento, telefono, puntos_fidelidad 
+            FROM clientes 
+            WHERE 1=1
+        """
+        params = []
+
+        if q:
+            sql_base += " AND (razon_social_nombres ILIKE %s OR apellidos ILIKE %s OR numero_documento ILIKE %s OR telefono ILIKE %s)"
+            termino = f"%{q}%"
+            params.extend([termino, termino, termino, termino])
+
+        if nombre_filtro:
+            sql_base += " AND (razon_social_nombres ILIKE %s OR apellidos ILIKE %s)"
+            termino = f"%{nombre_filtro}%"
+            params.extend([termino, termino])
+
+        if dni_filtro:
+            sql_base += " AND numero_documento ILIKE %s"
+            params.append(f"%{dni_filtro}%")
+
+        if telefono_filtro:
+            sql_base += " AND telefono ILIKE %s"
+            params.append(f"%{telefono_filtro}%")
+
+        if puntos_min is not None:
+            sql_base += " AND puntos_fidelidad >= %s"
+            params.append(puntos_min)
+
+        # Ordenar (Limitamos a 100 si no hay búsqueda para no sobrecargar)
+        sql_base += f" ORDER BY {db_sort_field} {order.upper()}"
+        if not (q or nombre_filtro or dni_filtro or telefono_filtro or puntos_min is not None):
+            sql_base += " LIMIT 100"
+
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            if q:
-                # BÚSQUEDA FILTRADA (ILIKE es clave para ignorar mayúsculas)
-                sql = """
-                    SELECT id, razon_social_nombres, apellidos, tipo_documento, 
-                           numero_documento, telefono, puntos_fidelidad 
-                    FROM clientes 
-                    WHERE 
-                        razon_social_nombres ILIKE %s OR 
-                        apellidos ILIKE %s OR 
-                        numero_documento ILIKE %s OR
-                        telefono ILIKE %s
-                    ORDER BY razon_social_nombres ASC
-                """
-                termino = f"%{q}%"
-                cursor.execute(sql, (termino, termino, termino, termino))
-            else:
-                # LISTADO COMPLETO (Limitado a 50 para no saturar si hay muchos)
-                sql = """
-                    SELECT id, razon_social_nombres, apellidos, tipo_documento, 
-                           numero_documento, telefono, puntos_fidelidad 
-                    FROM clientes 
-                    ORDER BY razon_social_nombres ASC 
-                    LIMIT 50
-                """
-                cursor.execute(sql)
-            
+            cursor.execute(sql_base, tuple(params))
             clientes = cursor.fetchall()
 
         return render_template('clientes/lista_clientes.html', 
                                clientes=clientes, 
-                               termino_busqueda=q)
+                               termino_busqueda=q,
+                               nombre_filtro=nombre_filtro,
+                               dni_filtro=dni_filtro,
+                               telefono_filtro=telefono_filtro,
+                               puntos_min=puntos_min,
+                               sort=sort_by,
+                               order=order)
 
     except Exception as e:
-        # current_app.logger.error(f"Error listando clientes: {e}")
         flash(f"Error al cargar clientes: {e}", "danger")
         return redirect(url_for('main.index'))
 
