@@ -227,3 +227,97 @@ def dashboard_financiero():
         titulo_pagina="Dashboard Financiero",
         datos_mensuales=datos_mensuales
     )
+
+@reportes_bp.route('/reportes/registro-contable', methods=['GET'])
+@login_required
+@admin_required
+def registro_contable_mensual():
+    """Reporte formal de Registro Contable (Ventas y Compras) p/ SUNAT."""
+    db_conn = get_db()
+    periodo_str = request.args.get('periodo') # Formato: YYYY-MM
+    
+    # Valores por defecto: Mes actual
+    hoy = datetime.now()
+    if not periodo_str:
+        periodo_str = hoy.strftime('%Y-%m')
+
+    ventas = []
+    compras = []
+    totales = {
+        "ventas_subtotal": 0, "ventas_igv": 0, "ventas_total": 0,
+        "compras_subtotal": 0, "compras_igv": 0, "compras_total": 0
+    }
+
+    try:
+        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Ventas Válidas (Excluye Notas de Venta internas y Anuladas)
+            cursor.execute("""
+                SELECT 
+                    v.fecha_venta as fecha, 
+                    v.tipo_comprobante, 
+                    v.serie_comprobante as serie, 
+                    v.numero_comprobante as numero,
+                    v.monto_final_venta as total,
+                    COALESCE(c.razon_social_nombres, 'CLIENTES VARIOS') as cliente_nombre,
+                    COALESCE(c.numero_documento, '00000000') as cliente_doc,
+                    COALESCE(tc.codigo_sunat, '00') as tipo_doc_sunat
+                FROM ventas v
+                LEFT JOIN clientes c ON v.cliente_facturacion_id = c.id
+                LEFT JOIN (SELECT 'DNI' as tipo, '1' as codigo_sunat UNION SELECT 'RUC', '6' UNION SELECT 'Otro', '0') tc 
+                     ON c.tipo_documento = tc.tipo
+                WHERE v.estado_pago != 'Anulado' 
+                AND v.tipo_comprobante IN ('Factura Electrónica', 'Boleta Electrónica')
+                AND TO_CHAR(v.fecha_venta, 'YYYY-MM') = %s
+                ORDER BY v.fecha_venta ASC
+            """, (periodo_str,))
+            ventas_db = cursor.fetchall()
+            
+            for v in ventas_db:
+                total = float(v['total'])
+                subtotal = total / 1.18
+                igv = total - subtotal
+                
+                v['subtotal'] = subtotal
+                v['igv'] = igv
+                ventas.append(v)
+                
+                totales['ventas_subtotal'] += subtotal
+                totales['ventas_igv'] += igv
+                totales['ventas_total'] += total
+
+            # 2. Compras
+            cursor.execute("""
+                SELECT 
+                    c.fecha_compra as fecha, 
+                    c.tipo_comprobante, 
+                    c.serie_numero_comprobante as correlativo,
+                    c.monto_subtotal as subtotal, 
+                    c.monto_impuestos as igv, 
+                    c.monto_total as total,
+                    p.nombre_empresa as proveedor_nombre,
+                    p.ruc as proveedor_ruc
+                FROM compras c
+                LEFT JOIN proveedores p ON c.proveedor_id = p.id
+                WHERE TO_CHAR(c.fecha_compra, 'YYYY-MM') = %s
+                ORDER BY c.fecha_compra ASC
+            """, (periodo_str,))
+            compras_db = cursor.fetchall()
+            
+            for comp in compras_db:
+                compras.append(comp)
+                totales['compras_subtotal'] += float(comp['subtotal'])
+                totales['compras_igv'] += float(comp['igv'])
+                totales['compras_total'] += float(comp['total'])
+
+    except Exception as e:
+        flash(f"Error generando registro contable: {e}", "danger")
+        current_app.logger.error(f"Error en registro_contable_mensual: {e}")
+
+    return render_template(
+        'reportes/registro_contable.html',
+        titulo_pagina="Registro Contable Mensual",
+        ventas=ventas,
+        compras=compras,
+        totales=totales,
+        periodo=periodo_str
+    )

@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}Registro Contable - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="text-light mb-0"><i class="fas fa-book-open text-warning me-2"></i>Registro Contable Mensual</h2>
+            <p class="text-muted">Reporte de movimientos válidos (Boletas y Facturas) para el periodo seleccionado.</p>
+        </div>
+
+        <form method="GET" class="d-flex gap-2">
+            <div class="input-group">
+                <span class="input-group-text bg-dark border-secondary text-light">Periodo:</span>
+                <input type="month" name="periodo" class="form-control bg-dark text-light border-secondary"
+                    value="{{ periodo }}" onchange="this.form.submit()">
+            </div>
+            <button type="button" class="btn btn-outline-warning" onclick="window.print()">
+                <i class="fas fa-print me-1"></i> Imprimir
+            </button>
+        </form>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card bg-dark border-success shadow-sm">
+                <div class="card-body">
+                    <h6 class="text-success text-uppercase small fw-bold">Total Ventas (Ingresos)</h6>
+                    <h3 class="text-light mb-0">S/ {{ "%.2f"|format(totales.ventas_total) }}</h3>
+                    <div class="d-flex justify-content-between mt-2 small">
+                        <span class="text-muted">Base: S/ {{ "%.2f"|format(totales.ventas_subtotal) }}</span>
+                        <span class="text-muted">IGV: S/ {{ "%.2f"|format(totales.ventas_igv) }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-dark border-danger shadow-sm">
+                <div class="card-body">
+                    <h6 class="text-danger text-uppercase small fw-bold">Total Compras (Egresos)</h6>
+                    <h3 class="text-light mb-0">S/ {{ "%.2f"|format(totales.compras_total) }}</h3>
+                    <div class="d-flex justify-content-between mt-2 small">
+                        <span class="text-muted">Base: S/ {{ "%.2f"|format(totales.compras_subtotal) }}</span>
+                        <span class="text-muted">IGV: S/ {{ "%.2f"|format(totales.compras_igv) }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            {% set balance_igv = totales.ventas_igv - totales.compras_igv %}
+            <div class="card bg-dark border-info shadow-sm">
+                <div class="card-body">
+                    <h6 class="text-info text-uppercase small fw-bold">Balance IGV Estimado</h6>
+                    <h3 class="{{ 'text-warning' if balance_igv > 0 else 'text-success' }} mb-0">
+                        S/ {{ "%.2f"|format(balance_igv) }}
+                    </h3>
+                    <p class="text-muted small mt-2 mb-0">Diferencia entre IGV ventas y compras.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs border-secondary mb-3" id="accountingTabs" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active text-light bg-dark border-secondary border-bottom-0" id="ventas-tab"
+                data-bs-toggle="tab" data-bs-target="#ventas" type="button">
+                <i class="fas fa-file-invoice-dollar me-2 text-success"></i>Registro de Ventas
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link text-light bg-dark border-secondary border-bottom-0" id="compras-tab"
+                data-bs-toggle="tab" data-bs-target="#compras" type="button">
+                <i class="fas fa-shopping-cart me-2 text-danger"></i>Registro de Compras
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="accountingTabsContent">
+        <!-- TAB VENTAS -->
+        <div class="tab-pane fade show active" id="ventas" role="tabpanel">
+            <div class="card bg-dark border-secondary">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0 small">
+                        <thead class="table-secondary text-dark">
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Tipo</th>
+                                <th>Serie-Número</th>
+                                <th>Cliente</th>
+                                <th>Documento</th>
+                                <th class="text-end">Base Imponible</th>
+                                <th class="text-end">IGV (18%)</th>
+                                <th class="text-end">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for v in ventas %}
+                            <tr>
+                                <td>{{ v.fecha.strftime('%d/%m/%Y') }}</td>
+                                <td>
+                                    {% if 'Factura' in v.tipo_comprobante %}
+                                    <span class="badge bg-primary">Factura</span>
+                                    {% else %}
+                                    <span class="badge bg-info text-dark">Boleta</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ v.serie }}-{{ v.numero }}</td>
+                                <td>{{ v.cliente_nombre }}</td>
+                                <td><small class="text-muted">({{ v.tipo_doc_sunat }})</small> {{ v.cliente_doc }}</td>
+                                <td class="text-end">S/ {{ "%.2f"|format(v.subtotal) }}</td>
+                                <td class="text-end text-muted">S/ {{ "%.2f"|format(v.igv) }}</td>
+                                <td class="text-end fw-bold">S/ {{ "%.2f"|format(v.total) }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="8" class="text-center py-4 text-muted">No hay ventas electrónicas
+                                    registradas en este periodo.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="table-dark fw-bold border-top border-secondary">
+                            <tr>
+                                <td colspan="5" class="text-end text-warning">TOTALES CIERRE</td>
+                                <td class="text-end text-warning">S/ {{ "%.2f"|format(totales.ventas_subtotal) }}</td>
+                                <td class="text-end text-warning">S/ {{ "%.2f"|format(totales.ventas_igv) }}</td>
+                                <td class="text-end text-warning">S/ {{ "%.2f"|format(totales.ventas_total) }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB COMPRAS -->
+        <div class="tab-pane fade" id="compras" role="tabpanel">
+            <div class="card bg-dark border-secondary">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0 small">
+                        <thead class="table-secondary text-dark">
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Tipo</th>
+                                <th>Serie-Número</th>
+                                <th>Proveedor</th>
+                                <th>RUC/Doc</th>
+                                <th class="text-end">Base Imponible</th>
+                                <th class="text-end">IGV (18%)</th>
+                                <th class="text-end">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in compras %}
+                            <tr>
+                                <td>{{ c.fecha.strftime('%d/%m/%Y') }}</td>
+                                <td>{{ c.tipo_comprobante or 'S/T' }}</td>
+                                <td>{{ c.correlativo or '---' }}</td>
+                                <td>{{ c.proveedor_nombre or 'Desconocido' }}</td>
+                                <td>{{ c.proveedor_ruc or '---' }}</td>
+                                <td class="text-end">S/ {{ "%.2f"|format(c.subtotal) }}</td>
+                                <td class="text-end text-muted">S/ {{ "%.2f"|format(c.igv) }}</td>
+                                <td class="text-end fw-bold">S/ {{ "%.2f"|format(c.total) }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="8" class="text-center py-4 text-muted">No hay compras registradas en este
+                                    periodo.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="table-dark fw-bold border-top border-secondary">
+                            <tr>
+                                <td colspan="5" class="text-end text-warning">TOTALES CIERRE</td>
+                                <td class="text-end text-warning">S/ {{ "%.2f"|format(totales.compras_subtotal) }}</td>
+                                <td class="text-end text-warning">S/ {{ "%.2f"|format(totales.compras_igv) }}</td>
+                                <td class="text-end text-warning">S/ {{ "%.2f"|format(totales.compras_total) }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    @media print {
+
+        .nav-tabs,
+        .btn-outline-warning,
+        .input-group-text,
+        input[type="month"] {
+            display: none !important;
+        }
+
+        .container-fluid {
+            padding: 0 !important;
+        }
+
+        .card {
+            border: none !important;
+            background-color: white !important;
+            color: black !important;
+        }
+
+        .table {
+            color: black !important;
+            background-color: white !important;
+        }
+
+        .table-secondary {
+            background-color: #eee !important;
+        }
+
+        .tab-pane {
+            display: block !important;
+            opacity: 1 !important;
+        }
+
+        .tab-content>.tab-pane {
+            display: block !important;
+        }
+
+        #accountingTabsContent {
+            display: block !important;
+        }
+    }
+</style>
+{% endblock %}
