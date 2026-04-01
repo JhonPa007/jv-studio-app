@@ -122,13 +122,83 @@
             <table class="table table-sm table-hover table-custom">
                 <thead>
                     <tr>
-                        <th>Colaborador</th>
-                        <th class="text-end col-serv-reg">Prod. Serv. Regular</th>
-                        <th class="text-end col-serv-extra">Prod. Serv. Extra</th>
-                        <th class="text-end col-prod">Venta Productos</th>
-                        <th class="text-end col-tips text-success">Propinas</th>
-                        <th class="text-end col-fid text-warning">Fondo Fidelidad</th>
-                        <th class="text-end col-com">Comisiones</th>
+                        <th>
+                            <a href="{{ url_for('main.reporte_produccion_general', sucursal_id=filtros.sucursal_id, fecha_inicio=filtros.fecha_inicio, fecha_fin=filtros.fecha_fin, sort='colaborador', order='desc' if filtros.sort == 'colaborador' and filtros.order == 'asc' else 'asc') }}"
+                                class="text-decoration-none" style="color: #ff8c00 !important;">
+                                Colaborador
+                                {% if filtros.sort == 'colaborador' %}
+                                <i class="fas fa-sort-{{ 'up' if filtros.order == 'asc' else 'down' }} ms-1"></i>
+                                {% else %}
+                                <i class="fas fa-sort ms-1 opacity-50"></i>
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="text-end col-serv-reg">
+                            <a href="{{ url_for('main.reporte_produccion_general', sucursal_id=filtros.sucursal_id, fecha_inicio=filtros.fecha_inicio, fecha_fin=filtros.fecha_fin, sort='serv_reg', order='desc' if filtros.sort == 'serv_reg' and filtros.order == 'asc' else 'asc') }}"
+                                class="text-decoration-none" style="color: #ff8c00 !important;">
+                                Prod. Serv. Regular
+                                {% if filtros.sort == 'serv_reg' %}
+                                <i class="fas fa-sort-{{ 'up' if filtros.order == 'asc' else 'down' }} ms-1"></i>
+                                {% else %}
+                                <i class="fas fa-sort ms-1 opacity-50"></i>
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="text-end col-serv-extra">
+                            <a href="{{ url_for('main.reporte_produccion_general', sucursal_id=filtros.sucursal_id, fecha_inicio=filtros.fecha_inicio, fecha_fin=filtros.fecha_fin, sort='serv_extra', order='desc' if filtros.sort == 'serv_extra' and filtros.order == 'asc' else 'asc') }}"
+                                class="text-decoration-none" style="color: #ff8c00 !important;">
+                                Prod. Serv. Extra
+                                {% if filtros.sort == 'serv_extra' %}
+                                <i class="fas fa-sort-{{ 'up' if filtros.order == 'asc' else 'down' }} ms-1"></i>
+                                {% else %}
+                                <i class="fas fa-sort ms-1 opacity-50"></i>
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="text-end col-prod">
+                            <a href="{{ url_for('main.reporte_produccion_general', sucursal_id=filtros.sucursal_id, fecha_inicio=filtros.fecha_inicio, fecha_fin=filtros.fecha_fin, sort='productos', order='desc' if filtros.sort == 'productos' and filtros.order == 'asc' else 'asc') }}"
+                                class="text-decoration-none" style="color: #ff8c00 !important;">
+                                Venta Productos
+                                {% if filtros.sort == 'productos' %}
+                                <i class="fas fa-sort-{{ 'up' if filtros.order == 'asc' else 'down' }} ms-1"></i>
+                                {% else %}
+                                <i class="fas fa-sort ms-1 opacity-50"></i>
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="text-end col-tips">
+                            <a href="{{ url_for('main.reporte_produccion_general', sucursal_id=filtros.sucursal_id, fecha_inicio=filtros.fecha_inicio, fecha_fin=filtros.fecha_fin, sort='propinas', order='desc' if filtros.sort == 'propinas' and filtros.order == 'asc' else 'asc') }}"
+                                class="text-decoration-none" style="color: #ff8c00 !important;">
+                                Propinas
+                                {% if filtros.sort == 'propinas' %}
+                                <i class="fas fa-sort-{{ 'up' if filtros.order == 'asc' else 'down' }} ms-1"></i>
+                                {% else %}
+                                <i class="fas fa-sort ms-1 opacity-50"></i>
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="text-end col-fid">
+                            <a href="{{ url_for('main.reporte_produccion_general', sucursal_id=filtros.sucursal_id, fecha_inicio=filtros.fecha_inicio, fecha_fin=filtros.fecha_fin, sort='fidelidad', order='desc' if filtros.sort == 'fidelidad' and filtros.order == 'asc' else 'asc') }}"
+                                class="text-decoration-none" style="color: #ff8c00 !important;">
+                                Fondo Fidelidad
+                                {% if filtros.sort == 'fidelidad' %}
+                                <i class="fas fa-sort-{{ 'up' if filtros.order == 'asc' else 'down' }} ms-1"></i>
+                                {% else %}
+                                <i class="fas fa-sort ms-1 opacity-50"></i>
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="text-end col-com">
+                            <a href="{{ url_for('main.reporte_produccion_general', sucursal_id=filtros.sucursal_id, fecha_inicio=filtros.fecha_inicio, fecha_fin=filtros.fecha_fin, sort='comisiones', order='desc' if filtros.sort == 'comisiones' and filtros.order == 'asc' else 'asc') }}"
+                                class="text-decoration-none" style="color: #ff8c00 !important;">
+                                Comisiones
+                                {% if filtros.sort == 'comisiones' %}
+                                <i class="fas fa-sort-{{ 'up' if filtros.order == 'asc' else 'down' }} ms-1"></i>
+                                {% else %}
+                                <i class="fas fa-sort ms-1 opacity-50"></i>
+                                {% endif %}
+                            </a>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>

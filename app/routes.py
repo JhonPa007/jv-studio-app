@@ -9566,6 +9566,8 @@ def reporte_produccion_general():
     sucursal_id = request.args.get('sucursal_id', type=int)
     fecha_inicio = request.args.get('fecha_inicio')
     fecha_fin = request.args.get('fecha_fin')
+    sort_by = request.args.get('sort', 'colaborador')
+    order = request.args.get('order', 'asc').lower()
 
     # Valores por defecto: Mes actual y sucursal de la sesión
     hoy = datetime.now()
@@ -9579,7 +9581,9 @@ def reporte_produccion_general():
     filtros = {
         'sucursal_id': sucursal_id,
         'fecha_inicio': fecha_inicio,
-        'fecha_fin': fecha_fin
+        'fecha_fin': fecha_fin,
+        'sort': sort_by,
+        'order': order
     }
 
     # Cargar sucursales para el menú desplegable
@@ -9593,18 +9597,35 @@ def reporte_produccion_general():
 
     resultados = []
     totales_generales = {}
+    
+    # Mapeo de campos permitidos para ordenar
+    allowed_sorts = {
+        'colaborador': 'colaborador_nombre',
+        'serv_reg': '2', # Referencia por posición o alias si el driver lo soporta
+        'serv_extra': '3',
+        'productos': '4',
+        'comisiones': 'total_comisiones',
+        'propinas': 'total_propinas',
+        'fidelidad': 'total_fidelidad'
+    }
+    
+    # Para ser más robusto con aliases en ORDER BY de Postgres, usaremos el nombre del alias o expresión
+    db_sort = allowed_sorts.get(sort_by, 'colaborador_nombre')
+    if order not in ['asc', 'desc']:
+        order = 'asc'
+
     if sucursal_id and fecha_inicio and fecha_fin:
         try:
             with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
                 # Esta consulta obtiene la producción y comisiones agrupadas por colaborador
-                sql = """
+                sql = f"""
                     SELECT
                         e.id as colaborador_id,
                         e.nombre_display AS colaborador_nombre,
                         SUM(CASE WHEN vi.servicio_id IS NOT NULL AND vi.es_hora_extra = FALSE THEN vi.subtotal_item_neto ELSE 0 END) as produccion_servicios_regular,
                         SUM(CASE WHEN vi.servicio_id IS NOT NULL AND vi.es_hora_extra = TRUE THEN vi.subtotal_item_neto ELSE 0 END) as produccion_servicios_extra,
                         SUM(CASE WHEN vi.producto_id IS NOT NULL THEN vi.subtotal_item_neto ELSE 0 END) as produccion_productos,
-                        (SELECT SUM(c.monto_comision) FROM comisiones c JOIN venta_items vi_c ON c.venta_item_id = vi_c.id JOIN ventas v_c ON vi_c.venta_id = v_c.id WHERE v_c.empleado_id = e.id AND DATE(v_c.fecha_venta) BETWEEN %s AND %s) as total_comisiones,
+                        (SELECT COALESCE(SUM(c.monto_comision), 0) FROM comisiones c JOIN venta_items vi_c ON c.venta_item_id = vi_c.id JOIN ventas v_c ON vi_c.venta_id = v_c.id WHERE v_c.empleado_id = e.id AND DATE(v_c.fecha_venta) BETWEEN %s AND %s) as total_comisiones,
                         (SELECT COALESCE(SUM(p.monto), 0) FROM propinas p WHERE p.empleado_id = e.id AND DATE(p.fecha_registro) BETWEEN %s AND %s) as total_propinas,
                         (SELECT COALESCE(ABS(SUM(a.monto)), 0) FROM ajustes_pago a WHERE a.empleado_id = e.id AND a.tipo ILIKE '%%Fidelidad%%' AND DATE(a.fecha) BETWEEN %s AND %s) as total_fidelidad
                     FROM ventas v
@@ -9613,7 +9634,7 @@ def reporte_produccion_general():
                     WHERE v.sucursal_id = %s AND DATE(v.fecha_venta) BETWEEN %s AND %s
                       AND v.estado_pago != 'Anulado'
                     GROUP BY e.id, e.nombre_display
-                    ORDER BY colaborador_nombre;
+                    ORDER BY {db_sort} {order.upper()};
                 """
                 cursor.execute(sql, (fecha_inicio, fecha_fin, fecha_inicio, fecha_fin, fecha_inicio, fecha_fin, sucursal_id, fecha_inicio, fecha_fin))
                 resultados = cursor.fetchall()
