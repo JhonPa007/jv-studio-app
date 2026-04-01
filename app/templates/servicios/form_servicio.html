@@ -122,6 +122,14 @@
                         value="{{ data_source.get('orden', '0') }}" min="0">
                     <small class="form-text text-muted">A menor número, aparecerá primero en la lista de ventas.</small>
                 </div>
+                <div class="col-md-6 mb-3">
+                    <label for="ciclo_dias" class="form-label text-info fw-bold">Ciclo Sugerido (Días para
+                        Retorno)</label>
+                    <input type="number" class="form-control border-info" id="ciclo_dias" name="ciclo_dias"
+                        value="{{ data_source.get('ciclo_dias', '0') }}" min="0">
+                    <small class="form-text text-muted">Días recomendados para que el cliente vuelva a realizarse este
+                        servicio. 0 = Sin alerta.</small>
+                </div>
             </div>
 
             <div class="mb-3 form-check">

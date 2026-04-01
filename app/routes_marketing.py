@@ -1003,3 +1003,138 @@ def nueva_gift_card():
         packages = cursor.fetchall()
             
     return render_template('marketing/crear_gift_card.html', packages=packages)
+
+
+# ==============================================================================
+# 6. CRM INTELIGENTE (IA GEMINI)
+# ==============================================================================
+from datetime import datetime, date, timedelta
+from .services.gemini_service import GeminiCRM
+
+@marketing_bp.route('/crm-ia', methods=['GET'])
+@login_required
+def crm_inteligente():
+    db = get_db()
+    hoy = date.today()
+    
+    try:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Consulta clasificada para Clientes SMART
+            cursor.execute("""
+                SELECT 
+                    c.id, c.razon_social_nombres, c.apellidos, c.telefono,
+                    c.fecha_nacimiento, c.puntos_fidelidad, c.notas_especiales,
+                    uv.fecha_venta as ultima_visita,
+                    s.nombre as ultimo_servicio,
+                    s.ciclo_dias as servicio_ciclo
+                FROM clientes c
+                LEFT JOIN (
+                    SELECT cliente_receptor_id, MAX(fecha_venta) as fecha_venta 
+                    FROM ventas GROUP BY cliente_receptor_id
+                ) uv ON c.id = uv.cliente_receptor_id
+                LEFT JOIN LATERAL (
+                    SELECT s.nombre, s.ciclo_dias 
+                    FROM venta_items vi 
+                    JOIN ventas v ON vi.venta_id = v.id 
+                    JOIN servicios s ON vi.servicio_id = s.id
+                    WHERE v.cliente_receptor_id = c.id 
+                    ORDER BY v.fecha_venta DESC LIMIT 1
+                ) s ON TRUE
+                ORDER BY uv.fecha_venta DESC NULLS LAST
+            """)
+            clientes_db = cursor.fetchall()
+            
+            clientes_filtrados = []
+            for c in clientes_db:
+                alertas = []
+                
+                # A. Cumpleaños
+                if c['fecha_nacimiento']:
+                    fnac = c['fecha_nacimiento']
+                    if fnac.month == hoy.month and fnac.day == hoy.day:
+                        alertas.append("🎂 ¡Hoy es su Cumpleaños!")
+                    elif (date(hoy.year, fnac.month, fnac.day) - hoy).days in [1, 2]:
+                        alertas.append("🎈 Cumpleaños pronto")
+
+                # B. Inactividad (> 45 días)
+                if c['ultima_visita']:
+                    dias_desde = (hoy - c['ultima_visita'].date()).days
+                    if dias_desde > 45:
+                        alertas.append(f"💤 Cliente Inactivo ({dias_desde} días)")
+                    
+                    # C. Ciclo de Servicio
+                    if c['servicio_ciclo'] and c['servicio_ciclo'] > 0:
+                        if dias_desde >= c['servicio_ciclo']:
+                            alertas.append(f"✂️ Ciclo de {c['ultimo_servicio']} cumplido")
+
+                # D. Nota Especial
+                if c['notas_especiales']:
+                    alertas.append("📝 Ver Nota Especial")
+
+                if alertas:
+                    c['alertas'] = alertas
+                    c['motivo_contacto'] = "; ".join(alertas)
+                    clientes_filtrados.append(c)
+
+        return render_template('marketing/crm_ia.html', clientes=clientes_filtrados)
+    except Exception as e:
+        flash(f"Error CRM Inteligente: {e}", "danger")
+        return redirect(url_for('main.index'))
+
+@marketing_bp.route('/crm-ia/generar-mensaje', methods=['POST'])
+@login_required
+def api_generar_mensaje_ia():
+    data = request.json
+    if not data or 'cliente_id' not in data:
+        return jsonify({'success': False, 'message': 'Faltan datos'}), 400
+    
+    db = get_db()
+    try:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # Obtener data consolidada para el prompt
+            cursor.execute("""
+                SELECT 
+                    c.razon_social_nombres as nombre, 
+                    c.puntos_fidelidad as puntos, 
+                    c.notas_especiales as notas,
+                    (SELECT MAX(fecha_venta) FROM ventas WHERE cliente_receptor_id = c.id) as ultima_visita,
+                    (SELECT s.nombre FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id JOIN servicios s ON vi.servicio_id = s.id WHERE v.cliente_receptor_id = c.id ORDER BY v.fecha_venta DESC LIMIT 1) as ultimo_servicio
+                FROM clientes c WHERE c.id = %s
+            """, (data['cliente_id'],))
+            cliente = cursor.fetchone()
+            
+            if not cliente:
+                return jsonify({'success': False, 'message': 'Cliente no encontrado'}), 404
+            
+            # Preparar objeto para el servicio
+            profile = {
+                'nombre': cliente['nombre'],
+                'ultimo_servicio': cliente['ultimo_servicio'] or 'un servicio en Studio',
+                'fecha_ultima_visita': cliente['ultima_visita'].strftime('%d/%m/%Y') if cliente['ultima_visita'] else 'Hace tiempo',
+                'puntos': cliente['puntos'] or 0,
+                'notas': cliente['notas'] or 'Sin notas especiales',
+                'motivo_alerta': data.get('motivo') or 'Mantener el contacto'
+            }
+            
+            gemini = GeminiCRM()
+            mensaje = gemini.generar_mensaje_whatsapp(profile)
+            
+            return jsonify({'success': True, 'mensaje': mensaje})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@marketing_bp.route('/crm-ia/guardar-nota', methods=['POST'])
+@login_required
+def api_guardar_nota():
+    data = request.json
+    cliente_id = data.get('cliente_id')
+    nota = data.get('nota')
+    
+    db = get_db()
+    try:
+        with db.cursor() as cursor:
+            cursor.execute("UPDATE clientes SET notas_especiales = %s WHERE id = %s", (nota, cliente_id))
+            db.commit()
+            return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500

@@ -260,6 +260,7 @@ def check_schema_updates(app):
                     ("clientes", "apellido_paterno", "VARCHAR(100)"),
                     ("clientes", "apellido_materno", "VARCHAR(100)"),
                     ("clientes", "saldo_monedero", "DECIMAL(12, 2) DEFAULT 0.00"),
+                    ("clientes", "notas_especiales", "TEXT"),
                     # GASTOS
                     ("gastos", "estado_confirmacion", "VARCHAR(20) DEFAULT 'Confirmado'"),
                     # GIFT CARDS - PAQUETES
@@ -270,6 +271,7 @@ def check_schema_updates(app):
                     ("categorias_gastos", "requiere_beneficiario", "BOOLEAN DEFAULT FALSE"),
                     # ORDENACION
                     ("servicios", "orden", "INTEGER DEFAULT 0"),
+                    ("servicios", "ciclo_dias", "INTEGER DEFAULT 0"),
                     ("productos", "orden", "INTEGER DEFAULT 0"),
                 ]
                 

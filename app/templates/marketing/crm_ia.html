@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+
+{% block title %}CRM Inteligente - JV Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header Decorativo -->
+    <div class="row mb-4 animate__animated animate__fadeIn">
+        <div class="col-12 p-4 rounded-4"
+            style="background: linear-gradient(135deg, #1a1a1a 0%, #2c2c2c 100%); border-left: 5px solid #d4af37; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1" style="color: #d4af37; font-weight: 700;">
+                        <i class="fas fa-brain me-2"></i>CRM Inteligente (IA Gemini)
+                    </h2>
+                    <p class="text-muted mb-0">Gestión personalizada y automatizada de clientes basada en comportamiento
+                        y eventos.</p>
+                </div>
+                <div class="text-end text-light">
+                    <span class="badge bg-dark border border-warning p-2">Total Alertas: {{ clientes|length }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros Rápidos -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-outline-warning btn-sm filter-btn active" data-filter="all">Todos</button>
+                <button class="btn btn-outline-info btn-sm filter-btn" data-filter="Cumpleaños">Cumpleaños</button>
+                <button class="btn btn-outline-danger btn-sm filter-btn" data-filter="Inactivo">Inactivos</button>
+                <button class="btn btn-outline-success btn-sm filter-btn" data-filter="Ciclo">Ciclos de
+                    Servicio</button>
+                <button class="btn btn-outline-light btn-sm filter-btn" data-filter="Nota">Con Notas</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de Clientes con Alertas -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary shadow-sm">
+                <div class="table-responsive p-3">
+                    <table class="table table-dark table-hover align-middle mb-0" id="crm-table">
+                        <thead>
+                            <tr class="text-muted">
+                                <th>Cliente</th>
+                                <th>Contacto</th>
+                                <th>Alertas Inteligentes</th>
+                                <th>Última Visita</th>
+                                <th>Notas Especiales</th>
+                                <th class="text-center">Acción con IA</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in clientes %}
+                            <tr class="crm-row" data-tags="{{ c.motivo_contacto }}">
+                                <td>
+                                    <div class="fw-bold">{{ c.razon_social_nombres }} {{ c.apellidos or '' }}</div>
+                                    <small class="text-muted">DNI: {{ c.numero_documento or '---' }}</small>
+                                </td>
+                                <td>
+                                    <a href="https://wa.me/51{{ c.telefono }}" target="_blank"
+                                        class="text-info text-decoration-none">
+                                        <i class="fab fa-whatsapp me-1"></i>{{ c.telefono }}
+                                    </a>
+                                </td>
+                                <td>
+                                    {% for alerta in c.alertas %}
+                                    <span
+                                        class="badge rounded-pill {% if 'Cumpleaños' in alerta %}bg-info{% elif 'Inactivo' in alerta %}bg-danger{% elif 'Ciclo' in alerta %}bg-success{% else %}bg-secondary{% endif %} me-1">
+                                        {{ alerta }}
+                                    </span>
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    {% if c.ultima_visita %}
+                                    {{ c.ultima_visita.strftime('%d/%m/%Y') }}
+                                    <br><small class="text-muted">{{ c.ultimo_servicio }}</small>
+                                    {% else %}
+                                    <span class="text-muted small italic">Sin registros</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div id="nota-text-{{ c.id }}" class="text-truncate" style="max-width: 150px;">
+                                            {{ c.notas_especiales or '---' }}</div>
+                                        <button class="btn btn-sm btn-link text-warning p-0 ms-2 btn-open-note"
+                                            data-id="{{ c.id }}" data-nota="{{ c.notas_especiales or '' }}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn btn-warning btn-sm px-3 fw-bold btn-gen-ia" data-id="{{ c.id }}"
+                                        data-motivo="{{ c.motivo_contacto }}" data-telefono="{{ c.telefono }}">
+                                        <i class="fas fa-robot me-1"></i> Sugerir Mensaje
+                                    </button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center p-5">
+                                    <div class="text-muted">
+                                        <i class="fas fa-search-minus fs-1 mb-3"></i><br>
+                                        No hay alertas automáticas que requieran atención en este momento.
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Notas -->
+<div class="modal fade" id="noteModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-white border-warning">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-warning"><i class="fas fa-edit me-2"></i>Nota Especial del Cliente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="current_cliente_id">
+                <textarea id="note_textarea" class="form-control bg-secondary text-white border-0" rows="4"
+                    placeholder="Ej: Prefiere café sin azúcar, siempre pide fade alto..."></textarea>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-warning btn-sm" onclick="saveNote()">Guardar Nota</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Sugerencia IA -->
+<div class="modal fade" id="iaModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content bg-dark text-white border-info shadow-lg">
+            <div class="modal-header border-secondary" style="background: rgba(0,255,255,0.05);">
+                <h5 class="modal-title text-info"><i class="fas fa-robot me-2"></i>Propuesta de Mensaje (Gemini)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="ia_loading" class="text-center p-4">
+                    <div class="spinner-border text-info" role="status"></div>
+                    <p class="mt-2">Analizando perfil del cliente y generando mensaje...</p>
+                </div>
+                <div id="ia_result" style="display: none;">
+                    <div class="p-3 rounded border border-secondary mb-3 bg-black"
+                        style="min-height: 100px; font-size: 1.1rem; line-height: 1.6; white-space: pre-wrap;"
+                        id="suggested_text"></div>
+                    <div class="alert alert-secondary py-2 small">
+                        <i class="fas fa-info-circle me-1"></i> Este mensaje ha sido redactado por la IA. Puedes
+                        copiarlo y editarlo antes de enviar.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">Descartar</button>
+                <button type="button" class="btn btn-info btn-sm px-4" onclick="copyAndOpenWA()">
+                    <i class="fab fa-whatsapp me-1"></i> Copiar y Abrir WhatsApp
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentPhone = "";
+    const noteModal = new bootstrap.Modal(document.getElementById('noteModal'));
+    const iaModal = new bootstrap.Modal(document.getElementById('iaModal'));
+
+    // Manejo de clicks para Notas
+    document.querySelectorAll('.btn-open-note').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-id');
+            const nota = btn.getAttribute('data-nota');
+            openNoteModal(id, nota);
+        });
+    });
+
+    // Manejo de clicks para IA
+    document.querySelectorAll('.btn-gen-ia').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-id');
+            const motivo = btn.getAttribute('data-motivo');
+            const telefono = btn.getAttribute('data-telefono');
+            generateIAMessage(id, motivo, telefono);
+        });
+    });
+
+    function openNoteModal(id, currentNote) {
+        document.getElementById('current_cliente_id').value = id;
+        document.getElementById('note_textarea').value = currentNote || "";
+        noteModal.show();
+    }
+
+    async function saveNote() {
+        const id = document.getElementById('current_cliente_id').value;
+        const nota = document.getElementById('note_textarea').value;
+
+        try {
+            const res = await fetch('/marketing/crm-ia/guardar-nota', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cliente_id: id, nota: nota })
+            });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById(`nota-text-${id}`).innerText = nota || "---";
+                // Actualizar el data-attribute para futuros clicks
+                document.querySelector(`.btn-open-note[data-id="${id}"]`).setAttribute('data-nota', nota);
+                noteModal.hide();
+            }
+        } catch (e) {
+            alert("Error al guardar nota");
+        }
+    }
+
+    async function generateIAMessage(id, motivo, telefono) {
+        currentPhone = telefono;
+        document.getElementById('ia_loading').style.display = 'block';
+        document.getElementById('ia_result').style.display = 'none';
+        iaModal.show();
+
+        try {
+            const res = await fetch('/marketing/crm-ia/generar-mensaje', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cliente_id: id, motivo: motivo })
+            });
+            const data = await res.json();
+
+            document.getElementById('ia_loading').style.display = 'none';
+            document.getElementById('ia_result').style.display = 'block';
+
+            if (data.success) {
+                document.getElementById('suggested_text').innerText = data.mensaje;
+            } else {
+                document.getElementById('suggested_text').innerText = "❌ No se pudo generar el mensaje: " + data.message;
+            }
+        } catch (e) {
+            document.getElementById('ia_loading').style.display = 'none';
+            document.getElementById('ia_result').style.display = 'block';
+            document.getElementById('suggested_text').innerText = "❌ Error de conexión.";
+        }
+    }
+
+    function copyAndOpenWA() {
+        const text = document.getElementById('suggested_text').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            const encodedText = encodeURIComponent(text);
+            window.open(`https://wa.me/51${currentPhone}?text=${encodedText}`, '_blank');
+        });
+    }
+
+    // Filtrado de Tabla
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            const filter = btn.getAttribute('data-filter');
+            document.querySelectorAll('.crm-row').forEach(row => {
+                if (filter === 'all') {
+                    row.style.display = '';
+                } else {
+                    const tags = row.getAttribute('data-tags');
+                    row.style.display = tags.includes(filter) ? '' : 'none';
+                }
+            });
+        });
+    });
+</script>
+
+<style>
+    .crm-row {
+        transition: all 0.3s ease;
+    }
+
+    .crm-row:hover {
+        background-color: rgba(212, 175, 55, 0.05) !important;
+        transform: scale(1.005);
+    }
+
+    .btn-warning {
+        background-color: #d4af37;
+        border-color: #d4af37;
+        color: #000;
+    }
+
+    .btn-warning:hover {
+        background-color: #bfa030;
+        border-color: #bfa030;
+    }
+
+    .bg-black {
+        background-color: #0b0b0b !important;
+    }
+</style>
+{% endblock %}

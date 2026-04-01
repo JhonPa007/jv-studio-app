@@ -1517,6 +1517,7 @@ def nuevo_servicio():
         porcentaje_comision_extra_str = request.form.get('porcentaje_comision_extra')
         porcentaje_comision_extra = float(porcentaje_comision_extra_str) if porcentaje_comision_extra_str else None
         orden = request.form.get('orden', '0', type=int)
+        ciclo_dias = request.form.get('ciclo_dias', '0', type=int)
         activo = 'activo' in request.form # True si 'activo' está en request.form, False si no.
 
         # Validaciones
@@ -1550,9 +1551,9 @@ def nuevo_servicio():
             db = get_db()
             cursor = db.cursor()
             sql = """INSERT INTO servicios 
-                                (nombre, descripcion, duracion_minutos, precio, categoria_id, activo, porcentaje_comision_extra, orden) 
-                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
-            val = (nombre, (descripcion or None), duracion_minutos, precio, categoria_id, activo, porcentaje_comision_extra, orden)
+                                (nombre, descripcion, duracion_minutos, precio, categoria_id, activo, porcentaje_comision_extra, orden, ciclo_dias) 
+                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+            val = (nombre, (descripcion or None), duracion_minutos, precio, categoria_id, activo, porcentaje_comision_extra, orden, ciclo_dias)
             cursor.execute(sql, val)
             db.commit()
             flash(f'Servicio "{nombre}" registrado exitosamente!', 'success')
@@ -1620,6 +1621,7 @@ def editar_servicio(servicio_id):
         porcentaje_comision_extra_str = request.form.get('porcentaje_comision_extra')
         porcentaje_comision_extra = float(porcentaje_comision_extra_str) if porcentaje_comision_extra_str else None
         orden = request.form.get('orden', '0', type=int)
+        ciclo_dias = request.form.get('ciclo_dias', '0', type=int)
         activo = 'activo' in request.form # True si el checkbox 'activo' está marcado
 
         # Variables para almacenar los valores convertidos y validados
@@ -1677,9 +1679,9 @@ def editar_servicio(servicio_id):
                 # 3. Actualizar la base de datos
                 sql_update = """UPDATE servicios SET 
                                     nombre=%s, descripcion=%s, duracion_minutos=%s, precio=%s, 
-                                    categoria_id=%s, activo=%s, porcentaje_comision_extra=%s, orden=%s 
+                                    categoria_id=%s, activo=%s, porcentaje_comision_extra=%s, orden=%s, ciclo_dias=%s 
                                 WHERE id=%s"""
-                val_update = (nombre, descripcion, duracion_minutos, precio_decimal, categoria_id, activo, porcentaje_comision_extra, orden, servicio_id)
+                val_update = (nombre, descripcion, duracion_minutos, precio_decimal, categoria_id, activo, porcentaje_comision_extra, orden, ciclo_dias, servicio_id)
                 cursor.execute(sql_update, val_update)
             db_conn.commit()
             flash(f'Servicio "{nombre}" actualizado exitosamente.', 'success')
