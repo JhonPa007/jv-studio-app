@@ -35,132 +35,141 @@
     </div>
 
 
-    <div class="card bg-dark text-light mb-4 shadow-sm">
-        <div class="card-body">
-            <form method="GET" action="{{ url_for('main.listar_clientes') }}">
-                <div class="row g-2 align-items-end">
-                    <div class="col-md-3">
-                        <label for="q" class="small text-muted mb-1"><i class="fas fa-search me-1"></i>Búsqueda
-                            General</label>
-                        <input type="search" class="form-control form-control-sm bg-dark text-white border-secondary"
-                            id="q" name="q" placeholder="Nombre, DNI o Teléfono..."
-                            value="{{ termino_busqueda or '' }}">
-                    </div>
-                    <div class="col-md-2">
-                        <label for="nombre" class="small text-muted mb-1">Nombre/Apellidos</label>
-                        <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary"
-                            id="nombre" name="nombre" value="{{ nombre_filtro or '' }}">
-                    </div>
-                    <div class="col-md-2">
-                        <label for="dni" class="small text-muted mb-1">DNI/Documento</label>
-                        <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary"
-                            id="dni" name="dni" value="{{ dni_filtro or '' }}">
-                    </div>
-                    <div class="col-md-2">
-                        <label for="telefono" class="small text-muted mb-1">Teléfono</label>
-                        <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary"
-                            id="telefono" name="telefono" value="{{ telefono_filtro or '' }}">
-                    </div>
-                    <div class="col-md-1">
-                        <label for="puntos_min" class="small text-muted mb-1">Puntos ≥</label>
-                        <input type="number" class="form-control form-control-sm bg-dark text-white border-secondary"
-                            id="puntos_min" name="puntos_min" value="{{ puntos_min or '' }}">
-                    </div>
-
-                    <!-- Mantener el orden actual al buscar -->
-                    <input type="hidden" name="sort" value="{{ sort or 'nombre' }}">
-                    <input type="hidden" name="order" value="{{ order or 'asc' }}">
-
-                    <div class="col-md-2">
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-sm btn-primary flex-grow-1"><i
-                                    class="fas fa-filter me-1"></i> Filtrar</button>
-                            <a href="{{ url_for('main.listar_clientes') }}" class="btn btn-sm btn-outline-secondary"
-                                title="Limpiar Filtros"><i class="fas fa-sync-alt"></i></a>
+    <div class="card bg-dark text-light mb-4 shadow-sm border-0">
+        <div class="card-body p-4">
+            <form id="search-form" method="GET" action="{{ url_for('main.listar_clientes') }}">
+                <div class="row g-3 align-items-center">
+                    <div class="col-md-8">
+                        <div class="input-group input-group-lg search-box-container">
+                            <span class="input-group-text bg-dark border-secondary text-accent">
+                                <i class="fas fa-search"></i>
+                            </span>
+                            <input type="search" class="form-control bg-dark text-white border-secondary ps-2" id="q"
+                                name="q" placeholder="Buscar por nombre, apellidos, DNI o teléfono..."
+                                value="{{ termino_busqueda or '' }}" autocomplete="off">
                         </div>
+                    </div>
+                    <input type="hidden" name="sort" id="sort-input" value="{{ sort or 'nombre' }}">
+                    <input type="hidden" name="order" id="order-input" value="{{ order or 'asc' }}">
+                    <div class="col-md-4 text-end">
+                        <span id="loading-spinner" class="spinner-border spinner-border-sm text-accent me-2 d-none"
+                            role="status"></span>
+                        <a href="{{ url_for('main.listar_clientes') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-sync-alt me-1"></i> Reiniciar
+                        </a>
                     </div>
                 </div>
             </form>
         </div>
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-hover table-custom table-sm align-middle">
-            <thead>
+    <div class="table-responsive shadow-lg rounded-3">
+        <table class="table table-hover table-custom align-middle mb-0" id="clientes-table">
+            <thead class="bg-black">
                 <tr>
-                    <th>
-                        <a href="{{ url_for('main.listar_clientes', q=termino_busqueda, nombre=nombre_filtro, dni=dni_filtro, telefono=telefono_filtro, puntos_min=puntos_min, sort='nombre', order='desc' if sort == 'nombre' and order == 'asc' else 'asc') }}"
-                            class="text-light text-decoration-none">
+                    <th style="width: 35%;">
+                        <a href="{{ url_for('main.listar_clientes', q=termino_busqueda, sort='nombre', order='desc' if sort == 'nombre' and order == 'asc' else 'asc') }}"
+                            class="text-decoration-none text-accent">
                             Nombre {% if sort == 'nombre' %}<i
-                                class="fas fa-sort-{{ 'up' if order == 'asc' else 'down' }} ms-1 text-warning"></i>{%
-                            else %}<i class="fas fa-sort ms-1 opacity-50"></i>{% endif %}
+                                class="fas fa-sort-{{ 'up' if order == 'asc' else 'down' }} ms-1"></i>{% else %}<i
+                                class="fas fa-sort ms-1 opacity-50"></i>{% endif %}
                         </a>
                     </th>
                     <th class="text-center">
-                        <a href="{{ url_for('main.listar_clientes', q=termino_busqueda, nombre=nombre_filtro, dni=dni_filtro, telefono=telefono_filtro, puntos_min=puntos_min, sort='dni', order='desc' if sort == 'dni' and order == 'asc' else 'asc') }}"
-                            class="text-light text-decoration-none">
+                        <a href="{{ url_for('main.listar_clientes', q=termino_busqueda, sort='dni', order='desc' if sort == 'dni' and order == 'asc' else 'asc') }}"
+                            class="text-decoration-none text-accent">
                             Documento {% if sort == 'dni' %}<i
-                                class="fas fa-sort-{{ 'up' if order == 'asc' else 'down' }} ms-1 text-warning"></i>{%
-                            else %}<i class="fas fa-sort ms-1 opacity-50"></i>{% endif %}
+                                class="fas fa-sort-{{ 'up' if order == 'asc' else 'down' }} ms-1"></i>{% else %}<i
+                                class="fas fa-sort ms-1 opacity-50"></i>{% endif %}
                         </a>
                     </th>
                     <th>
-                        <a href="{{ url_for('main.listar_clientes', q=termino_busqueda, nombre=nombre_filtro, dni=dni_filtro, telefono=telefono_filtro, puntos_min=puntos_min, sort='telefono', order='desc' if sort == 'telefono' and order == 'asc' else 'asc') }}"
-                            class="text-light text-decoration-none">
+                        <a href="{{ url_for('main.listar_clientes', q=termino_busqueda, sort='telefono', order='desc' if sort == 'telefono' and order == 'asc' else 'asc') }}"
+                            class="text-decoration-none text-accent">
                             Teléfono {% if sort == 'telefono' %}<i
-                                class="fas fa-sort-{{ 'up' if order == 'asc' else 'down' }} ms-1 text-warning"></i>{%
-                            else %}<i class="fas fa-sort ms-1 opacity-50"></i>{% endif %}
+                                class="fas fa-sort-{{ 'up' if order == 'asc' else 'down' }} ms-1"></i>{% else %}<i
+                                class="fas fa-sort ms-1 opacity-50"></i>{% endif %}
                         </a>
                     </th>
                     <th class="text-center">
-                        <a href="{{ url_for('main.listar_clientes', q=termino_busqueda, nombre=nombre_filtro, dni=dni_filtro, telefono=telefono_filtro, puntos_min=puntos_min, sort='puntos', order='desc' if sort == 'puntos' and order == 'asc' else 'asc') }}"
-                            class="text-light text-decoration-none">
+                        <a href="{{ url_for('main.listar_clientes', q=termino_busqueda, sort='puntos', order='desc' if sort == 'puntos' and order == 'asc' else 'asc') }}"
+                            class="text-decoration-none text-accent">
                             JV Puntos {% if sort == 'puntos' %}<i
-                                class="fas fa-sort-{{ 'up' if order == 'asc' else 'down' }} ms-1 text-warning"></i>{%
-                            else %}<i class="fas fa-sort ms-1 opacity-50"></i>{% endif %}
+                                class="fas fa-sort-{{ 'up' if order == 'asc' else 'down' }} ms-1"></i>{% else %}<i
+                                class="fas fa-sort ms-1 opacity-50"></i>{% endif %}
                         </a>
                     </th>
                     <th class="text-center">Acciones</th>
                 </tr>
             </thead>
-            <tbody>
-                {% for cliente in clientes %}
-                <tr>
-                    <td>
-                        <a href="{{ url_for('main.detalle_cliente', cliente_id=cliente.id) }}"
-                            class="text-decoration-none text-light fw-bold">
-                            {{ cliente.razon_social_nombres }} {{ cliente.apellidos or '' }}
-                        </a>
-                    </td>
-                    <td class="text-center text-muted small">
-                        {{ cliente.tipo_documento or 'S/D' }}: {{ cliente.numero_documento or 'No reg.' }}
-                    </td>
-                    <td>{{ cliente.telefono or '-' }}</td>
-                    <td class="text-center">
-                        <span class="badge bg-warning text-dark">
-                            {{ cliente.puntos_fidelidad if cliente.puntos_fidelidad is not none else 0 }}
-                        </span>
-                    </td>
-                    <td class="text-center">
-                        <a href="{{ url_for('main.editar_cliente', cliente_id=cliente.id) }}"
-                            class="btn btn-xs btn-outline-warning" title="Editar Cliente"><i
-                                class="fas fa-edit"></i></a>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="5" class="text-center text-muted fst-italic p-5">
-                        <i class="fas fa-user-slash fa-2x mb-3 d-block opacity-25"></i>
-                        {% if termino_busqueda or nombre_filtro or dni_filtro or telefono_filtro or puntos_min %}
-                        No se encontraron clientes con los filtros aplicados.
-                        {% else %}
-                        No hay clientes registrados en el sistema.
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
+            <tbody id="clientes-tbody">
+                {% include 'clientes/_filas_clientes.html' %}
             </tbody>
         </table>
     </div>
 </div>
+
+<style>
+    .text-accent {
+        color: var(--color-accent) !important;
+    }
+
+    .search-box-container .form-control:focus {
+        border-color: var(--color-accent) !important;
+        box-shadow: 0 0 0 0.25rem rgba(212, 175, 55, 0.25);
+    }
+
+    #clientes-table thead th {
+        background-color: #000 !important;
+        padding: 15px;
+        border-bottom: 2px solid var(--color-accent);
+    }
+
+    #clientes-table tbody tr {
+        transition: all 0.2s;
+    }
+
+    #clientes-table tbody tr:hover {
+        background-color: rgba(212, 175, 55, 0.05) !important;
+        transform: scale(1.002);
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const searchInput = document.getElementById('q');
+        const tbody = document.getElementById('clientes-tbody');
+        const spinner = document.getElementById('loading-spinner');
+        let timeout = null;
+
+        searchInput.addEventListener('input', function () {
+            clearTimeout(timeout);
+            const query = this.value;
+
+            spinner.classList.remove('d-none');
+
+            timeout = setTimeout(() => {
+                const sort = document.getElementById('sort-input').value;
+                const order = document.getElementById('order-input').value;
+                const url = `{{ url_for('main.listar_clientes') }}?q=${encodeURIComponent(query)}&sort=${sort}&order=${order}&ajax=1`;
+
+                fetch(url)
+                    .then(response => response.text())
+                    .then(html => {
+                        tbody.innerHTML = html;
+                        spinner.classList.add('d-none');
+                    })
+                    .catch(error => {
+                        console.error('Error in search:', error);
+                        spinner.classList.add('d-none');
+                    });
+            }, 300); // 300ms debounce
+        });
+
+        // Handle form submission to avoid page refresh
+        document.getElementById('search-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+        });
+    });
+</script>
 {% endblock %}

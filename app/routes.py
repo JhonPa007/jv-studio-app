@@ -463,12 +463,9 @@ def api_registrar_comunicacion():
 def listar_clientes():
     db_conn = get_db()
     try:
-        # Obtener términos de búsqueda y filtros específicos
+        # Obtener términos de búsqueda y filtros
         q = request.args.get('q', '').strip()
-        nombre_filtro = request.args.get('nombre', '').strip()
-        dni_filtro = request.args.get('dni', '').strip()
-        telefono_filtro = request.args.get('telefono', '').strip()
-        puntos_min = request.args.get('puntos_min', None, type=int)
+        ajax = request.args.get('ajax', False, type=bool)
         
         # Ordenación
         sort_by = request.args.get('sort', 'nombre')
@@ -485,7 +482,7 @@ def listar_clientes():
         if order not in ['asc', 'desc']:
             order = 'asc'
 
-        # Construir la consulta SQL dinámicamente
+        # Consulta SQL optimizada para búsqueda general
         sql_base = """
             SELECT id, razon_social_nombres, apellidos, tipo_documento, 
                    numero_documento, telefono, puntos_fidelidad 
@@ -499,39 +496,23 @@ def listar_clientes():
             termino = f"%{q}%"
             params.extend([termino, termino, termino, termino])
 
-        if nombre_filtro:
-            sql_base += " AND (razon_social_nombres ILIKE %s OR apellidos ILIKE %s)"
-            termino = f"%{nombre_filtro}%"
-            params.extend([termino, termino])
-
-        if dni_filtro:
-            sql_base += " AND numero_documento ILIKE %s"
-            params.append(f"%{dni_filtro}%")
-
-        if telefono_filtro:
-            sql_base += " AND telefono ILIKE %s"
-            params.append(f"%{telefono_filtro}%")
-
-        if puntos_min is not None:
-            sql_base += " AND puntos_fidelidad >= %s"
-            params.append(puntos_min)
-
-        # Ordenar (Limitamos a 100 si no hay búsqueda para no sobrecargar)
+        # Ordenar
         sql_base += f" ORDER BY {db_sort_field} {order.upper()}"
-        if not (q or nombre_filtro or dni_filtro or telefono_filtro or puntos_min is not None):
+        
+        # Límite si no hay búsqueda
+        if not q:
             sql_base += " LIMIT 100"
 
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             cursor.execute(sql_base, tuple(params))
             clientes = cursor.fetchall()
 
+        if ajax:
+            return render_template('clientes/_filas_clientes.html', clientes=clientes)
+
         return render_template('clientes/lista_clientes.html', 
                                clientes=clientes, 
                                termino_busqueda=q,
-                               nombre_filtro=nombre_filtro,
-                               dni_filtro=dni_filtro,
-                               telefono_filtro=telefono_filtro,
-                               puntos_min=puntos_min,
                                sort=sort_by,
                                order=order)
 
