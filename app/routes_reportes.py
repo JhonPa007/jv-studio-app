@@ -18,12 +18,15 @@ def ingresos_egresos():
     fecha_fin_str = request.args.get('fecha_fin')
     sucursal_id_str = request.args.get('sucursal_id')
     
-    # Valores por defecto: Mes actual
+    # Valores por defecto: Mes actual y sucursal de la sesión
     hoy = datetime.now()
     if not fecha_inicio_str:
         fecha_inicio_str = hoy.replace(day=1).strftime('%Y-%m-%d')
     if not fecha_fin_str:
         fecha_fin_str = hoy.strftime('%Y-%m-%d')
+    if not sucursal_id_str:
+        from flask import session
+        sucursal_id_str = str(session.get('sucursal_id', ''))
 
     sucursales_activas = []
     resultados = None

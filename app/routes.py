@@ -6702,14 +6702,14 @@ def listar_ventas():
     fecha_inicio_str = request.args.get('fecha_inicio')
     fecha_fin_str = request.args.get('fecha_fin')
     
-    # Requerimiento: Si no hay filtros de fecha, cargar predeterminadamente con la fecha actual
+    # Requerimiento: Si no hay filtros de fecha, cargar predeterminadamente con el inicio de mes
     lima_tz = pytz.timezone('America/Lima')
-    hoy = datetime.now(lima_tz).strftime('%Y-%m-%d')
+    hoy_dt = datetime.now(lima_tz)
     
     if not fecha_inicio_str or not fecha_inicio_str.strip():
-        fecha_inicio_str = hoy
+        fecha_inicio_str = hoy_dt.replace(day=1).strftime('%Y-%m-%d')
     if not fecha_fin_str or not fecha_fin_str.strip():
-        fecha_fin_str = hoy
+        fecha_fin_str = hoy_dt.strftime('%Y-%m-%d')
 
     estado_pago = request.args.get('estado_pago')
     tipo_comprobante = request.args.get('tipo_comprobante')
@@ -9165,18 +9165,22 @@ def reporte_estado_resultados():
     fecha_fin_str = request.args.get('fecha_fin')
     sucursal_id_str = request.args.get('sucursal_id')
     
-    # Cargar sucursales para el menú desplegable de filtros
-    sucursales_activas = []
-    try:
-        with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            cursor.execute("SELECT id, nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre")
-            sucursales_activas = cursor.fetchall()
-    except Exception as err:
-        flash(f"Error al cargar sucursales: {err}", "danger")
+    # Valores por defecto: Mes actual y sucursal de la sesión
+    hoy = datetime.now()
+    if not fecha_inicio_str:
+        fecha_inicio_str = hoy.replace(day=1).strftime('%Y-%m-%d')
+    if not fecha_fin_str:
+        fecha_fin_str = hoy.strftime('%Y-%m-%d')
+    if not sucursal_id_str:
+        sucursal_id_str = str(session.get('sucursal_id', ''))
 
-    resultados = None # Inicializamos los resultados como nulos
+    filtros = {
+        'fecha_inicio': fecha_inicio_str,
+        'fecha_fin': fecha_fin_str,
+        'sucursal_id': sucursal_id_str
+    }
 
-    # Si se enviaron los filtros, procesar los datos
+    # Si se enviaron los filtros (o se cargaron los por defecto en el diccionario), procesar los datos
     if fecha_inicio_str and fecha_fin_str and sucursal_id_str:
         try:
             sucursal_id = int(sucursal_id_str)
@@ -9236,7 +9240,7 @@ def reporte_estado_resultados():
     return render_template('reportes/estado_resultados.html',
                            titulo_pagina="Reporte de Estado de Resultados",
                            sucursales=sucursales_activas,
-                           filtros=request.args, # Pasar los filtros para mantenerlos en el form
+                           filtros=filtros, # Pasar los filtros para mantenerlos en el form
                            resultados=resultados)
 
 @main_bp.route('/reportes/liquidacion', methods=['GET'])
@@ -9362,6 +9366,22 @@ def reporte_produccion():
     fecha_inicio = request.args.get('fecha_inicio')
     fecha_fin = request.args.get('fecha_fin')
 
+    # Valores por defecto: Mes actual y sucursal de la sesión
+    hoy = datetime.now()
+    if not fecha_inicio:
+        fecha_inicio = hoy.replace(day=1).strftime('%Y-%m-%d')
+    if not fecha_fin:
+        fecha_fin = hoy.strftime('%Y-%m-%d')
+    if not sucursal_id:
+        sucursal_id = session.get('sucursal_id')
+
+    filtros = {
+        'colaborador_id': colaborador_id,
+        'sucursal_id': sucursal_id,
+        'fecha_inicio': fecha_inicio,
+        'fecha_fin': fecha_fin
+    }
+
     # Cargar datos para los desplegables de los filtros
     sucursales = []
     colaboradores = []
@@ -9477,7 +9497,7 @@ def reporte_produccion():
                            titulo_pagina="Reporte de Producción por Colaborador",
                            sucursales=sucursales,
                            colaboradores=colaboradores,
-                           filtros=request.args,
+                           filtros=filtros,
                            resultados=resultados)
 
 @main_bp.route('/reportes/produccion/exportar')
@@ -9566,6 +9586,21 @@ def reporte_produccion_general():
     fecha_inicio = request.args.get('fecha_inicio')
     fecha_fin = request.args.get('fecha_fin')
 
+    # Valores por defecto: Mes actual y sucursal de la sesión
+    hoy = datetime.now()
+    if not fecha_inicio:
+        fecha_inicio = hoy.replace(day=1).strftime('%Y-%m-%d')
+    if not fecha_fin:
+        fecha_fin = hoy.strftime('%Y-%m-%d')
+    if not sucursal_id:
+        sucursal_id = session.get('sucursal_id')
+
+    filtros = {
+        'sucursal_id': sucursal_id,
+        'fecha_inicio': fecha_inicio,
+        'fecha_fin': fecha_fin
+    }
+
     # Cargar sucursales para el menú desplegable
     sucursales = []
     try:
@@ -9621,7 +9656,7 @@ def reporte_produccion_general():
     return render_template('reportes/reporte_produccion_general.html',
                            titulo_pagina="Reporte de Producción General",
                            sucursales=sucursales,
-                           filtros=request.args,
+                           filtros=filtros,
                            resultados=resultados,
                            totales=totales_generales)
 
