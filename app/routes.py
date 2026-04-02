@@ -8629,17 +8629,29 @@ def gestionar_caja():
             else:
                 monto_final = float(monto_inicial_manual or 0)
 
-            with db_conn.cursor() as cursor:
-                cursor.execute("SELECT id FROM caja_sesiones WHERE usuario_id=%s AND estado='Abierta'", (usuario_id,))
-                if cursor.fetchone():
-                    flash("Ya tienes una caja abierta.", "warning")
-                else:
-                    cursor.execute("""
-                        INSERT INTO caja_sesiones (usuario_id, sucursal_id, monto_inicial, estado, fecha_apertura)
-                        VALUES (%s, %s, %s, 'Abierta', CURRENT_TIMESTAMP)
-                    """, (usuario_id, sucursal_id, monto_final))
-                    db_conn.commit()
-                    flash(f"¡Caja abierta con S/ {monto_final:.2f}!", "success")
+                with db_conn.cursor() as cursor:
+                    # 1. Validar si el usuario ya tiene una caja abierta
+                    cursor.execute("SELECT id FROM caja_sesiones WHERE usuario_id=%s AND estado='Abierta'", (usuario_id,))
+                    if cursor.fetchone():
+                        flash("Ya tienes una caja abierta.", "warning")
+                    else:
+                        # 2. Validar si hay cajas de días anteriores abiertas en esta sucursal
+                        cursor.execute("""
+                            SELECT id FROM caja_sesiones 
+                            WHERE sucursal_id = %s AND estado = 'Abierta' AND DATE(fecha_apertura) < CURRENT_DATE
+                        """, (sucursal_id,))
+                        
+                        if cursor.fetchone():
+                            flash("No se puede iniciar un nuevo día operativo: Existen cajas de días anteriores que aún no han sido cerradas. Por favor, ciérrelas para continuar.", "danger")
+                            return redirect(url_for('main.gestionar_caja'))
+
+                        # 3. Proceder con la apertura
+                        cursor.execute("""
+                            INSERT INTO caja_sesiones (usuario_id, sucursal_id, monto_inicial, estado, fecha_apertura)
+                            VALUES (%s, %s, %s, 'Abierta', CURRENT_TIMESTAMP)
+                        """, (usuario_id, sucursal_id, monto_final))
+                        db_conn.commit()
+                        flash(f"¡Caja abierta con S/ {monto_final:.2f}!", "success")
         except Exception as e:
             db_conn.rollback()
             flash(f"Error al abrir caja: {e}", "danger")
@@ -8659,6 +8671,18 @@ def gestionar_caja():
             if not sesion_abierta:
                 monto_sugerido = 0.00
                 
+                # --- NUEVA VALIDACIÓN: REVISAR CAJAS ANTERIORES ABIERTAS ---
+                cursor.execute("""
+                    SELECT cs.id, cs.fecha_apertura, e.nombres, e.apellidos
+                    FROM caja_sesiones cs
+                    JOIN empleados e ON cs.usuario_id = e.id
+                    WHERE cs.sucursal_id = %s 
+                      AND cs.estado = 'Abierta' 
+                      AND DATE(cs.fecha_apertura) < CURRENT_DATE
+                    ORDER BY cs.fecha_apertura ASC
+                """, (sucursal_id,))
+                cajas_olvidadas = cursor.fetchall()
+                
                 cursor.execute("""
                     SELECT monto_final_real, destino_remanente 
                     FROM caja_sesiones 
@@ -8671,7 +8695,9 @@ def gestionar_caja():
                 if ultima_caja and ultima_caja['destino_remanente'] == 'Caja':
                     monto_sugerido = float(ultima_caja['monto_final_real'])
 
-                return render_template('caja/apertura.html', monto_sugerido=monto_sugerido)
+                return render_template('caja/apertura.html', 
+                                       monto_sugerido=monto_sugerido,
+                                       cajas_olvidadas=cajas_olvidadas)
 
             # CASO B: CAJA ABIERTA -> Panel de Gestión
             caja_id = sesion_abierta['id']
