@@ -8975,10 +8975,19 @@ def abrir_caja():
 
     try:
         with db_conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            # Verificar que no haya otra caja abierta para esta sucursal
+            # Verificar que no haya otra caja abierta para esta sucursal (en general)
             cursor.execute("SELECT id FROM caja_sesiones WHERE sucursal_id = %s AND estado = 'Abierta'", (sucursal_id,))
             if cursor.fetchone():
                 flash(f"Ya existe una sesión de caja abierta para esta sucursal.", "warning")
+                return redirect(url_for('main.gestionar_caja'))
+            
+            # --- NUEVA VALIDACIÓN: REVISAR CAJAS ANTERIORES ABIERTAS ---
+            cursor.execute("""
+                SELECT id FROM caja_sesiones 
+                WHERE sucursal_id = %s AND estado = 'Abierta' AND DATE(fecha_apertura) < CURRENT_DATE
+            """, (sucursal_id,))
+            if cursor.fetchone():
+                flash("No se puede abrir una nueva caja: Existen sesiones de días anteriores pendientes de cierre.", "danger")
                 return redirect(url_for('main.gestionar_caja'))
             
             # Insertar la nueva sesión de caja
