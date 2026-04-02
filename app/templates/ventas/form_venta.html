@@ -521,7 +521,28 @@
     let clienteIdCampana = null;
     window.saldoMonederoActual = 0; // Global tracking for wallet balance
 
+    // --- AYUDANTE DE LIMPIEZA DE TELÉFONO (NUEVO) ---
+    function cleanPhone(val) {
+        if (!val) return "";
+        // Eliminar +51 (con o sin espacio) y todos los espacios en blanco
+        return val.replace(/\+51/g, '').replace(/\s+/g, '').replace(/[^\d]/g, '').trim();
+    }
+
+    // Listener para el buscador Select2 (General)
+    $(document).on('input', '.select2-search__field', function () {
+        const oldVal = this.value;
+        // Solo aplicar si detectamos +51 o espacios (para no interferir con escritura normal de nombres)
+        if (oldVal.startsWith('+51') || /\s/.test(oldVal)) {
+            const cleaned = cleanPhone(oldVal);
+            if (cleaned !== oldVal && /^\d+$/.test(cleaned)) { // Solo si el resultado son solo números
+                this.value = cleaned;
+                $(this).trigger('change'); // Reflejar cambio
+            }
+        }
+    });
+
     // 1. Recibir datos del Backend (NUEVO)
+
     const datosPreCargados = JSON.parse('{{ prefill_data | tojson | safe if prefill_data else "null" }}');
 
     // --- INICIALIZACIÓN ---
@@ -531,6 +552,11 @@
             theme: 'bootstrap-5',
             placeholder: 'Buscar cliente...',
             width: '100%'
+        });
+
+        // Listener Limpieza Teléfono Modal
+        $(document).on('input', '#nc_telefono', function () {
+            this.value = cleanPhone(this.value);
         });
 
         // 🟢 AUTOMATIZACIÓN: Si hay datos pre-cargados (Desde Agenda)
