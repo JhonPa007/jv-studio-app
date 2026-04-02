@@ -5695,10 +5695,11 @@ def nueva_venta():
         return redirect(url_for('main.index'))
 
     # ==============================================================================
-    # --- VALIDACIÓN DE CAJA ABIERTA ---
+    # --- VALIDACIÓN DE CAJA ABIERTA Y CIERRE DE DÍAS ANTERIORES ---
     # ==============================================================================
     try:
         with db_conn.cursor() as cursor_val:
+            # 1. Verificar si el usuario actual tiene caja abierta (NECESARIO PARA REGISTRAR EN ELLA)
             cursor_val.execute("""
                 SELECT id FROM caja_sesiones 
                 WHERE usuario_id = %s AND sucursal_id = %s AND estado = 'Abierta'
@@ -5707,10 +5708,22 @@ def nueva_venta():
 
             if not caja_abierta:
                 flash("⛔ ACCESO DENEGADO: Debes ABRIR CAJA antes de realizar ventas.", "danger")
-                return redirect(url_for('main.index')) 
+                return redirect(url_for('main.gestionar_caja')) 
+
+            # 2. Verificar si hay cajas de días anteriores sin cerrar (de cualquier usuario en esta sucursal)
+            # Esto previene que se registren ventas hoy si el "cierre" de ayer no se completó.
+            cursor_val.execute("""
+                SELECT id FROM caja_sesiones 
+                WHERE sucursal_id = %s AND estado = 'Abierta' AND DATE(fecha_apertura) < CURRENT_DATE
+            """, (sucursal_id,))
+            caja_olvidada = cursor_val.fetchone()
+
+            if caja_olvidada:
+                flash("⚠️ BLOQUEO OPERATIVO: Existen sesiones de caja de días anteriores que siguen ABIERTAS. Por seguridad, DEBES CERRAR LAS CAJAS ANTERIORES antes de realizar cualquier venta hoy.", "danger")
+                return redirect(url_for('main.gestionar_caja'))
     except Exception as e:
-        flash(f"Error verificando caja: {e}", "danger")
-        return redirect(url_for('main.index'))
+        flash(f"Error verificando integridad de caja: {e}", "danger")
+        return redirect(url_for('main.gestionar_caja'))
     
     # --- LÓGICA POST (PROCESAR VENTA) ---
     if request.method == 'POST':
