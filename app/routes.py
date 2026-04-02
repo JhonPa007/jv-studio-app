@@ -753,11 +753,11 @@ def api_crear_cliente_rapido():
 
         # 2. Insertar
         sql = """
-            INSERT INTO clientes (razon_social_nombres, apellidos, apellido_paterno, apellido_materno, telefono, numero_documento, fecha_registro)
-            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_DATE)
+            INSERT INTO clientes (razon_social_nombres, apellidos, telefono, numero_documento, fecha_registro)
+            VALUES (%s, %s, %s, %s, CURRENT_DATE)
             RETURNING id, razon_social_nombres, apellidos
         """
-        cursor.execute(sql, (nombre, apellidos, apellido_paterno, apellido_materno, telefono, documento))
+        cursor.execute(sql, (nombre, apellidos, telefono, documento))
         nuevo_cliente = cursor.fetchone()
         db.commit()
         cursor.close()
@@ -807,14 +807,17 @@ def api_crear_cliente_completo():
     if ape_mat: parts.append(ape_mat)
     apellidos_full = " ".join(parts) if parts else None
     
-    # Nombre Completo para razon_social_nombres
-    razon_social = f"{nombres or ''} {apellidos_full or ''}".strip()
+    # razon_social_nombres llevará solo los nombres (por consistencia con el sistema)
+    # o podrías poner el nombre completo. Pero viendo 'display_text' en el sistema:
+    # "{razon_social_nombres} {apellidos}"
+    # Así que razon_social_nombres = nombres.
+    nombre_solo = nombres
     
     fecha_nac = data.get('fecha_nacimiento') or None
     direccion = data.get('direccion', '').strip() or None
     email = data.get('email', '').strip() or None
     telefono = data.get('telefono', '').strip() or None
-    ocupacion = data.get('ocupacion', '').strip() or None
+    notas = data.get('ocupacion', '').strip() or None
 
     if not nombres:
         return jsonify({'success': False, 'message': 'El nombre es obligatorio.'}), 400
@@ -832,22 +835,21 @@ def api_crear_cliente_completo():
             sql = """
                 INSERT INTO clientes (
                     tipo_documento, numero_documento, razon_social_nombres, apellidos, 
-                    apellido_paterno, apellido_materno, fecha_nacimiento, 
-                    direccion, email, telefono, ocupacion, fecha_registro
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE)
+                    fecha_nacimiento, direccion, email, telefono, notas_adicionales, fecha_registro
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE)
                 RETURNING id
             """
             params = (
-                tipo_doc, num_doc, razon_social, apellidos_full, 
-                ape_pat, ape_mat, fecha_nac, 
-                direccion, email, telefono, ocupacion
+                tipo_doc, num_doc, nombre_solo, apellidos_full, 
+                fecha_nac, direccion, email, telefono, notas
             )
             cursor.execute(sql, params)
             nuevo_id = cursor.fetchone()['id']
             db.commit()
 
-            # Texto para mostrar en el buscador
-            display_text = razon_social
+            # Texto para el Select2
+            full_name = f"{nombre_solo} {apellidos_full if apellidos_full else ''}".strip()
+            display_text = full_name
             if telefono:
                 display_text += f" ({telefono})"
 
@@ -858,6 +860,9 @@ def api_crear_cliente_completo():
                     'text': display_text
                 }
             })
+    except Exception as e:
+        db.rollback()
+        return jsonify({'success': False, 'message': f"Error en base de datos: {str(e)}"}), 500
     except Exception as e:
         db.rollback()
         return jsonify({'success': False, 'message': f"Error en base de datos: {str(e)}"}), 500
