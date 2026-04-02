@@ -107,8 +107,10 @@
                             </option>
                             {% endfor %}
                         </select>
-                        <a href="{{ url_for('main.nuevo_cliente') }}" class="btn btn-outline-secondary"
-                            title="Nuevo Cliente"><i class="fas fa-plus"></i></a>
+                        <button type="button" class="btn btn-outline-secondary" title="Nuevo Cliente"
+                            data-bs-toggle="modal" data-bs-target="#modalNuevoCliente">
+                            <i class="fas fa-plus"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -203,7 +205,8 @@
                                 <select class="form-select" id="select_producto">
                                     <option value="">-- Agregar Producto --</option>
                                     {% for p in productos %}
-                                    {% set nombre_completo = p.nombre + ' (' + p.marca_nombre + ')' if p.marca_nombre else p.nombre %}
+                                    {% set nombre_completo = p.nombre + ' (' + p.marca_nombre + ')' if p.marca_nombre
+                                    else p.nombre %}
                                     <option value="{{ p.id }}" data-precio="{{ p.precio_venta }}"
                                         data-nombre="{{ nombre_completo }}" data-stock="{{ p.stock_actual }}">
                                         {{ nombre_completo }} (Stock: {{ p.stock_actual }}) - S/ {{
@@ -391,6 +394,115 @@
                     </a>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Nueva Venta</button>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo Cliente -->
+<div class="modal fade" id="modalNuevoCliente" tabindex="-1" aria-labelledby="modalNuevoClienteLabel" aria-hidden="true"
+    data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content bg-dark text-white border-warning shadow-lg">
+            <div class="modal-header border-secondary bg-warning bg-opacity-10">
+                <h5 class="modal-title text-warning fw-bold" id="modalNuevoClienteLabel">
+                    <i class="fas fa-user-plus me-2"></i>Registrar Nuevo Cliente
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formNuevoClienteModal">
+                    <div class="row">
+                        <!-- Columna Identificación -->
+                        <div class="col-md-6 border-end border-secondary pe-4">
+                            <h6 class="text-info border-bottom border-secondary pb-2 mb-3">Identificación</h6>
+
+                            <div class="mb-3">
+                                <label class="form-label small text-muted text-uppercase">Tipo de Documento</label>
+                                <select class="form-select bg-dark text-white border-secondary" name="tipo_documento"
+                                    id="nc_tipo_doc">
+                                    <option value="DNI">DNI</option>
+                                    <option value="RUC">RUC</option>
+                                    <option value="Carnet Extranjería">Carnet de Extranjería</option>
+                                    <option value="Pasaporte">Pasaporte</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small text-muted text-uppercase">Número de Documento</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control bg-dark text-white border-secondary"
+                                        name="numero_documento" id="nc_num_doc" placeholder="Ingrese número">
+                                    <button class="btn btn-warning fw-bold" type="button"
+                                        onclick="buscarDocumentoModal()">
+                                        <i class="fas fa-search me-1"></i>Buscar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small text-muted text-uppercase">Nombres</label>
+                                <input type="text" class="form-control bg-dark text-white border-secondary"
+                                    name="nombres" id="nc_nombres" required>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label small text-muted text-uppercase">Apellido Paterno</label>
+                                    <input type="text" class="form-control bg-dark text-white border-secondary"
+                                        name="apellido_paterno" id="nc_ape_pat">
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label small text-muted text-uppercase">Apellido Materno</label>
+                                    <input type="text" class="form-control bg-dark text-white border-secondary"
+                                        name="apellido_materno" id="nc_ape_mat">
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small text-muted text-uppercase">Fecha de Nacimiento</label>
+                                <input type="date" class="form-control bg-dark text-white border-secondary"
+                                    name="fecha_nacimiento" id="nc_fecha_nac">
+                            </div>
+                        </div>
+
+                        <!-- Columna Contacto -->
+                        <div class="col-md-6 ps-4">
+                            <h6 class="text-info border-bottom border-secondary pb-2 mb-3">Contacto</h6>
+
+                            <div class="mb-3">
+                                <label class="form-label small text-muted text-uppercase">Dirección</label>
+                                <input type="text" class="form-control bg-dark text-white border-secondary"
+                                    name="direccion" id="nc_direccion">
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small text-muted text-uppercase">Correo Electrónico</label>
+                                <input type="email" class="form-control bg-dark text-white border-secondary"
+                                    name="email" id="nc_email">
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small text-muted text-uppercase">Teléfono / Celular</label>
+                                <input type="text" class="form-control bg-dark text-white border-secondary"
+                                    name="telefono" id="nc_telefono">
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small text-muted text-uppercase">Ocupación / Notas</label>
+                                <textarea class="form-control bg-dark text-white border-secondary" name="ocupacion"
+                                    id="nc_ocupacion" rows="3"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-secondary bg-dark">
+                <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning px-5 fw-bold" onclick="guardarClienteModal()">
+                    <i class="fas fa-save me-2"></i>GUARDAR CLIENTE
+                </button>
             </div>
         </div>
     </div>
@@ -1004,6 +1116,120 @@
 
         document.getElementById('input_puntos_canjeados').value = nuevoCanje;
         calcularTotales();
+    }
+
+    // --- LÓGICA MODAL NUEVO CLIENTE ---
+
+    async function buscarDocumentoModal() {
+        const tipo = document.getElementById('nc_tipo_doc').value;
+        const numero = document.getElementById('nc_num_doc').value.trim();
+
+        if (!numero) {
+            Swal.fire('Atención', 'Ingrese un número de documento.', 'warning');
+            return;
+        }
+
+        const btn = event.currentTarget;
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Buscando...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch(`/api/consultar-documento/${tipo}/${numero}`);
+            const data = await res.json();
+
+            if (data.success) {
+                if (tipo === 'DNI') {
+                    document.getElementById('nc_nombres').value = data.nombres || '';
+                    document.getElementById('nc_ape_pat').value = data.apellido_paterno || '';
+                    document.getElementById('nc_ape_mat').value = data.apellido_materno || '';
+                    if (data.direccion) document.getElementById('nc_direccion').value = data.direccion;
+                    if (data.fecha_nacimiento) document.getElementById('nc_fecha_nac').value = data.fecha_nacimiento;
+                } else if (tipo === 'RUC') {
+                    document.getElementById('nc_nombres').value = data.razon_social || '';
+                    if (data.direccion) document.getElementById('nc_direccion').value = data.direccion;
+                }
+            } else {
+                Swal.fire('No encontrado', data.message || "No se encontraron datos.", 'info');
+            }
+        } catch (e) {
+            console.error(e);
+            Swal.fire('Error', 'Error al conectar con el servicio de búsqueda.', 'error');
+        } finally {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+        }
+    }
+
+    async function guardarClienteModal() {
+        // Recoger datos
+        const data = {
+            tipo_documento: document.getElementById('nc_tipo_doc').value,
+            numero_documento: document.getElementById('nc_num_doc').value,
+            nombres: document.getElementById('nc_nombres').value,
+            apellido_paterno: document.getElementById('nc_ape_pat').value,
+            apellido_materno: document.getElementById('nc_ape_mat').value,
+            fecha_nacimiento: document.getElementById('nc_fecha_nacimiento') ? document.getElementById('nc_fecha_nacimiento').value : document.getElementById('nc_fecha_nac').value,
+            direccion: document.getElementById('nc_direccion').value,
+            email: document.getElementById('nc_email').value,
+            telefono: document.getElementById('nc_telefono').value,
+            ocupacion: document.getElementById('nc_ocupacion').value
+        };
+
+        if (!data.nombres) {
+            Swal.fire('Campo Requerido', 'El nombre es obligatorio.', 'warning');
+            return;
+        }
+
+        const btn = event.currentTarget;
+        btn.disabled = true;
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
+
+        try {
+            const res = await fetch('/api/crear-cliente-completo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+
+            if (result.success) {
+                // 1. Agregar al Select2
+                const newOption = new Option(result.cliente.text, result.cliente.id, true, true);
+
+                // Agregamos metadata para que las otras funciones la lean
+                newOption.dataset.saldo = "0.00";
+                newOption.dataset.fecha = data.fecha_nacimiento || '';
+                newOption.dataset.validado = 'true'; // Ya lo creamos nosotros, asumimos validado
+
+                $('#cliente_id').append(newOption).trigger('change').trigger({
+                    type: 'select2:select',
+                    params: {
+                        data: {
+                            id: result.cliente.id,
+                            text: result.cliente.text,
+                            element: newOption
+                        }
+                    }
+                });
+
+                // 2. Cerrar Modal y Resetear Form
+                const modalEl = document.getElementById('modalNuevoCliente');
+                bootstrap.Modal.getInstance(modalEl).hide();
+                document.getElementById('formNuevoClienteModal').reset();
+
+                Swal.fire('¡Éxito!', 'Cliente registrado y seleccionado.', 'success');
+            } else {
+                Swal.fire('Error', result.message || "Error al crear cliente.", 'error');
+            }
+        } catch (e) {
+            console.error(e);
+            Swal.fire('Error', 'Error de red al intentar crear el cliente.', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
     }
 </script>
 {% endblock %}

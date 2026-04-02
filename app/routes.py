@@ -778,8 +778,89 @@ def api_crear_cliente_rapido():
 
     except Exception as e:
         if db: db.rollback()
-        current_app.logger.error(f"Error api_crear_cliente_rapido: {e}")
-        return jsonify({'success': False, 'message': f'Error interno: {str(e)}'}), 500
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@main_bp.route('/api/crear-cliente-completo', methods=['POST'])
+@login_required
+def api_crear_cliente_completo():
+    """
+    API para creación exhaustiva de clientes (Modal de Ventas).
+    Aplica Title Case a nombres y apellidos.
+    """
+    data = request.get_json()
+    
+    # helper para title case
+    def tc(val):
+        return val.strip().title() if val and val.strip() else None
+
+    tipo_doc = data.get('tipo_documento', 'DNI')
+    num_doc = data.get('numero_documento', '').strip() or None
+    
+    # Nombres y Apellidos con Title Case
+    nombres = tc(data.get('nombres'))
+    ape_pat = tc(data.get('apellido_paterno'))
+    ape_mat = tc(data.get('apellido_materno'))
+    
+    # Composicion de Apellidos para el campo 'apellidos' de la DB
+    parts = []
+    if ape_pat: parts.append(ape_pat)
+    if ape_mat: parts.append(ape_mat)
+    apellidos_full = " ".join(parts) if parts else None
+    
+    # Nombre Completo para razon_social_nombres
+    razon_social = f"{nombres or ''} {apellidos_full or ''}".strip()
+    
+    fecha_nac = data.get('fecha_nacimiento') or None
+    direccion = data.get('direccion', '').strip() or None
+    email = data.get('email', '').strip() or None
+    telefono = data.get('telefono', '').strip() or None
+    ocupacion = data.get('ocupacion', '').strip() or None
+
+    if not nombres:
+        return jsonify({'success': False, 'message': 'El nombre es obligatorio.'}), 400
+
+    db = get_db()
+    try:
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            # 1. Verificar duplicidad por documento (si se proporciona)
+            if num_doc:
+                cursor.execute("SELECT id FROM clientes WHERE numero_documento = %s AND tipo_documento = %s", (num_doc, tipo_doc))
+                if cursor.fetchone():
+                    return jsonify({'success': False, 'message': f'Ya existe un cliente con {tipo_doc} {num_doc}.'}), 400
+
+            # 2. Insertar
+            sql = """
+                INSERT INTO clientes (
+                    tipo_documento, numero_documento, razon_social_nombres, apellidos, 
+                    apellido_paterno, apellido_materno, fecha_nacimiento, 
+                    direccion, email, telefono, ocupacion, fecha_registro
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE)
+                RETURNING id
+            """
+            params = (
+                tipo_doc, num_doc, razon_social, apellidos_full, 
+                ape_pat, ape_mat, fecha_nac, 
+                direccion, email, telefono, ocupacion
+            )
+            cursor.execute(sql, params)
+            nuevo_id = cursor.fetchone()['id']
+            db.commit()
+
+            # Texto para mostrar en el buscador
+            display_text = razon_social
+            if telefono:
+                display_text += f" ({telefono})"
+
+            return jsonify({
+                'success': True,
+                'cliente': {
+                    'id': nuevo_id,
+                    'text': display_text
+                }
+            })
+    except Exception as e:
+        db.rollback()
+        return jsonify({'success': False, 'message': f"Error en base de datos: {str(e)}"}), 500
 
 
 @main_bp.route('/clientes/ver/<int:cliente_id>')
