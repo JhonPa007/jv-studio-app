@@ -902,12 +902,21 @@ def confirmar_adelanto(gasto_id):
                 
             sucursal_id = gasto['sucursal_id']
 
-            # 2. Buscar si hay una caja abierta en esa sucursal
+            # 2. Validar Estado de Caja (Bloqueo Operativo)
+            # 2.1 Asegurar que hay al menos una caja abierta para el egreso
             cursor.execute("SELECT id FROM caja_sesiones WHERE sucursal_id = %s AND estado = 'Abierta' LIMIT 1", (sucursal_id,))
             caja = cursor.fetchone()
             
             if not caja:
-                return jsonify({'error': 'No se puede confirmar ahora. No hay ninguna caja física abierta en el local para asumir el egreso.'}), 400
+                return jsonify({'error': '⛔ ACCESO DENEGADO: No hay ninguna caja física ABIERTA en el local para asumir el egreso.'}), 400
+
+            # 2.2 Bloqueo si hay cajas de días anteriores sin cerrar
+            cursor.execute("""
+                SELECT id FROM caja_sesiones 
+                WHERE sucursal_id = %s AND estado = 'Abierta' AND DATE(fecha_apertura) < CURRENT_DATE
+            """, (sucursal_id,))
+            if cursor.fetchone():
+                return jsonify({'error': '⚠️ BLOQUEO OPERATIVO: Existen cajas de días anteriores que siguen abiertas. Por favor, ciérrelas antes de procesar movimientos hoy.'}), 400
 
             caja_id = caja['id']
 
@@ -1074,7 +1083,7 @@ def registrar_ingreso():
         db = get_db()
         try:
             with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-                # 1. Obtener Caja Abierta
+                # 1. Obtener Caja Abierta del usuario actual (NECESARIO PARA EL REGISTRO)
                 cursor.execute("""
                     SELECT id FROM caja_sesiones 
                     WHERE usuario_id = %s AND sucursal_id = %s AND estado = 'Abierta'
@@ -1082,7 +1091,16 @@ def registrar_ingreso():
                 caja = cursor.fetchone()
                 
                 if not caja:
-                    flash("Debe tener una CAJA ABIERTA para registrar ingresos.", "warning")
+                    flash("⛔ ACCESO DENEGADO: Debe tener una CAJA ABIERTA para registrar ingresos.", "warning")
+                    return redirect(url_for('finanzas.registrar_ingreso'))
+
+                # 2. Verificar cajas de días anteriores pendientes de cierre (Cualquier usuario)
+                cursor.execute("""
+                    SELECT id FROM caja_sesiones 
+                    WHERE sucursal_id = %s AND estado = 'Abierta' AND DATE(fecha_apertura) < CURRENT_DATE
+                """, (sucursal_id,))
+                if cursor.fetchone():
+                    flash("⚠️ BLOQUEO OPERATIVO: Existen cajas de días anteriores sin cerrar. Por favor, ciérrelas antes de registrar ingresos hoy.", "danger")
                     return redirect(url_for('finanzas.registrar_ingreso'))
                 
                 caja_id = caja['id']
@@ -1349,6 +1367,27 @@ def registrar_propina():
     venta_id = request.form.get('venta_id') # Opcional
 
     db = get_db()
+    sucursal_id = session.get('sucursal_id')
+    
+    # --- VALIDACIÓN DE CAJA ---
+    try:
+        with db.cursor() as cursor_val:
+            # 1. Necesita caja para efectivo
+            if metodo == 'Efectivo':
+                cursor_val.execute("SELECT id FROM caja_sesiones WHERE usuario_id = %s AND sucursal_id = %s AND estado = 'Abierta'", (current_user.id, sucursal_id))
+                if not cursor_val.fetchone():
+                    flash("⛔ Error: Debes abrir caja para registrar propinas en EFECTIVO.", "danger")
+                    return redirect(request.referrer)
+            
+            # 2. Bloqueo por cajas anteriores
+            cursor_val.execute("SELECT id FROM caja_sesiones WHERE sucursal_id = %s AND estado = 'Abierta' AND DATE(fecha_apertura) < CURRENT_DATE", (sucursal_id,))
+            if cursor_val.fetchone():
+                flash("⚠️ Bloqueo: Existen cajas de días anteriores abiertas. Ciérrelas antes de registrar propinas hoy.", "danger")
+                return redirect(request.referrer)
+    except Exception as e:
+        flash(f"Error de validación: {e}", "danger")
+        return redirect(request.referrer)
+
     try:
         with db.cursor() as cursor:
             # 1. Guardar la propina

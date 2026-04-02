@@ -7996,6 +7996,7 @@ def nuevo_gasto():
     caja_id_activa = None
     try:
         with db_conn.cursor() as cursor_val:
+            # 1. Verificar si el usuario actual tiene caja abierta (NECESARIO PARA REGISTRAR EN ELLA)
             cursor_val.execute("""
                 SELECT id FROM caja_sesiones 
                 WHERE usuario_id = %s AND sucursal_id = %s AND estado = 'Abierta'
@@ -8004,8 +8005,19 @@ def nuevo_gasto():
             row_caja = cursor_val.fetchone()
 
             if not row_caja:
-                flash("⛔ ACCESO DENEGADO: Debes ABRIR CAJA para registrar salidas de dinero (gastos).", "danger")
-                return redirect(url_for('main.index'))
+                flash("⛔ ACCESO DENEGADO: Debes ABRIR CAJA antes de registrar gastos.", "danger")
+                return redirect(url_for('main.gestionar_caja')) 
+
+            # 2. Verificar si hay cajas de días anteriores sin cerrar (de cualquier usuario en esta sucursal)
+            cursor_val.execute("""
+                SELECT id FROM caja_sesiones 
+                WHERE sucursal_id = %s AND estado = 'Abierta' AND DATE(fecha_apertura) < CURRENT_DATE
+            """, (sucursal_id,))
+            caja_olvidada = cursor_val.fetchone()
+
+            if caja_olvidada:
+                flash("⚠️ BLOQUEO OPERATIVO: Existen sesiones de caja de días anteriores que siguen ABIERTAS en esta sucursal. Por favor, ciérrelas antes de registrar gastos.", "danger")
+                return redirect(url_for('main.gestionar_caja'))
             
             caja_id_activa = row_caja[0] # Guardamos el ID para usarlo al guardar
     except Exception as e:

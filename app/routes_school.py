@@ -390,6 +390,33 @@ def register_payment():
         return jsonify({'error': 'Datos inválidos'}), 400
         
     db = get_db()
+    sucursal_id = session.get('sucursal_id')
+
+    # ==============================================================================
+    # --- VALIDACIÓN DE CAJA ABIERTA (BLOQUEO OPERATIVO) ---
+    # ==============================================================================
+    try:
+        with db.cursor() as cursor_val:
+            # 1. Verificar si el usuario actual tiene caja abierta (Solo si es Efectivo)
+            if metodo_pago == 'Efectivo':
+                cursor_val.execute("""
+                    SELECT id FROM caja_sesiones 
+                    WHERE usuario_id = %s AND sucursal_id = %s AND estado = 'Abierta'
+                """, (current_user.id, sucursal_id))
+                if not cursor_val.fetchone():
+                    return jsonify({'error': '⛔ ACCESO DENEGADO: Debes ABRIR CAJA antes de registrar cobros en EFECTIVO.'}), 403
+
+            # 2. Verificar cajas de días anteriores (CUALQUIER MÉTODO DE PAGO)
+            cursor_val.execute("""
+                SELECT id FROM caja_sesiones 
+                WHERE sucursal_id = %s AND estado = 'Abierta' AND DATE(fecha_apertura) < CURRENT_DATE
+            """, (sucursal_id,))
+            if cursor_val.fetchone():
+                return jsonify({'error': '⚠️ BLOQUEO OPERATIVO: Existen cajas de días anteriores abiertas en esta sucursal. Ciérrelas para iniciar hoy.'}), 403
+    except Exception as e:
+        return jsonify({'error': f'Error verificando integridad de caja: {e}'}), 500
+    # ==============================================================================
+
     try:
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             # 1. Registrar Cabecera de Pago
