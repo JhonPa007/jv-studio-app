@@ -5842,6 +5842,7 @@ def nueva_venta():
                             db_conn.commit() # Confirmar la creación inmediatamente para que esté disponible
                             cliente_id_str = str(nuevo_id)
                 except Exception as e_cli:
+                    db_conn.rollback() # <--- IMPORTANTE: Limpiar el estado de la transacción si falla la búsqueda/creación
                     current_app.logger.error(f"Error asignando Clientes Varios: {e_cli}")
                     # No fallamos aquí, dejamos que intente procesar null y lance error normal si es requerido
             
@@ -6151,6 +6152,7 @@ def nueva_venta():
                             VALUES (%s, %s, %s, 'ACUMULA', %s)
                         """, (cliente_id, venta_id, puntos_ganados, f"Puntos por Venta #{serie_comprobante}-{numero_comprobante_str}"))
                 except Exception as e:
+                    db_conn.rollback() # Limpiar estado
                     print(f"Error acumulando puntos: {e}") 
 
             # 11. (NUEVO) VINCULACIÓN AUTOMÁTICA CON RESERVAS (AGENDA)
